@@ -10,7 +10,11 @@ struct MacGameLibraryApp: App {
             LibraryGame.self,
             GameFolderPath.self
         ])
-        let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
+        let configuration = ModelConfiguration(
+            schema: schema,
+            url: PersistenceStoreLocation.storeFileURL,
+            cloudKitDatabase: .none
+        )
         do {
             return try ModelContainer(for: schema, configurations: [configuration])
         } catch {

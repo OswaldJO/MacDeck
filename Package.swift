@@ -12,7 +12,10 @@ let package = Package(
     targets: [
         .target(
             name: "MacGameLibrary",
-            path: "Sources/MacGameLibrary"
+            path: "Sources/MacGameLibrary",
+            resources: [
+                .copy("Resources/BuiltinEmulatorCatalog.json")
+            ]
         )
     ]
 )

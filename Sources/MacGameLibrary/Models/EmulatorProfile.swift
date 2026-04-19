@@ -8,7 +8,7 @@ public final class EmulatorProfile {
     public var name: String
     /// Path to the emulator executable (.app bundle or binary).
     public var executablePath: String
-    /// Placeholder `{rom}` is replaced with the game file path when launching.
+    /// Playnite-style `{ImagePath}` (and `{rom}` / `{ROM}` aliases) is replaced with the game file path when launching.
     public var launchArgumentTemplate: String
     public var sortOrder: Int
     public var dateCreated: Date
@@ -20,7 +20,7 @@ public final class EmulatorProfile {
         id: UUID = UUID(),
         name: String,
         executablePath: String,
-        launchArgumentTemplate: String = "\"{rom}\"",
+        launchArgumentTemplate: String = "\"{ImagePath}\"",
         sortOrder: Int = 0,
         dateCreated: Date = Date()
     ) {

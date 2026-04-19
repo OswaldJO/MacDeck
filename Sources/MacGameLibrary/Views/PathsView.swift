@@ -9,8 +9,20 @@ struct PathsView: View {
 
     @State private var selectedEmulatorID: UUID?
 
+    /// Resolved picker value when `emulators` is non-empty (avoids Picker tag/`nil` mismatch).
+    private var effectiveEmulatorID: UUID {
+        guard let first = emulators.first else {
+            return UUID()
+        }
+        if let id = selectedEmulatorID, emulators.contains(where: { $0.id == id }) {
+            return id
+        }
+        return first.id
+    }
+
     private var pathsForSelection: [GameFolderPath] {
-        guard let id = selectedEmulatorID else { return [] }
+        guard !emulators.isEmpty else { return [] }
+        let id = effectiveEmulatorID
         return allFolderPaths.filter { $0.emulator?.id == id }
     }
 
@@ -25,9 +37,12 @@ struct PathsView: View {
             } else {
                 Form {
                     Section {
-                        Picker("Emulator", selection: $selectedEmulatorID) {
+                        Picker("Emulator", selection: Binding(
+                            get: { effectiveEmulatorID },
+                            set: { selectedEmulatorID = $0 }
+                        )) {
                             ForEach(emulators) { emu in
-                                Text(emu.name).tag(Optional(emu.id))
+                                Text(emu.name).tag(emu.id)
                             }
                         }
                         .pickerStyle(.menu)
@@ -52,7 +67,6 @@ struct PathsView: View {
                         Button("Add folder…", systemImage: "folder.badge.plus") {
                             addFolder()
                         }
-                        .disabled(selectedEmulatorID == nil)
                     }
                 }
                 .formStyle(.grouped)
@@ -64,18 +78,20 @@ struct PathsView: View {
         .onAppear {
             if selectedEmulatorID == nil {
                 selectedEmulatorID = emulators.first?.id
+            } else if let id = selectedEmulatorID, !emulators.contains(where: { $0.id == id }) {
+                selectedEmulatorID = emulators.first?.id
             }
         }
-        .onChange(of: emulators.count) { _, _ in
-            if let id = selectedEmulatorID, !emulators.contains(where: { $0.id == id }) {
+        .onChange(of: emulators.map(\.id)) { _, ids in
+            if let id = selectedEmulatorID, !ids.contains(id) {
                 selectedEmulatorID = emulators.first?.id
             }
         }
     }
 
     private func addFolder() {
-        guard let emuID = selectedEmulatorID,
-              let emulator = emulators.first(where: { $0.id == emuID }) else { return }
+        let emuID = effectiveEmulatorID
+        guard let emulator = emulators.first(where: { $0.id == emuID }) else { return }
 
         let panel = NSOpenPanel()
         panel.canChooseFiles = false

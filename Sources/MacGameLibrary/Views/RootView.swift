@@ -25,6 +25,7 @@ public struct RootView: View {
     @State private var scanFeedback: String?
     @State private var confirmClearAllGames = false
     @State private var clearEmulatorGamesID: UUID?
+    @State private var showStoredDataInspector = false
 
     private var filteredGames: [LibraryGame] {
         switch sidebarSelection {
@@ -74,6 +75,13 @@ public struct RootView: View {
                             Image(systemName: "arrow.triangle.2.circlepath")
                         }
                         .help("Scan Paths")
+
+                        Button {
+                            showStoredDataInspector = true
+                        } label: {
+                            Image(systemName: "cylinder.split.1x2")
+                        }
+                        .help("Inspect SwiftData store and file path")
                     }
                 }
                 .alert("Scan Paths", isPresented: Binding(
@@ -143,6 +151,9 @@ public struct RootView: View {
                 sidebarSelection = .all
             }
         }
+        .sheet(isPresented: $showStoredDataInspector) {
+            StoredDataInspectorView()
+        }
     }
 
     private func performScan() {
@@ -158,9 +169,18 @@ public struct RootView: View {
     }
 
     private func play(_ game: LibraryGame) {
+        let gameID = game.id
+        var descriptor = FetchDescriptor<LibraryGame>(
+            predicate: #Predicate { $0.id == gameID }
+        )
+        descriptor.fetchLimit = 1
+        guard let fresh = try? modelContext.fetch(descriptor).first else {
+            NSLog("Play: library game no longer in store (id: \(gameID))")
+            return
+        }
         do {
-            try GameLauncher.launch(game: game)
-            game.lastPlayed = Date()
+            try GameLauncher.launch(game: fresh)
+            fresh.lastPlayed = Date()
             try modelContext.save()
         } catch {
             NSLog("%@", error.localizedDescription)
