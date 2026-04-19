@@ -1,0 +1,4 @@
+module MacGameLibrary {
+header "MacGameLibrary-Swift.h"
+export *
+}

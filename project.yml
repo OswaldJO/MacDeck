@@ -1,0 +1,39 @@
+name: MacGameLibrary
+options:
+  bundleIdPrefix: com.local
+  deploymentTarget:
+    macOS: "14.0"
+  createIntermediateGroups: true
+
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    MACOSX_DEPLOYMENT_TARGET: "14.0"
+
+packages:
+  MacGameLibrarySPM:
+    path: .
+
+targets:
+  MacGameLibraryApp:
+    type: application
+    platform: macOS
+    deploymentTarget: "14.0"
+    sources:
+      - path: MacGameLibraryApp
+    dependencies:
+      - package: MacGameLibrarySPM
+        product: MacGameLibrary
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.local.MacGameLibraryApp
+        PRODUCT_NAME: MacGameLibrary
+        # Must differ from the SPM module "MacGameLibrary" or Xcode emits duplicate swiftmodules.
+        PRODUCT_MODULE_NAME: MacGameLibraryApp
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_CFBundleDisplayName: Mac Game Library
+        INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.games
+        INFOPLIST_KEY_NSHumanReadableCopyright: ""
+        MARKETING_VERSION: "1.0"
+        CURRENT_PROJECT_VERSION: "1"
+        ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS: YES

@@ -1,0 +1,29 @@
+{
+  "" : {
+    "diagnostics" : "/Users/oswald_joshua_olazabal/Desktop/Playnite Mac/build/DerivedData/Build/Intermediates.noindex/MacGameLibrary.build/Debug/MacGameLibraryApp.build/Objects-normal/arm64/MacGameLibraryApp-primary.dia",
+    "emit-module-dependencies" : "/Users/oswald_joshua_olazabal/Desktop/Playnite Mac/build/DerivedData/Build/Intermediates.noindex/MacGameLibrary.build/Debug/MacGameLibraryApp.build/Objects-normal/arm64/MacGameLibraryApp-primary-emit-module.d",
+    "emit-module-diagnostics" : "/Users/oswald_joshua_olazabal/Desktop/Playnite Mac/build/DerivedData/Build/Intermediates.noindex/MacGameLibrary.build/Debug/MacGameLibraryApp.build/Objects-normal/arm64/MacGameLibraryApp-primary-emit-module.dia",
+    "pch" : "/Users/oswald_joshua_olazabal/Desktop/Playnite Mac/build/DerivedData/Build/Intermediates.noindex/MacGameLibrary.build/Debug/MacGameLibraryApp.build/Objects-normal/arm64/MacGameLibraryApp-primary-Bridging-header.pch",
+    "swift-dependencies" : "/Users/oswald_joshua_olazabal/Desktop/Playnite Mac/build/DerivedData/Build/Intermediates.noindex/MacGameLibrary.build/Debug/MacGameLibraryApp.build/Objects-normal/arm64/MacGameLibraryApp-primary.swiftdeps"
+  },
+  "/Users/oswald_joshua_olazabal/Desktop/Playnite Mac/MacGameLibraryApp/MacGameLibraryApp.swift" : {
+    "const-values" : "/Users/oswald_joshua_olazabal/Desktop/Playnite Mac/build/DerivedData/Build/Intermediates.noindex/MacGameLibrary.build/Debug/MacGameLibraryApp.build/Objects-normal/arm64/MacGameLibraryApp.swiftconstvalues",
+    "dependencies" : "/Users/oswald_joshua_olazabal/Desktop/Playnite Mac/build/DerivedData/Build/Intermediates.noindex/MacGameLibrary.build/Debug/MacGameLibraryApp.build/Objects-normal/arm64/MacGameLibraryApp.d",
+    "diagnostics" : "/Users/oswald_joshua_olazabal/Desktop/Playnite Mac/build/DerivedData/Build/Intermediates.noindex/MacGameLibrary.build/Debug/MacGameLibraryApp.build/Objects-normal/arm64/MacGameLibraryApp.dia",
+    "index-unit-output-path" : "/MacGameLibrary.build/Debug/MacGameLibraryApp.build/Objects-normal/arm64/MacGameLibraryApp.o",
+    "llvm-bc" : "/Users/oswald_joshua_olazabal/Desktop/Playnite Mac/build/DerivedData/Build/Intermediates.noindex/MacGameLibrary.build/Debug/MacGameLibraryApp.build/Objects-normal/arm64/MacGameLibraryApp.bc",
+    "object" : "/Users/oswald_joshua_olazabal/Desktop/Playnite Mac/build/DerivedData/Build/Intermediates.noindex/MacGameLibrary.build/Debug/MacGameLibraryApp.build/Objects-normal/arm64/MacGameLibraryApp.o",
+    "swift-dependencies" : "/Users/oswald_joshua_olazabal/Desktop/Playnite Mac/build/DerivedData/Build/Intermediates.noindex/MacGameLibrary.build/Debug/MacGameLibraryApp.build/Objects-normal/arm64/MacGameLibraryApp.swiftdeps",
+    "swiftmodule" : "/Users/oswald_joshua_olazabal/Desktop/Playnite Mac/build/DerivedData/Build/Intermediates.noindex/MacGameLibrary.build/Debug/MacGameLibraryApp.build/Objects-normal/arm64/MacGameLibraryApp~partial.swiftmodule"
+  },
+  "/Users/oswald_joshua_olazabal/Desktop/Playnite Mac/build/DerivedData/Build/Intermediates.noindex/MacGameLibrary.build/Debug/MacGameLibraryApp.build/DerivedSources/GeneratedAssetSymbols.swift" : {
+    "const-values" : "/Users/oswald_joshua_olazabal/Desktop/Playnite Mac/build/DerivedData/Build/Intermediates.noindex/MacGameLibrary.build/Debug/MacGameLibraryApp.build/Objects-normal/arm64/GeneratedAssetSymbols.swiftconstvalues",
+    "dependencies" : "/Users/oswald_joshua_olazabal/Desktop/Playnite Mac/build/DerivedData/Build/Intermediates.noindex/MacGameLibrary.build/Debug/MacGameLibraryApp.build/Objects-normal/arm64/GeneratedAssetSymbols.d",
+    "diagnostics" : "/Users/oswald_joshua_olazabal/Desktop/Playnite Mac/build/DerivedData/Build/Intermediates.noindex/MacGameLibrary.build/Debug/MacGameLibraryApp.build/Objects-normal/arm64/GeneratedAssetSymbols.dia",
+    "index-unit-output-path" : "/MacGameLibrary.build/Debug/MacGameLibraryApp.build/Objects-normal/arm64/GeneratedAssetSymbols.o",
+    "llvm-bc" : "/Users/oswald_joshua_olazabal/Desktop/Playnite Mac/build/DerivedData/Build/Intermediates.noindex/MacGameLibrary.build/Debug/MacGameLibraryApp.build/Objects-normal/arm64/GeneratedAssetSymbols.bc",
+    "object" : "/Users/oswald_joshua_olazabal/Desktop/Playnite Mac/build/DerivedData/Build/Intermediates.noindex/MacGameLibrary.build/Debug/MacGameLibraryApp.build/Objects-normal/arm64/GeneratedAssetSymbols.o",
+    "swift-dependencies" : "/Users/oswald_joshua_olazabal/Desktop/Playnite Mac/build/DerivedData/Build/Intermediates.noindex/MacGameLibrary.build/Debug/MacGameLibraryApp.build/Objects-normal/arm64/GeneratedAssetSymbols.swiftdeps",
+    "swiftmodule" : "/Users/oswald_joshua_olazabal/Desktop/Playnite Mac/build/DerivedData/Build/Intermediates.noindex/MacGameLibrary.build/Debug/MacGameLibraryApp.build/Objects-normal/arm64/GeneratedAssetSymbols~partial.swiftmodule"
+  }
+}
