@@ -37,6 +37,34 @@
       "inputs" : [
         {
           "kind" : "file",
+          "name" : "/Users/oswald_joshua_olazabal/Desktop/Playnite Mac/Sources/MacGameLibrary/ControllerMapping/ConnectedControllersObserver.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/oswald_joshua_olazabal/Desktop/Playnite Mac/Sources/MacGameLibrary/ControllerMapping/ControllerMappingStore.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/oswald_joshua_olazabal/Desktop/Playnite Mac/Sources/MacGameLibrary/ControllerMapping/GamepadElementCatalog.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/oswald_joshua_olazabal/Desktop/Playnite Mac/Sources/MacGameLibrary/ControllerMapping/MappedAction.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/oswald_joshua_olazabal/Desktop/Playnite Mac/Sources/MacGameLibrary/ControllerMapping/MappedActionFormatting.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/oswald_joshua_olazabal/Desktop/Playnite Mac/Sources/MacGameLibrary/ControllerMapping/SyntheticInputPlayback.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/oswald_joshua_olazabal/Desktop/Playnite Mac/Sources/MacGameLibrary/ControllerMapping/VirtualKeyCatalog.swift"
+        },
+        {
+          "kind" : "file",
           "name" : "/Users/oswald_joshua_olazabal/Desktop/Playnite Mac/Sources/MacGameLibrary/Models/EmulatorProfile.swift"
         },
         {
@@ -85,6 +113,10 @@
         },
         {
           "kind" : "file",
+          "name" : "/Users/oswald_joshua_olazabal/Desktop/Playnite Mac/Sources/MacGameLibrary/Views/ControllerMappingView.swift"
+        },
+        {
+          "kind" : "file",
           "name" : "/Users/oswald_joshua_olazabal/Desktop/Playnite Mac/Sources/MacGameLibrary/Views/EmulatorsView.swift"
         },
         {
@@ -124,6 +156,13 @@
       "moduleName" : "MacGameLibrary",
       "moduleOutputPath" : "/Users/oswald_joshua_olazabal/Desktop/Playnite Mac/.build/arm64-apple-macosx/debug/Modules/MacGameLibrary.swiftmodule",
       "objects" : [
+        "/Users/oswald_joshua_olazabal/Desktop/Playnite Mac/.build/arm64-apple-macosx/debug/MacGameLibrary.build/ConnectedControllersObserver.swift.o",
+        "/Users/oswald_joshua_olazabal/Desktop/Playnite Mac/.build/arm64-apple-macosx/debug/MacGameLibrary.build/ControllerMappingStore.swift.o",
+        "/Users/oswald_joshua_olazabal/Desktop/Playnite Mac/.build/arm64-apple-macosx/debug/MacGameLibrary.build/GamepadElementCatalog.swift.o",
+        "/Users/oswald_joshua_olazabal/Desktop/Playnite Mac/.build/arm64-apple-macosx/debug/MacGameLibrary.build/MappedAction.swift.o",
+        "/Users/oswald_joshua_olazabal/Desktop/Playnite Mac/.build/arm64-apple-macosx/debug/MacGameLibrary.build/MappedActionFormatting.swift.o",
+        "/Users/oswald_joshua_olazabal/Desktop/Playnite Mac/.build/arm64-apple-macosx/debug/MacGameLibrary.build/SyntheticInputPlayback.swift.o",
+        "/Users/oswald_joshua_olazabal/Desktop/Playnite Mac/.build/arm64-apple-macosx/debug/MacGameLibrary.build/VirtualKeyCatalog.swift.o",
         "/Users/oswald_joshua_olazabal/Desktop/Playnite Mac/.build/arm64-apple-macosx/debug/MacGameLibrary.build/EmulatorProfile.swift.o",
         "/Users/oswald_joshua_olazabal/Desktop/Playnite Mac/.build/arm64-apple-macosx/debug/MacGameLibrary.build/GameFolderPath.swift.o",
         "/Users/oswald_joshua_olazabal/Desktop/Playnite Mac/.build/arm64-apple-macosx/debug/MacGameLibrary.build/LibraryGame.swift.o",
@@ -136,6 +175,7 @@
         "/Users/oswald_joshua_olazabal/Desktop/Playnite Mac/.build/arm64-apple-macosx/debug/MacGameLibrary.build/InAppControlPlaneClient.swift.o",
         "/Users/oswald_joshua_olazabal/Desktop/Playnite Mac/.build/arm64-apple-macosx/debug/MacGameLibrary.build/PINPairingTypes.swift.o",
         "/Users/oswald_joshua_olazabal/Desktop/Playnite Mac/.build/arm64-apple-macosx/debug/MacGameLibrary.build/StreamingPairingSession.swift.o",
+        "/Users/oswald_joshua_olazabal/Desktop/Playnite Mac/.build/arm64-apple-macosx/debug/MacGameLibrary.build/ControllerMappingView.swift.o",
         "/Users/oswald_joshua_olazabal/Desktop/Playnite Mac/.build/arm64-apple-macosx/debug/MacGameLibrary.build/EmulatorsView.swift.o",
         "/Users/oswald_joshua_olazabal/Desktop/Playnite Mac/.build/arm64-apple-macosx/debug/MacGameLibrary.build/PathsView.swift.o",
         "/Users/oswald_joshua_olazabal/Desktop/Playnite Mac/.build/arm64-apple-macosx/debug/MacGameLibrary.build/RootView.swift.o",
@@ -202,6 +242,34 @@
       "outputs" : [
         {
           "kind" : "file",
+          "name" : "/Users/oswald_joshua_olazabal/Desktop/Playnite Mac/.build/arm64-apple-macosx/debug/MacGameLibrary.build/ConnectedControllersObserver.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/oswald_joshua_olazabal/Desktop/Playnite Mac/.build/arm64-apple-macosx/debug/MacGameLibrary.build/ControllerMappingStore.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/oswald_joshua_olazabal/Desktop/Playnite Mac/.build/arm64-apple-macosx/debug/MacGameLibrary.build/GamepadElementCatalog.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/oswald_joshua_olazabal/Desktop/Playnite Mac/.build/arm64-apple-macosx/debug/MacGameLibrary.build/MappedAction.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/oswald_joshua_olazabal/Desktop/Playnite Mac/.build/arm64-apple-macosx/debug/MacGameLibrary.build/MappedActionFormatting.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/oswald_joshua_olazabal/Desktop/Playnite Mac/.build/arm64-apple-macosx/debug/MacGameLibrary.build/SyntheticInputPlayback.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/oswald_joshua_olazabal/Desktop/Playnite Mac/.build/arm64-apple-macosx/debug/MacGameLibrary.build/VirtualKeyCatalog.swift.o"
+        },
+        {
+          "kind" : "file",
           "name" : "/Users/oswald_joshua_olazabal/Desktop/Playnite Mac/.build/arm64-apple-macosx/debug/MacGameLibrary.build/EmulatorProfile.swift.o"
         },
         {
@@ -250,6 +318,10 @@
         },
         {
           "kind" : "file",
+          "name" : "/Users/oswald_joshua_olazabal/Desktop/Playnite Mac/.build/arm64-apple-macosx/debug/MacGameLibrary.build/ControllerMappingView.swift.o"
+        },
+        {
+          "kind" : "file",
           "name" : "/Users/oswald_joshua_olazabal/Desktop/Playnite Mac/.build/arm64-apple-macosx/debug/MacGameLibrary.build/EmulatorsView.swift.o"
         },
         {
@@ -279,6 +351,13 @@
       ],
       "prepareForIndexing" : false,
       "sources" : [
+        "/Users/oswald_joshua_olazabal/Desktop/Playnite Mac/Sources/MacGameLibrary/ControllerMapping/ConnectedControllersObserver.swift",
+        "/Users/oswald_joshua_olazabal/Desktop/Playnite Mac/Sources/MacGameLibrary/ControllerMapping/ControllerMappingStore.swift",
+        "/Users/oswald_joshua_olazabal/Desktop/Playnite Mac/Sources/MacGameLibrary/ControllerMapping/GamepadElementCatalog.swift",
+        "/Users/oswald_joshua_olazabal/Desktop/Playnite Mac/Sources/MacGameLibrary/ControllerMapping/MappedAction.swift",
+        "/Users/oswald_joshua_olazabal/Desktop/Playnite Mac/Sources/MacGameLibrary/ControllerMapping/MappedActionFormatting.swift",
+        "/Users/oswald_joshua_olazabal/Desktop/Playnite Mac/Sources/MacGameLibrary/ControllerMapping/SyntheticInputPlayback.swift",
+        "/Users/oswald_joshua_olazabal/Desktop/Playnite Mac/Sources/MacGameLibrary/ControllerMapping/VirtualKeyCatalog.swift",
         "/Users/oswald_joshua_olazabal/Desktop/Playnite Mac/Sources/MacGameLibrary/Models/EmulatorProfile.swift",
         "/Users/oswald_joshua_olazabal/Desktop/Playnite Mac/Sources/MacGameLibrary/Models/GameFolderPath.swift",
         "/Users/oswald_joshua_olazabal/Desktop/Playnite Mac/Sources/MacGameLibrary/Models/LibraryGame.swift",
@@ -291,6 +370,7 @@
         "/Users/oswald_joshua_olazabal/Desktop/Playnite Mac/Sources/MacGameLibrary/Streaming/InAppControlPlaneClient.swift",
         "/Users/oswald_joshua_olazabal/Desktop/Playnite Mac/Sources/MacGameLibrary/Streaming/PINPairingTypes.swift",
         "/Users/oswald_joshua_olazabal/Desktop/Playnite Mac/Sources/MacGameLibrary/Streaming/StreamingPairingSession.swift",
+        "/Users/oswald_joshua_olazabal/Desktop/Playnite Mac/Sources/MacGameLibrary/Views/ControllerMappingView.swift",
         "/Users/oswald_joshua_olazabal/Desktop/Playnite Mac/Sources/MacGameLibrary/Views/EmulatorsView.swift",
         "/Users/oswald_joshua_olazabal/Desktop/Playnite Mac/Sources/MacGameLibrary/Views/PathsView.swift",
         "/Users/oswald_joshua_olazabal/Desktop/Playnite Mac/Sources/MacGameLibrary/Views/RootView.swift",
@@ -313,6 +393,13 @@
       "-package-name",
       "playnite_mac",
       "-c",
+      "/Users/oswald_joshua_olazabal/Desktop/Playnite Mac/Sources/MacGameLibrary/ControllerMapping/ConnectedControllersObserver.swift",
+      "/Users/oswald_joshua_olazabal/Desktop/Playnite Mac/Sources/MacGameLibrary/ControllerMapping/ControllerMappingStore.swift",
+      "/Users/oswald_joshua_olazabal/Desktop/Playnite Mac/Sources/MacGameLibrary/ControllerMapping/GamepadElementCatalog.swift",
+      "/Users/oswald_joshua_olazabal/Desktop/Playnite Mac/Sources/MacGameLibrary/ControllerMapping/MappedAction.swift",
+      "/Users/oswald_joshua_olazabal/Desktop/Playnite Mac/Sources/MacGameLibrary/ControllerMapping/MappedActionFormatting.swift",
+      "/Users/oswald_joshua_olazabal/Desktop/Playnite Mac/Sources/MacGameLibrary/ControllerMapping/SyntheticInputPlayback.swift",
+      "/Users/oswald_joshua_olazabal/Desktop/Playnite Mac/Sources/MacGameLibrary/ControllerMapping/VirtualKeyCatalog.swift",
       "/Users/oswald_joshua_olazabal/Desktop/Playnite Mac/Sources/MacGameLibrary/Models/EmulatorProfile.swift",
       "/Users/oswald_joshua_olazabal/Desktop/Playnite Mac/Sources/MacGameLibrary/Models/GameFolderPath.swift",
       "/Users/oswald_joshua_olazabal/Desktop/Playnite Mac/Sources/MacGameLibrary/Models/LibraryGame.swift",
@@ -325,6 +412,7 @@
       "/Users/oswald_joshua_olazabal/Desktop/Playnite Mac/Sources/MacGameLibrary/Streaming/InAppControlPlaneClient.swift",
       "/Users/oswald_joshua_olazabal/Desktop/Playnite Mac/Sources/MacGameLibrary/Streaming/PINPairingTypes.swift",
       "/Users/oswald_joshua_olazabal/Desktop/Playnite Mac/Sources/MacGameLibrary/Streaming/StreamingPairingSession.swift",
+      "/Users/oswald_joshua_olazabal/Desktop/Playnite Mac/Sources/MacGameLibrary/Views/ControllerMappingView.swift",
       "/Users/oswald_joshua_olazabal/Desktop/Playnite Mac/Sources/MacGameLibrary/Views/EmulatorsView.swift",
       "/Users/oswald_joshua_olazabal/Desktop/Playnite Mac/Sources/MacGameLibrary/Views/PathsView.swift",
       "/Users/oswald_joshua_olazabal/Desktop/Playnite Mac/Sources/MacGameLibrary/Views/RootView.swift",
@@ -416,6 +504,34 @@
         },
         {
           "kind" : "file",
+          "name" : "/Users/oswald_joshua_olazabal/Desktop/Playnite Mac/Sources/MacGameLibrary/ControllerMapping/ConnectedControllersObserver.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/oswald_joshua_olazabal/Desktop/Playnite Mac/Sources/MacGameLibrary/ControllerMapping/ControllerMappingStore.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/oswald_joshua_olazabal/Desktop/Playnite Mac/Sources/MacGameLibrary/ControllerMapping/GamepadElementCatalog.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/oswald_joshua_olazabal/Desktop/Playnite Mac/Sources/MacGameLibrary/ControllerMapping/MappedAction.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/oswald_joshua_olazabal/Desktop/Playnite Mac/Sources/MacGameLibrary/ControllerMapping/MappedActionFormatting.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/oswald_joshua_olazabal/Desktop/Playnite Mac/Sources/MacGameLibrary/ControllerMapping/SyntheticInputPlayback.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/oswald_joshua_olazabal/Desktop/Playnite Mac/Sources/MacGameLibrary/ControllerMapping/VirtualKeyCatalog.swift"
+        },
+        {
+          "kind" : "file",
           "name" : "/Users/oswald_joshua_olazabal/Desktop/Playnite Mac/Sources/MacGameLibrary/Models/EmulatorProfile.swift"
         },
         {
@@ -461,6 +577,10 @@
         {
           "kind" : "file",
           "name" : "/Users/oswald_joshua_olazabal/Desktop/Playnite Mac/Sources/MacGameLibrary/Streaming/StreamingPairingSession.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/oswald_joshua_olazabal/Desktop/Playnite Mac/Sources/MacGameLibrary/Views/ControllerMappingView.swift"
         },
         {
           "kind" : "file",
