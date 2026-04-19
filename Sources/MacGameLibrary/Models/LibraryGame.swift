@@ -16,6 +16,8 @@ public final class LibraryGame {
     public var sortOrder: Int
     public var dateAdded: Date
     public var lastPlayed: Date?
+    /// When metadata (e.g. IGDB cover) was last requested; used to throttle background retries.
+    public var metadataLastFetchAt: Date?
 
     public init(
         id: UUID = UUID(),
@@ -26,7 +28,8 @@ public final class LibraryGame {
         platformHint: String? = nil,
         sortOrder: Int = 0,
         dateAdded: Date = Date(),
-        lastPlayed: Date? = nil
+        lastPlayed: Date? = nil,
+        metadataLastFetchAt: Date? = nil
     ) {
         self.id = id
         self.title = title
@@ -37,5 +40,6 @@ public final class LibraryGame {
         self.sortOrder = sortOrder
         self.dateAdded = dateAdded
         self.lastPlayed = lastPlayed
+        self.metadataLastFetchAt = metadataLastFetchAt
     }
 }

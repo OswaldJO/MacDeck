@@ -28,6 +28,7 @@ public struct RootView: View {
     @State private var confirmClearAllGames = false
     @State private var clearEmulatorGamesID: UUID?
     @State private var showStoredDataInspector = false
+    @State private var showMetadataSettings = false
 
     private var filteredGames: [LibraryGame] {
         switch sidebarSelection {
@@ -84,6 +85,13 @@ public struct RootView: View {
                             Image(systemName: "cylinder.split.1x2")
                         }
                         .help("Inspect SwiftData store and file path")
+
+                        Button {
+                            showMetadataSettings = true
+                        } label: {
+                            Image(systemName: "photo.on.rectangle.angled")
+                        }
+                        .help("Metadata (IGDB) credentials")
                     }
                 }
                 .alert("Scan Paths", isPresented: Binding(
@@ -161,8 +169,19 @@ public struct RootView: View {
                 sidebarSelection = .all
             }
         }
+        .task {
+            MetadataBackgroundFetcher.shared.startIfNeeded(container: modelContext.container)
+        }
         .sheet(isPresented: $showStoredDataInspector) {
             StoredDataInspectorView()
+        }
+        .sheet(isPresented: $showMetadataSettings) {
+            IGDBSettingsSheet()
+        }
+        .onChange(of: showMetadataSettings) { _, isShowing in
+            if !isShowing {
+                MetadataBackgroundFetcher.shared.scheduleExtraPass(container: modelContext.container)
+            }
         }
     }
 
@@ -173,6 +192,9 @@ public struct RootView: View {
                 added == 0
                 ? "No new games found. Add folders in Paths or check that files use supported extensions."
                 : "Added \(added) game(s) to the library."
+            if added > 0 {
+                MetadataBackgroundFetcher.shared.scheduleExtraPass(container: modelContext.container)
+            }
         } catch {
             scanFeedback = "Scan failed: \(error.localizedDescription)"
         }
@@ -307,9 +329,7 @@ private struct CoverThumbnail: View {
 
     var body: some View {
         Group {
-            if let urlString,
-               let url = URL(string: urlString),
-               url.isFileURL || url.scheme?.hasPrefix("http") == true {
+            if let urlString, let url = Self.resolvedImageURL(from: urlString) {
                 AsyncImage(url: url) { phase in
                     switch phase {
                     case .empty:
@@ -326,6 +346,13 @@ private struct CoverThumbnail: View {
                 placeholder
             }
         }
+    }
+
+    private static func resolvedImageURL(from string: String) -> URL? {
+        let normalized = string.hasPrefix("//") ? "https:" + string : string
+        guard let url = URL(string: normalized),
+              url.isFileURL || url.scheme?.hasPrefix("http") == true else { return nil }
+        return url
     }
 
     private var placeholder: some View {
