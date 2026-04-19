@@ -1,0 +1,9 @@
+.build/
+.swiftpm/
+DerivedData/
+*.xcodeproj/xcuserdata/
+*.xcworkspace/xcuserdata/
+
+# Local clones of streaming upstreams (see Vendor/streaming-repos/README.md)
+Vendor/streaming-repos/Apollo/
+Vendor/streaming-repos/moonlight-ios/

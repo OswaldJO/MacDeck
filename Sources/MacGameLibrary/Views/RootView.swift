@@ -5,6 +5,7 @@ private enum MainSection: Hashable {
     case library
     case emulators
     case paths
+    case streaming
 }
 
 private enum LibrarySidebarSelection: Hashable {
@@ -145,6 +146,10 @@ public struct RootView: View {
             PathsView()
                 .tabItem { Label("Paths", systemImage: "folder") }
                 .tag(MainSection.paths)
+
+            StreamingView()
+                .tabItem { Label("Streaming", systemImage: "dot.radiowaves.left.and.right") }
+                .tag(MainSection.streaming)
         }
         .onChange(of: emulators.map(\.id)) { _, ids in
             if case .emulator(let selectedId) = sidebarSelection, !ids.contains(selectedId) {
