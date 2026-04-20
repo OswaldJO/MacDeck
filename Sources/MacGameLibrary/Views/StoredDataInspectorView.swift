@@ -61,7 +61,9 @@ public struct StoredDataInspectorView: View {
                         VStack(alignment: .leading, spacing: 2) {
                             Text(p.folderPath).font(.caption)
                             if let emu = p.emulator {
-                                Text(emu.name).font(.caption2).foregroundStyle(.secondary)
+                                Text("\(emu.name) · \(p.resolvedPurpose == .covers ? "covers" : "games")")
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
                             }
                         }
                     }

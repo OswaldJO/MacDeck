@@ -6,6 +6,8 @@ import SwiftData
 public final class LibraryGame {
     public var id: UUID
     public var title: String
+    /// Optional name shown in the library grid; does not rename the file on disk. When `nil`, `title` is shown.
+    public var libraryDisplayName: String?
     /// Absolute path to the ROM or disc image.
     public var romPath: String
     public var emulator: EmulatorProfile?
@@ -22,6 +24,7 @@ public final class LibraryGame {
     public init(
         id: UUID = UUID(),
         title: String,
+        libraryDisplayName: String? = nil,
         romPath: String,
         emulator: EmulatorProfile? = nil,
         coverImageURLString: String? = nil,
@@ -33,6 +36,7 @@ public final class LibraryGame {
     ) {
         self.id = id
         self.title = title
+        self.libraryDisplayName = libraryDisplayName
         self.romPath = romPath
         self.emulator = emulator
         self.coverImageURLString = coverImageURLString
@@ -41,5 +45,12 @@ public final class LibraryGame {
         self.dateAdded = dateAdded
         self.lastPlayed = lastPlayed
         self.metadataLastFetchAt = metadataLastFetchAt
+    }
+
+    /// Title shown in the library UI (user override or `title`).
+    public var libraryListTitle: String {
+        let custom = libraryDisplayName?.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let custom, !custom.isEmpty { return custom }
+        return title
     }
 }

@@ -1,5 +1,7 @@
+import AppKit
 import SwiftData
 import SwiftUI
+import UniformTypeIdentifiers
 
 private enum MainSection: Hashable {
     case library
@@ -27,8 +29,10 @@ public struct RootView: View {
     @State private var scanFeedback: String?
     @State private var confirmClearAllGames = false
     @State private var clearEmulatorGamesID: UUID?
-    @State private var showStoredDataInspector = false
-    @State private var showMetadataSettings = false
+    /// Game card showing play / info overlay.
+    @State private var actionOverlayGameID: UUID?
+    /// Game open in the trailing inspector column.
+    @State private var inspectorGameID: UUID?
 
     private var filteredGames: [LibraryGame] {
         switch sidebarSelection {
@@ -37,6 +41,36 @@ public struct RootView: View {
         case .emulator(let id):
             return games.filter { $0.emulator?.id == id }
         }
+    }
+
+    @ViewBuilder
+    private var libraryDetailContent: some View {
+        HStack(spacing: 0) {
+            LibraryGamesGridView(
+                games: filteredGames,
+                actionOverlayGameID: $actionOverlayGameID,
+                inspectorGameID: $inspectorGameID,
+                onPlay: { play($0) },
+                onDelete: { deleteGame($0) }
+            )
+            .frame(minWidth: 240)
+            .layoutPriority(1)
+
+            if let id = inspectorGameID,
+               let game = filteredGames.first(where: { $0.id == id }) {
+                Divider()
+                NavigationStack {
+                    LibraryGameInspectorView(game: game) {
+                        inspectorGameID = nil
+                    }
+                }
+                .frame(minWidth: 280, idealWidth: 320, maxWidth: 520)
+                .frame(maxHeight: .infinity)
+                .transition(.move(edge: .trailing).combined(with: .opacity))
+            }
+        }
+        .animation(.easeInOut(duration: 0.22), value: inspectorGameID)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     public var body: some View {
@@ -68,30 +102,16 @@ public struct RootView: View {
                         Button {
                             addGamePlaceholder()
                         } label: {
-                            Image(systemName: "plus")
+                            Label("Add Game", systemImage: "plus")
+                                .labelStyle(.titleAndIcon)
                         }
-                        .help("Add Game")
 
                         Button {
                             performScan()
                         } label: {
-                            Image(systemName: "arrow.triangle.2.circlepath")
+                            Label("Scan Paths", systemImage: "arrow.triangle.2.circlepath")
+                                .labelStyle(.titleAndIcon)
                         }
-                        .help("Scan Paths")
-
-                        Button {
-                            showStoredDataInspector = true
-                        } label: {
-                            Image(systemName: "cylinder.split.1x2")
-                        }
-                        .help("Inspect SwiftData store and file path")
-
-                        Button {
-                            showMetadataSettings = true
-                        } label: {
-                            Image(systemName: "photo.on.rectangle.angled")
-                        }
-                        .help("Metadata (IGDB) credentials")
                     }
                 }
                 .alert("Scan Paths", isPresented: Binding(
@@ -138,11 +158,7 @@ public struct RootView: View {
                     }
                 }
             } detail: {
-                LibraryGamesGridView(
-                    games: filteredGames,
-                    onPlay: { play($0) },
-                    onDelete: { deleteGame($0) }
-                )
+                libraryDetailContent
             }
             .navigationSplitViewStyle(.balanced)
             .tabItem { Label("Library", systemImage: "square.grid.2x2") }
@@ -169,19 +185,16 @@ public struct RootView: View {
                 sidebarSelection = .all
             }
         }
+        .onChange(of: filteredGames.map(\.id)) { _, ids in
+            if let id = inspectorGameID, !ids.contains(id) {
+                inspectorGameID = nil
+            }
+            if let id = actionOverlayGameID, !ids.contains(id) {
+                actionOverlayGameID = nil
+            }
+        }
         .task {
             MetadataBackgroundFetcher.shared.startIfNeeded(container: modelContext.container)
-        }
-        .sheet(isPresented: $showStoredDataInspector) {
-            StoredDataInspectorView()
-        }
-        .sheet(isPresented: $showMetadataSettings) {
-            IGDBSettingsSheet()
-        }
-        .onChange(of: showMetadataSettings) { _, isShowing in
-            if !isShowing {
-                MetadataBackgroundFetcher.shared.scheduleExtraPass(container: modelContext.container)
-            }
         }
     }
 
@@ -255,6 +268,8 @@ public struct RootView: View {
 
 private struct LibraryGamesGridView: View {
     let games: [LibraryGame]
+    @Binding var actionOverlayGameID: UUID?
+    @Binding var inspectorGameID: UUID?
     let onPlay: (LibraryGame) -> Void
     let onDelete: (LibraryGame) -> Void
 
@@ -274,14 +289,35 @@ private struct LibraryGamesGridView: View {
                 ScrollView {
                     LazyVGrid(columns: columns, alignment: .leading, spacing: 20) {
                         ForEach(games) { game in
-                            GameLibraryTile(game: game, onPlay: { onPlay(game) })
-                                .contextMenu {
-                                    Button("Play", systemImage: "play.fill") { onPlay(game) }
-                                    Divider()
-                                    Button("Remove from Library", systemImage: "trash", role: .destructive) {
-                                        onDelete(game)
+                            GameLibraryTile(
+                                game: game,
+                                showsActionOverlay: actionOverlayGameID == game.id,
+                                onCardTap: {
+                                    if actionOverlayGameID == game.id {
+                                        actionOverlayGameID = nil
+                                    } else {
+                                        actionOverlayGameID = game.id
                                     }
+                                },
+                                onPlay: {
+                                    actionOverlayGameID = nil
+                                    onPlay(game)
+                                },
+                                onInfo: {
+                                    actionOverlayGameID = nil
+                                    inspectorGameID = game.id
                                 }
+                            )
+                            .contextMenu {
+                                Button("Play", systemImage: "play.fill") { onPlay(game) }
+                                Button("Details…", systemImage: "info.circle") {
+                                    inspectorGameID = game.id
+                                }
+                                Divider()
+                                Button("Remove from Library", systemImage: "trash", role: .destructive) {
+                                    onDelete(game)
+                                }
+                            }
                         }
                     }
                     .padding(20)
@@ -294,10 +330,13 @@ private struct LibraryGamesGridView: View {
 
 private struct GameLibraryTile: View {
     let game: LibraryGame
+    let showsActionOverlay: Bool
+    let onCardTap: () -> Void
     let onPlay: () -> Void
+    let onInfo: () -> Void
 
     var body: some View {
-        Button(action: onPlay) {
+        ZStack {
             VStack(alignment: .leading, spacing: 8) {
                 CoverThumbnail(urlString: game.coverImageURLString)
                     .aspectRatio(3 / 4, contentMode: .fill)
@@ -308,7 +347,7 @@ private struct GameLibraryTile: View {
                             .strokeBorder(.quaternary, lineWidth: 1)
                     }
 
-                Text(game.title)
+                Text(game.libraryListTitle)
                     .font(.subheadline.weight(.medium))
                     .foregroundStyle(.primary)
                     .multilineTextAlignment(.leading)
@@ -316,9 +355,142 @@ private struct GameLibraryTile: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
             .contentShape(Rectangle())
+            .onTapGesture(perform: onCardTap)
+
+            if showsActionOverlay {
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(Color.black.opacity(0.45))
+                    .onTapGesture(perform: onCardTap)
+
+                HStack(spacing: 28) {
+                    Button {
+                        onPlay()
+                    } label: {
+                        Image(systemName: "play.circle.fill")
+                            .font(.system(size: 40))
+                            .symbolRenderingMode(.palette)
+                            .foregroundStyle(.white, Color.accentColor.opacity(0.95))
+                    }
+                    .buttonStyle(.plain)
+                    .help("Play")
+
+                    Button {
+                        onInfo()
+                    } label: {
+                        Image(systemName: "info.circle.fill")
+                            .font(.system(size: 40))
+                            .symbolRenderingMode(.palette)
+                            .foregroundStyle(.white, .secondary)
+                    }
+                    .buttonStyle(.plain)
+                    .help("Game details and cover")
+                }
+            }
         }
-        .buttonStyle(.plain)
-        .help("Play \(game.title)")
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .help("Show actions for \(game.libraryListTitle)")
+    }
+}
+
+// MARK: - Inspector (cover + display name)
+
+private struct LibraryGameInspectorView: View {
+    @Environment(\.modelContext) private var modelContext
+    @Bindable var game: LibraryGame
+    var onDismiss: () -> Void
+
+    var body: some View {
+        Form {
+            Section {
+                TextField("Name in library", text: nameBinding, axis: .vertical)
+                    .textFieldStyle(.roundedBorder)
+                Text("Renames how this game appears here only. The file on disk is not renamed.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                LabeledContent("File") {
+                    Text(URL(fileURLWithPath: game.romPath).lastPathComponent)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .textSelection(.enabled)
+                        .multilineTextAlignment(.trailing)
+                }
+            }
+
+            Section("Cover art") {
+                HStack(alignment: .top, spacing: 16) {
+                    CoverThumbnail(urlString: game.coverImageURLString)
+                        .frame(width: 120, height: 160)
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 8)
+                                .strokeBorder(.quaternary, lineWidth: 1)
+                        }
+
+                    VStack(alignment: .leading, spacing: 10) {
+                        Button("Choose Image…", systemImage: "photo") {
+                            pickCoverImage()
+                        }
+                        if game.coverImageURLString != nil {
+                            Button("Clear cover", systemImage: "xmark.circle", role: .destructive) {
+                                game.coverImageURLString = nil
+                                try? modelContext.save()
+                            }
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
+        }
+        .formStyle(.grouped)
+        .padding()
+        .navigationTitle(game.libraryListTitle)
+        .toolbar {
+            ToolbarItem(placement: .cancellationAction) {
+                Button {
+                    onDismiss()
+                } label: {
+                    Label("Done", systemImage: "sidebar.right")
+                }
+                .help("Hide game details")
+            }
+        }
+    }
+
+    private var nameBinding: Binding<String> {
+        Binding(
+            get: {
+                game.libraryDisplayName ?? game.title
+            },
+            set: { new in
+                let trimmed = new.trimmingCharacters(in: .whitespacesAndNewlines)
+                if trimmed.isEmpty {
+                    game.libraryDisplayName = nil
+                } else if trimmed == game.title {
+                    game.libraryDisplayName = nil
+                } else {
+                    game.libraryDisplayName = trimmed
+                }
+                try? modelContext.save()
+            }
+        )
+    }
+
+    private func pickCoverImage() {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.image]
+        panel.canChooseFiles = true
+        panel.canChooseDirectories = false
+        panel.allowsMultipleSelection = false
+        panel.prompt = "Choose"
+        panel.begin { response in
+            guard response == .OK, let url = panel.url else { return }
+            let path = (url.path as NSString).standardizingPath
+            let fileURL = URL(fileURLWithPath: path)
+            DispatchQueue.main.async {
+                game.coverImageURLString = fileURL.absoluteString
+                try? modelContext.save()
+            }
+        }
     }
 }
 

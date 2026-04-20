@@ -72,10 +72,11 @@ final class MetadataBackgroundFetcher {
         guard let game = try? context.fetch(desc).first else { return }
 
         let romStem = URL(fileURLWithPath: game.romPath).deletingPathExtension().lastPathComponent
+        let searchTitle = game.libraryListTitle
 
         do {
             guard let result = try await MetadataService.fetchMetadata(
-                displayTitle: game.title,
+                displayTitle: searchTitle,
                 romFileNameStem: romStem,
                 platformHint: game.platformHint
             ) else {

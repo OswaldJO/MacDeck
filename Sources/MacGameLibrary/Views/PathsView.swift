@@ -20,10 +20,16 @@ struct PathsView: View {
         return first.id
     }
 
-    private var pathsForSelection: [GameFolderPath] {
+    private var gameFoldersForSelection: [GameFolderPath] {
         guard !emulators.isEmpty else { return [] }
         let id = effectiveEmulatorID
-        return allFolderPaths.filter { $0.emulator?.id == id }
+        return allFolderPaths.filter { $0.emulator?.id == id && $0.resolvedPurpose == .games }
+    }
+
+    private var coverFoldersForSelection: [GameFolderPath] {
+        guard !emulators.isEmpty else { return [] }
+        let id = effectiveEmulatorID
+        return allFolderPaths.filter { $0.emulator?.id == id && $0.resolvedPurpose == .covers }
     }
 
     var body: some View {
@@ -49,11 +55,11 @@ struct PathsView: View {
                     }
 
                     Section("Game folders for this emulator") {
-                        if pathsForSelection.isEmpty {
+                        if gameFoldersForSelection.isEmpty {
                             Text("No folders yet. Use “Add folder…” to pick a directory to scan.")
                                 .foregroundStyle(.secondary)
                         } else {
-                            ForEach(pathsForSelection) { entry in
+                            ForEach(gameFoldersForSelection) { entry in
                                 VStack(alignment: .leading, spacing: 4) {
                                     Text(entry.folderPath)
                                         .font(.body)
@@ -61,11 +67,35 @@ struct PathsView: View {
                                 }
                                 .padding(.vertical, 2)
                             }
-                            .onDelete(perform: deletePaths)
+                            .onDelete(perform: deleteGamePaths)
                         }
 
                         Button("Add folder…", systemImage: "folder.badge.plus") {
-                            addFolder()
+                            addGameFolder()
+                        }
+                    }
+
+                    Section("Covers for this emulator") {
+                        Text("Add folders that contain cover images. On scan, a file whose name matches a ROM (same name before the extension) is used as that game’s cover.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        if coverFoldersForSelection.isEmpty {
+                            Text("No cover folders yet.")
+                                .foregroundStyle(.secondary)
+                        } else {
+                            ForEach(coverFoldersForSelection) { entry in
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text(entry.folderPath)
+                                        .font(.body)
+                                        .textSelection(.enabled)
+                                }
+                                .padding(.vertical, 2)
+                            }
+                            .onDelete(perform: deleteCoverPaths)
+                        }
+
+                        Button("Add cover folder…", systemImage: "photo.on.rectangle.angled") {
+                            addCoverFolder()
                         }
                     }
                 }
@@ -89,7 +119,15 @@ struct PathsView: View {
         }
     }
 
-    private func addFolder() {
+    private func addGameFolder() {
+        addFolder(purpose: .games)
+    }
+
+    private func addCoverFolder() {
+        addFolder(purpose: .covers)
+    }
+
+    private func addFolder(purpose: GameFolderPurpose) {
         let emuID = effectiveEmulatorID
         guard let emulator = emulators.first(where: { $0.id == emuID }) else { return }
 
@@ -104,22 +142,38 @@ struct PathsView: View {
             DispatchQueue.main.async {
                 let desc = FetchDescriptor<GameFolderPath>()
                 let existing = (try? modelContext.fetch(desc)) ?? []
-                if existing.contains(where: { ($0.folderPath as NSString).standardizingPath == path && $0.emulator?.id == emuID }) {
+                if existing.contains(where: {
+                    ($0.folderPath as NSString).standardizingPath == path
+                        && $0.emulator?.id == emuID
+                        && $0.resolvedPurpose == purpose
+                }) {
                     return
                 }
-                let nextOrder = existing.filter { $0.emulator?.id == emuID }.map(\.sortOrder).max().map { $0 + 1 } ?? 0
+                let nextOrder = existing
+                    .filter { $0.emulator?.id == emuID && $0.resolvedPurpose == purpose }
+                    .map(\.sortOrder)
+                    .max()
+                    .map { $0 + 1 } ?? 0
                 let entry = GameFolderPath(
                     folderPath: path,
                     emulator: emulator,
-                    sortOrder: nextOrder
+                    sortOrder: nextOrder,
+                    folderPurpose: purpose.rawValue
                 )
                 modelContext.insert(entry)
             }
         }
     }
 
-    private func deletePaths(at offsets: IndexSet) {
-        let toDelete = offsets.map { pathsForSelection[$0] }
+    private func deleteGamePaths(at offsets: IndexSet) {
+        let toDelete = offsets.map { gameFoldersForSelection[$0] }
+        for item in toDelete {
+            modelContext.delete(item)
+        }
+    }
+
+    private func deleteCoverPaths(at offsets: IndexSet) {
+        let toDelete = offsets.map { coverFoldersForSelection[$0] }
         for item in toDelete {
             modelContext.delete(item)
         }

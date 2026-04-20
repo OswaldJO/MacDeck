@@ -2,6 +2,14 @@
 
 This repo now contains a starter Flutter companion app at `companion_app/`.
 
+## Project layout (Dart)
+
+- `companion_app/lib/main.dart` — entrypoint only (`runApp`).
+- `companion_app/lib/src/app.dart` — `MaterialApp` / theme.
+- `companion_app/lib/src/screens/home_page.dart` — tabs + UI state.
+- `companion_app/lib/src/services/streaming_bridge.dart` — `MethodChannel` API (`StreamingBridge.channelName` must match native code).
+- `companion_app/lib/src/models/host_info.dart` — host row model.
+
 ## What is included
 
 - Cross-platform Flutter UI with 3 tabs:
