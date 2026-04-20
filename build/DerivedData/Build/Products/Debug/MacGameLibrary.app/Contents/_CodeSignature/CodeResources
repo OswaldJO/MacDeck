@@ -3,17 +3,26 @@
 <plist version="1.0">
 <dict>
 	<key>files</key>
-	<dict/>
+	<dict>
+		<key>Resources/MacGameLibrary_MacGameLibrary.bundle/Contents/Info.plist</key>
+		<data>
+		PsV7Xk4j2L/FcVwxPfN7MzDQsRk=
+		</data>
+		<key>Resources/MacGameLibrary_MacGameLibrary.bundle/Contents/Resources/BuiltinEmulatorCatalog.json</key>
+		<data>
+		2B5O37UWhQ9EIZ7FUCSAOM4HweI=
+		</data>
+	</dict>
 	<key>files2</key>
 	<dict>
 		<key>MacOS/MacGameLibrary.debug.dylib</key>
 		<dict>
 			<key>cdhash</key>
 			<data>
-			NxVstydV6Ip9ktoVdyfW+F4+9cM=
+			M7L2Ut9YuAOdgEYEB2zkOFuFtrI=
 			</data>
 			<key>requirement</key>
-			<string>cdhash H"37156cb72755e88a7d92da157727d6f85e3ef5c3"</string>
+			<string>cdhash H"33b2f652df58b8039d804604076ce4385b85b6b2"</string>
 		</dict>
 		<key>MacOS/__preview.dylib</key>
 		<dict>
@@ -23,6 +32,20 @@
 			</data>
 			<key>requirement</key>
 			<string>cdhash H"5d0dccebc4adba13d67cfab9cf1393b8604b138d"</string>
+		</dict>
+		<key>Resources/MacGameLibrary_MacGameLibrary.bundle/Contents/Info.plist</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			tFYYyuKf29usBS2DcZ8mbTE8DmfmdgJVvynz1XgfJCU=
+			</data>
+		</dict>
+		<key>Resources/MacGameLibrary_MacGameLibrary.bundle/Contents/Resources/BuiltinEmulatorCatalog.json</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			pcNx10Hi9Q99fnvZ7J1IHCnF5EfrV1OZu55iQHTrX+k=
+			</data>
 		</dict>
 	</dict>
 	<key>rules</key>

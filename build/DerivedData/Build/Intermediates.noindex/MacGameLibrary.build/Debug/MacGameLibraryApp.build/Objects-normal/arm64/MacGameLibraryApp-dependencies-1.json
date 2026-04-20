@@ -75,6 +75,11 @@
     "modulePath" : "\/Applications\/Xcode.app\/Contents\/Developer\/Toolchains\/XcodeDefault.xctoolchain\/usr\/lib\/swift\/macosx\/prebuilt-modules\/26.2\/Foundation.swiftmodule\/arm64e-apple-macos.swiftmodule"
   },
   {
+    "isFramework" : true,
+    "moduleName" : "GameController",
+    "modulePath" : "\/Applications\/Xcode.app\/Contents\/Developer\/Toolchains\/XcodeDefault.xctoolchain\/usr\/lib\/swift\/macosx\/prebuilt-modules\/26.2\/GameController.swiftmodule\/arm64e-apple-macos.swiftmodule"
+  },
+  {
     "isFramework" : false,
     "moduleName" : "IOKit",
     "modulePath" : "\/Applications\/Xcode.app\/Contents\/Developer\/Toolchains\/XcodeDefault.xctoolchain\/usr\/lib\/swift\/macosx\/prebuilt-modules\/26.2\/IOKit.swiftmodule\/arm64e-apple-macos.swiftmodule"
@@ -240,6 +245,13 @@
     "moduleName" : "CUPS"
   },
   {
+    "clangModuleMapPath" : "\/Applications\/Xcode.app\/Contents\/Developer\/Platforms\/MacOSX.platform\/Developer\/SDKs\/MacOSX.sdk\/System\/Library\/Frameworks\/Carbon.framework\/Modules\/module.modulemap",
+    "clangModulePath" : "\/Users\/oswald_joshua_olazabal\/Desktop\/Playnite Mac\/build\/DerivedData\/ModuleCache.noindex\/Carbon-12L5FBAQGM7FWJ8N5YD4UW77J.pcm",
+    "isBridgingHeaderDependency" : false,
+    "isFramework" : false,
+    "moduleName" : "Carbon"
+  },
+  {
     "clangModuleMapPath" : "\/Applications\/Xcode.app\/Contents\/Developer\/Platforms\/MacOSX.platform\/Developer\/SDKs\/MacOSX.sdk\/System\/Library\/Frameworks\/ColorSync.framework\/Modules\/module.modulemap",
     "clangModulePath" : "\/Users\/oswald_joshua_olazabal\/Desktop\/Playnite Mac\/build\/DerivedData\/ModuleCache.noindex\/ColorSync-AC57BGFA4ZYB9UX9W670AM793.pcm",
     "isBridgingHeaderDependency" : false,
@@ -343,6 +355,13 @@
     "isBridgingHeaderDependency" : false,
     "isFramework" : false,
     "moduleName" : "Foundation"
+  },
+  {
+    "clangModuleMapPath" : "\/Applications\/Xcode.app\/Contents\/Developer\/Platforms\/MacOSX.platform\/Developer\/SDKs\/MacOSX.sdk\/System\/Library\/Frameworks\/GameController.framework\/Modules\/module.modulemap",
+    "clangModulePath" : "\/Users\/oswald_joshua_olazabal\/Desktop\/Playnite Mac\/build\/DerivedData\/ModuleCache.noindex\/GameController-2OCF3EVIOQC4QB8L21RJQLGSQ.pcm",
+    "isBridgingHeaderDependency" : false,
+    "isFramework" : false,
+    "moduleName" : "GameController"
   },
   {
     "clangModuleMapPath" : "\/Applications\/Xcode.app\/Contents\/Developer\/Platforms\/MacOSX.platform\/Developer\/SDKs\/MacOSX.sdk\/System\/Library\/Frameworks\/IOKit.framework\/Modules\/module.modulemap",
