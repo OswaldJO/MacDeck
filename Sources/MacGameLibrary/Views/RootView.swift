@@ -47,11 +47,20 @@ public struct RootView: View {
     }
 
     private var filteredGames: [LibraryGame] {
+        let sortedVisible = visibleLibraryGames.sorted {
+            let lhs = $0.libraryListTitle
+            let rhs = $1.libraryListTitle
+            let cmp = lhs.localizedStandardCompare(rhs)
+            if cmp == .orderedSame {
+                return $0.sortOrder < $1.sortOrder
+            }
+            return cmp == .orderedAscending
+        }
         switch sidebarSelection {
         case .all:
-            return visibleLibraryGames
+            return sortedVisible
         case .emulator(let id):
-            return visibleLibraryGames.filter { $0.emulatorUUID == id }
+            return sortedVisible.filter { $0.emulatorUUID == id }
         }
     }
 
