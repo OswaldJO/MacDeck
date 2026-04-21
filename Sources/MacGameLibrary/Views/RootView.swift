@@ -20,7 +20,7 @@ public struct RootView: View {
     public init() {}
 
     @Environment(\.modelContext) private var modelContext
-    @Query(sort: \EmulatorProfile.sortOrder) private var emulators: [EmulatorProfile]
+    @Query(sort: [SortDescriptor(\EmulatorProfile.name, comparator: .localizedStandard)]) private var emulators: [EmulatorProfile]
     @Query(sort: \LibraryGame.sortOrder) private var games: [LibraryGame]
 
     @State private var sidebarSelection: LibrarySidebarSelection = .all

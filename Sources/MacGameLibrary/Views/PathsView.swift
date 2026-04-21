@@ -10,6 +10,7 @@ struct PathsView: View {
     @State private var selectedEmulatorID: UUID?
     @State private var pendingDeletePathIDs: [UUID] = []
     @State private var pendingDeleteSectionTitle: String = ""
+    @State private var pasteFeedback: String?
 
     /// Resolved picker value when `emulators` is non-empty (avoids Picker tag/`nil` mismatch).
     private var effectiveEmulatorID: UUID {
@@ -81,8 +82,13 @@ struct PathsView: View {
                             .onDelete(perform: deleteGamePaths)
                         }
 
-                        Button("Add folder…", systemImage: "folder.badge.plus") {
-                            addGameFolder()
+                        HStack(spacing: 10) {
+                            Button("Add folder…", systemImage: "folder.badge.plus") {
+                                addGameFolder()
+                            }
+                            Button("Paste path", systemImage: "doc.on.clipboard") {
+                                pasteGameFolder()
+                            }
                         }
                     }
 
@@ -114,8 +120,13 @@ struct PathsView: View {
                             .onDelete(perform: deleteCoverPaths)
                         }
 
-                        Button("Add cover folder…", systemImage: "photo.on.rectangle.angled") {
-                            addCoverFolder()
+                        HStack(spacing: 10) {
+                            Button("Add cover folder…", systemImage: "photo.on.rectangle.angled") {
+                                addCoverFolder()
+                            }
+                            Button("Paste path", systemImage: "doc.on.clipboard") {
+                                pasteCoverFolder()
+                            }
                         }
                     }
                 }
@@ -160,14 +171,30 @@ struct PathsView: View {
         } message: {
             Text("This only removes the saved path from Playnite Mac. Files on disk are not deleted.")
         }
+        .alert("Paste path", isPresented: Binding(
+            get: { pasteFeedback != nil },
+            set: { if !$0 { pasteFeedback = nil } }
+        )) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(pasteFeedback ?? "")
+        }
     }
 
     private func addGameFolder() {
         addFolder(purpose: .games)
     }
 
+    private func pasteGameFolder() {
+        pasteFolder(purpose: .games)
+    }
+
     private func addCoverFolder() {
         addFolder(purpose: .covers)
+    }
+
+    private func pasteCoverFolder() {
+        pasteFolder(purpose: .covers)
     }
 
     private func addFolder(purpose: GameFolderPurpose) {
@@ -197,15 +224,96 @@ struct PathsView: View {
                     .map(\.sortOrder)
                     .max()
                     .map { $0 + 1 } ?? 0
-                let entry = GameFolderPath(
-                    folderPath: path,
+                insertPath(
+                    path,
                     emulator: emulator,
-                    sortOrder: nextOrder,
-                    folderPurpose: purpose.rawValue
+                    purpose: purpose,
+                    existing: existing,
+                    nextOrder: nextOrder
                 )
-                modelContext.insert(entry)
             }
         }
+    }
+
+    private func pasteFolder(purpose: GameFolderPurpose) {
+        let emuID = effectiveEmulatorID
+        guard let emulator = emulators.first(where: { $0.id == emuID }) else { return }
+        guard let raw = NSPasteboard.general.string(forType: .string)?
+            .trimmingCharacters(in: .whitespacesAndNewlines), !raw.isEmpty else {
+            pasteFeedback = "Clipboard is empty. Copy a folder path first."
+            return
+        }
+
+        let resolvedPath = normalizePastedPath(raw)
+        var isDir: ObjCBool = false
+        guard FileManager.default.fileExists(atPath: resolvedPath, isDirectory: &isDir), isDir.boolValue else {
+            pasteFeedback = "The pasted value is not an existing folder path:\n\(resolvedPath)"
+            return
+        }
+
+        let standardized = (resolvedPath as NSString).standardizingPath
+        let desc = FetchDescriptor<GameFolderPath>()
+        let existing = (try? modelContext.fetch(desc)) ?? []
+        if existing.contains(where: {
+            ($0.folderPath as NSString).standardizingPath == standardized
+                && $0.emulator?.id == emuID
+                && $0.resolvedPurpose == purpose
+        }) {
+            pasteFeedback = "That path is already added for this emulator."
+            return
+        }
+
+        let nextOrder = existing
+            .filter { $0.emulator?.id == emuID && $0.resolvedPurpose == purpose }
+            .map(\.sortOrder)
+            .max()
+            .map { $0 + 1 } ?? 0
+        insertPath(
+            standardized,
+            emulator: emulator,
+            purpose: purpose,
+            existing: existing,
+            nextOrder: nextOrder
+        )
+    }
+
+    private func insertPath(
+        _ path: String,
+        emulator: EmulatorProfile,
+        purpose: GameFolderPurpose,
+        existing: [GameFolderPath],
+        nextOrder: Int
+    ) {
+        if existing.contains(where: {
+            ($0.folderPath as NSString).standardizingPath == path
+                && $0.emulator?.id == emulator.id
+                && $0.resolvedPurpose == purpose
+        }) {
+            return
+        }
+        let entry = GameFolderPath(
+            folderPath: path,
+            emulator: emulator,
+            sortOrder: nextOrder,
+            folderPurpose: purpose.rawValue
+        )
+        modelContext.insert(entry)
+    }
+
+    private func normalizePastedPath(_ raw: String) -> String {
+        var value = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        if (value.hasPrefix("\"") && value.hasSuffix("\"")) || (value.hasPrefix("'") && value.hasSuffix("'")) {
+            value.removeFirst()
+            value.removeLast()
+        }
+
+        if let fileURL = URL(string: value), fileURL.isFileURL {
+            value = fileURL.path
+        }
+
+        value = (value as NSString).expandingTildeInPath
+        return (value as NSString).standardizingPath
     }
 
     private func deleteGamePaths(at offsets: IndexSet) {
