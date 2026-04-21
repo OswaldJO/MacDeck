@@ -182,8 +182,9 @@ public enum GamePathScanner {
             ) else { continue }
 
             while let item = enumerator.nextObject() as? URL {
-                let values = try? item.resourceValues(forKeys: [.isRegularFileKey])
-                guard values?.isRegularFile == true else { continue }
+                let values = try? item.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey])
+                let isFileLike = (values?.isRegularFile == true) || (values?.isSymbolicLink == true)
+                guard isFileLike else { continue }
 
                 let ext = item.pathExtension.lowercased()
                 guard coverImageExtensions.contains(ext) else { continue }
@@ -242,7 +243,7 @@ public enum GamePathScanner {
             ) else { continue }
 
             while let item = enumerator.nextObject() as? URL {
-                let values = try? item.resourceValues(forKeys: [.isRegularFileKey, .isDirectoryKey])
+                let values = try? item.resourceValues(forKeys: [.isRegularFileKey, .isDirectoryKey, .isSymbolicLinkKey])
 
                 if values?.isDirectory == true, let ps3Launch = ps3LaunchPathIfPresent(for: item) {
                     let dirPath = (item.path as NSString).standardizingPath
@@ -278,7 +279,8 @@ public enum GamePathScanner {
                     continue
                 }
 
-                guard values?.isRegularFile == true else { continue }
+                let isFileLike = (values?.isRegularFile == true) || (values?.isSymbolicLink == true)
+                guard isFileLike else { continue }
                 let itemPath = (item.path as NSString).standardizingPath
                 if isPath(itemPath, insideAny: excludedRoots) {
                     continue
