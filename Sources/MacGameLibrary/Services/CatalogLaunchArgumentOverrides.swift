@@ -1,0 +1,35 @@
+import Foundation
+
+/// Persists user-edited launch argument templates for built-in catalog profiles (bundle JSON is read-only).
+public enum CatalogLaunchArgumentOverrides {
+    private static let userDefaultsKey = "MacGameLibrary.CatalogLaunchArgumentOverrides.v1"
+
+    private static func loadMap() -> [Int: String] {
+        guard let data = UserDefaults.standard.data(forKey: userDefaultsKey),
+              let raw = try? JSONDecoder().decode([String: String].self, from: data) else {
+            return [:]
+        }
+        return Dictionary(uniqueKeysWithValues: raw.compactMap { key, value in
+            guard let id = Int(key) else { return nil }
+            return (id, value)
+        })
+    }
+
+    private static func saveMap(_ map: [Int: String]) {
+        let raw = Dictionary(uniqueKeysWithValues: map.map { (String($0.key), $0.value) })
+        if let data = try? JSONEncoder().encode(raw) {
+            UserDefaults.standard.set(data, forKey: userDefaultsKey)
+        }
+    }
+
+    /// Effective template: user override when present, otherwise the catalog default.
+    public static func effectiveStartupArguments(for record: BuiltinEmulatorProfileRecord) -> String {
+        loadMap()[record.catalogId] ?? record.startupArguments
+    }
+
+    public static func setEffectiveStartupArguments(_ value: String, catalogId: Int) {
+        var map = loadMap()
+        map[catalogId] = value
+        saveMap(map)
+    }
+}

@@ -86,6 +86,20 @@
     "swift-dependencies": "/Users/oswald_joshua_olazabal/Desktop/Playnite Mac/.build/arm64-apple-macosx/debug/MacGameLibrary.build/BuiltinEmulatorCatalog.swiftdeps",
     "diagnostics": "/Users/oswald_joshua_olazabal/Desktop/Playnite Mac/.build/arm64-apple-macosx/debug/MacGameLibrary.build/BuiltinEmulatorCatalog.dia"
   },
+  "/Users/oswald_joshua_olazabal/Desktop/Playnite Mac/Sources/MacGameLibrary/Services/CatalogLaunchArgumentOverrides.swift": {
+    "dependencies": "/Users/oswald_joshua_olazabal/Desktop/Playnite Mac/.build/arm64-apple-macosx/debug/MacGameLibrary.build/CatalogLaunchArgumentOverrides.d",
+    "object": "/Users/oswald_joshua_olazabal/Desktop/Playnite Mac/.build/arm64-apple-macosx/debug/MacGameLibrary.build/CatalogLaunchArgumentOverrides.swift.o",
+    "swiftmodule": "/Users/oswald_joshua_olazabal/Desktop/Playnite Mac/.build/arm64-apple-macosx/debug/MacGameLibrary.build/CatalogLaunchArgumentOverrides~partial.swiftmodule",
+    "swift-dependencies": "/Users/oswald_joshua_olazabal/Desktop/Playnite Mac/.build/arm64-apple-macosx/debug/MacGameLibrary.build/CatalogLaunchArgumentOverrides.swiftdeps",
+    "diagnostics": "/Users/oswald_joshua_olazabal/Desktop/Playnite Mac/.build/arm64-apple-macosx/debug/MacGameLibrary.build/CatalogLaunchArgumentOverrides.dia"
+  },
+  "/Users/oswald_joshua_olazabal/Desktop/Playnite Mac/Sources/MacGameLibrary/Services/CustomEmulatorLibraryStore.swift": {
+    "dependencies": "/Users/oswald_joshua_olazabal/Desktop/Playnite Mac/.build/arm64-apple-macosx/debug/MacGameLibrary.build/CustomEmulatorLibraryStore.d",
+    "object": "/Users/oswald_joshua_olazabal/Desktop/Playnite Mac/.build/arm64-apple-macosx/debug/MacGameLibrary.build/CustomEmulatorLibraryStore.swift.o",
+    "swiftmodule": "/Users/oswald_joshua_olazabal/Desktop/Playnite Mac/.build/arm64-apple-macosx/debug/MacGameLibrary.build/CustomEmulatorLibraryStore~partial.swiftmodule",
+    "swift-dependencies": "/Users/oswald_joshua_olazabal/Desktop/Playnite Mac/.build/arm64-apple-macosx/debug/MacGameLibrary.build/CustomEmulatorLibraryStore.swiftdeps",
+    "diagnostics": "/Users/oswald_joshua_olazabal/Desktop/Playnite Mac/.build/arm64-apple-macosx/debug/MacGameLibrary.build/CustomEmulatorLibraryStore.dia"
+  },
   "/Users/oswald_joshua_olazabal/Desktop/Playnite Mac/Sources/MacGameLibrary/Services/GameLauncher.swift": {
     "dependencies": "/Users/oswald_joshua_olazabal/Desktop/Playnite Mac/.build/arm64-apple-macosx/debug/MacGameLibrary.build/GameLauncher.d",
     "object": "/Users/oswald_joshua_olazabal/Desktop/Playnite Mac/.build/arm64-apple-macosx/debug/MacGameLibrary.build/GameLauncher.swift.o",

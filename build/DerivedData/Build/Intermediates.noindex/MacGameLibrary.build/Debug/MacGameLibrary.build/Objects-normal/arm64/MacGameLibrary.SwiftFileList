@@ -11,6 +11,8 @@
 /Users/oswald_joshua_olazabal/Desktop/Playnite\ Mac/Sources/MacGameLibrary/Models/LibraryGame.swift
 /Users/oswald_joshua_olazabal/Desktop/Playnite\ Mac/Sources/MacGameLibrary/Persistence/PersistenceStoreLocation.swift
 /Users/oswald_joshua_olazabal/Desktop/Playnite\ Mac/Sources/MacGameLibrary/Services/BuiltinEmulatorCatalog.swift
+/Users/oswald_joshua_olazabal/Desktop/Playnite\ Mac/Sources/MacGameLibrary/Services/CatalogLaunchArgumentOverrides.swift
+/Users/oswald_joshua_olazabal/Desktop/Playnite\ Mac/Sources/MacGameLibrary/Services/CustomEmulatorLibraryStore.swift
 /Users/oswald_joshua_olazabal/Desktop/Playnite\ Mac/Sources/MacGameLibrary/Services/GameLauncher.swift
 /Users/oswald_joshua_olazabal/Desktop/Playnite\ Mac/Sources/MacGameLibrary/Services/GamePathScanner.swift
 /Users/oswald_joshua_olazabal/Desktop/Playnite\ Mac/Sources/MacGameLibrary/Services/IGDBClient.swift

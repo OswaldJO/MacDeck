@@ -57,4 +57,13 @@ extension [BuiltinEmulatorProfileRecord] {
             return false
         }
     }
+
+    /// Full list when the search string is empty; otherwise the same matching rules as ``filteredForSearch``.
+    func matchingCatalogSearch(_ query: String) -> [BuiltinEmulatorProfileRecord] {
+        let q = query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        if q.isEmpty {
+            return self
+        }
+        return filteredForSearch(query)
+    }
 }
