@@ -6,7 +6,7 @@
 	<integer>12</integer>
 	<key>logs</key>
 	<dict>
-		<key>0BA1B166-A1D8-4B93-AEBE-95E4278D4893</key>
+		<key>58D774FE-AC38-4CF6-873B-A5A397D66A4F</key>
 		<dict>
 			<key>className</key>
 			<string>IDECommandLineBuildLog</string>
@@ -15,7 +15,7 @@
 			<key>domainType</key>
 			<string>Xcode.IDEActivityLogDomainType.BuildLog</string>
 			<key>fileName</key>
-			<string>0BA1B166-A1D8-4B93-AEBE-95E4278D4893.xcactivitylog</string>
+			<string>58D774FE-AC38-4CF6-873B-A5A397D66A4F.xcactivitylog</string>
 			<key>hasPrimaryLog</key>
 			<true/>
 			<key>primaryObservable</key>
@@ -34,13 +34,13 @@
 			<key>signature</key>
 			<string>Resolve Packages</string>
 			<key>timeStartedRecording</key>
-			<real>798447901.51611698</real>
+			<real>798448477.67316306</real>
 			<key>timeStoppedRecording</key>
-			<real>798447901.54587197</real>
+			<real>798448477.70324194</real>
 			<key>title</key>
 			<string>Resolve Packages</string>
 			<key>uniqueIdentifier</key>
-			<string>0BA1B166-A1D8-4B93-AEBE-95E4278D4893</string>
+			<string>58D774FE-AC38-4CF6-873B-A5A397D66A4F</string>
 		</dict>
 		<key>9EA5DC49-3D02-4745-9829-733A75F810BD</key>
 		<dict>
@@ -78,7 +78,7 @@
 			<key>uniqueIdentifier</key>
 			<string>9EA5DC49-3D02-4745-9829-733A75F810BD</string>
 		</dict>
-		<key>F521F916-6818-4E11-8E85-C2B2EE305F43</key>
+		<key>EE89B3E1-1A57-41C4-8A9B-557B56CD7008</key>
 		<dict>
 			<key>className</key>
 			<string>IDECommandLineBuildLog</string>
@@ -87,7 +87,7 @@
 			<key>domainType</key>
 			<string>Xcode.IDEActivityLogDomainType.BuildLog</string>
 			<key>fileName</key>
-			<string>F521F916-6818-4E11-8E85-C2B2EE305F43.xcactivitylog</string>
+			<string>EE89B3E1-1A57-41C4-8A9B-557B56CD7008.xcactivitylog</string>
 			<key>hasPrimaryLog</key>
 			<true/>
 			<key>primaryObservable</key>
@@ -106,13 +106,13 @@
 			<key>signature</key>
 			<string>Resolve Packages</string>
 			<key>timeStartedRecording</key>
-			<real>798447757.45787704</real>
+			<real>798448587.08768106</real>
 			<key>timeStoppedRecording</key>
-			<real>798447757.48616004</real>
+			<real>798448587.11958599</real>
 			<key>title</key>
 			<string>Resolve Packages</string>
 			<key>uniqueIdentifier</key>
-			<string>F521F916-6818-4E11-8E85-C2B2EE305F43</string>
+			<string>EE89B3E1-1A57-41C4-8A9B-557B56CD7008</string>
 		</dict>
 	</dict>
 </dict>

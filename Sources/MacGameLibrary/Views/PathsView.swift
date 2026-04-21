@@ -35,6 +35,12 @@ struct PathsView: View {
         return allFolderPaths.filter { $0.emulator?.id == id && $0.resolvedPurpose == .covers }
     }
 
+    private var excludedFoldersForSelection: [GameFolderPath] {
+        guard !emulators.isEmpty else { return [] }
+        let id = effectiveEmulatorID
+        return allFolderPaths.filter { $0.emulator?.id == id && $0.resolvedPurpose == .excludes }
+    }
+
     var body: some View {
         Group {
             if emulators.isEmpty {
@@ -83,7 +89,7 @@ struct PathsView: View {
                         }
 
                         HStack(spacing: 10) {
-                            Button("Add folder…", systemImage: "folder.badge.plus") {
+                            Button("Add folder", systemImage: "folder.badge.plus") {
                                 addGameFolder()
                             }
                             Button("Paste path", systemImage: "doc.on.clipboard") {
@@ -121,11 +127,49 @@ struct PathsView: View {
                         }
 
                         HStack(spacing: 10) {
-                            Button("Add cover folder…", systemImage: "photo.on.rectangle.angled") {
+                            Button("Add cover folder", systemImage: "photo.on.rectangle.angled") {
                                 addCoverFolder()
                             }
                             Button("Paste path", systemImage: "doc.on.clipboard") {
                                 pasteCoverFolder()
+                            }
+                        }
+                    }
+
+                    Section("Exclude these folders from Scans") {
+                        Text("Anything inside these folders is skipped when scanning game folders for this emulator.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        if excludedFoldersForSelection.isEmpty {
+                            Text("No excluded folders yet.")
+                                .foregroundStyle(.secondary)
+                        } else {
+                            ForEach(excludedFoldersForSelection) { entry in
+                                HStack(alignment: .top, spacing: 8) {
+                                    Text(entry.folderPath)
+                                        .font(.body)
+                                        .textSelection(.enabled)
+                                    Spacer(minLength: 8)
+                                    Button(role: .destructive) {
+                                        requestDelete(paths: [entry], sectionTitle: "excluded folder")
+                                    } label: {
+                                        Label("Delete excluded folder path", systemImage: "trash")
+                                            .labelStyle(.iconOnly)
+                                    }
+                                    .buttonStyle(.borderless)
+                                    .help("Remove this excluded folder path")
+                                }
+                                .padding(.vertical, 2)
+                            }
+                            .onDelete(perform: deleteExcludedPaths)
+                        }
+
+                        HStack(spacing: 10) {
+                            Button("Add folder…", systemImage: "folder.badge.minus") {
+                                addExcludedFolder()
+                            }
+                            Button("Paste path", systemImage: "doc.on.clipboard") {
+                                pasteExcludedFolder()
                             }
                         }
                     }
@@ -195,6 +239,14 @@ struct PathsView: View {
 
     private func pasteCoverFolder() {
         pasteFolder(purpose: .covers)
+    }
+
+    private func addExcludedFolder() {
+        addFolder(purpose: .excludes)
+    }
+
+    private func pasteExcludedFolder() {
+        pasteFolder(purpose: .excludes)
     }
 
     private func addFolder(purpose: GameFolderPurpose) {
@@ -324,6 +376,11 @@ struct PathsView: View {
     private func deleteCoverPaths(at offsets: IndexSet) {
         let toDelete = offsets.map { coverFoldersForSelection[$0] }
         requestDelete(paths: toDelete, sectionTitle: "cover folder")
+    }
+
+    private func deleteExcludedPaths(at offsets: IndexSet) {
+        let toDelete = offsets.map { excludedFoldersForSelection[$0] }
+        requestDelete(paths: toDelete, sectionTitle: "excluded folder")
     }
 
     private func requestDelete(paths: [GameFolderPath], sectionTitle: String) {

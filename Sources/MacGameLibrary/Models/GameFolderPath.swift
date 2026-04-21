@@ -5,6 +5,7 @@ import SwiftData
 public enum GameFolderPurpose: String, Codable, CaseIterable {
     case games
     case covers
+    case excludes
 }
 
 /// A folder on disk whose files should be associated with one emulator when scanning.

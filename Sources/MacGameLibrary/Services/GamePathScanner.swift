@@ -98,6 +98,14 @@ public enum GamePathScanner {
         return false
     }
 
+    private static func isPath(_ path: String, insideAny excludedRoots: [String]) -> Bool {
+        for root in excludedRoots {
+            if path == root { return true }
+            if path.hasPrefix(root + "/") { return true }
+        }
+        return false
+    }
+
     /// Minimal parser for PS3 PARAM.SFO key/value string fields.
     private static func parsePS3SFO(_ data: Data) -> [String: String]? {
         guard data.count >= 20 else { return nil }
@@ -218,6 +226,15 @@ public enum GamePathScanner {
                 continue
             }
 
+            let excludedRoots = folderEntries
+                .filter { $0.emulator?.id == emulator.id && $0.resolvedPurpose == .excludes }
+                .map { ($0.folderPath as NSString).standardizingPath }
+                .sorted { $0.count > $1.count }
+            let standardizedRoot = (root.path as NSString).standardizingPath
+            if isPath(standardizedRoot, insideAny: excludedRoots) {
+                continue
+            }
+
             guard let enumerator = FileManager.default.enumerator(
                 at: root,
                 includingPropertiesForKeys: [.isRegularFileKey],
@@ -228,6 +245,11 @@ public enum GamePathScanner {
                 let values = try? item.resourceValues(forKeys: [.isRegularFileKey, .isDirectoryKey])
 
                 if values?.isDirectory == true, let ps3Launch = ps3LaunchPathIfPresent(for: item) {
+                    let dirPath = (item.path as NSString).standardizingPath
+                    if isPath(dirPath, insideAny: excludedRoots) {
+                        enumerator.skipDescendants()
+                        continue
+                    }
                     guard shouldIncludePS3Folder(item) else {
                         enumerator.skipDescendants()
                         continue
@@ -257,6 +279,10 @@ public enum GamePathScanner {
                 }
 
                 guard values?.isRegularFile == true else { continue }
+                let itemPath = (item.path as NSString).standardizingPath
+                if isPath(itemPath, insideAny: excludedRoots) {
+                    continue
+                }
 
                 let ext = item.pathExtension.lowercased()
                 if isPS3Emulator {
@@ -265,7 +291,7 @@ public enum GamePathScanner {
                     guard romExtensions.contains(ext) else { continue }
                 }
 
-                let standardized = (item.path as NSString).standardizingPath
+                let standardized = itemPath
                 guard !existingPaths.contains(standardized) else { continue }
                 existingPaths.insert(standardized)
 
