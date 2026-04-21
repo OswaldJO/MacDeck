@@ -359,9 +359,9 @@ private struct GameLibraryTile: View {
                 Text(game.libraryListTitle)
                     .font(.subheadline.weight(.medium))
                     .foregroundStyle(.primary)
-                    .multilineTextAlignment(.leading)
+                    .multilineTextAlignment(.center)
                     .lineLimit(3)
-                    .frame(width: LibraryGridMetrics.cardWidth, height: LibraryGridMetrics.titleHeight, alignment: .topLeading)
+                    .frame(width: LibraryGridMetrics.cardWidth, height: LibraryGridMetrics.titleHeight, alignment: .top)
             }
             .contentShape(Rectangle())
             .onTapGesture(perform: onCardTap)
