@@ -26,33 +26,45 @@ enum GameLauncher {
     private static var terminationObservers: [NSObjectProtocol] = []
 
     static func launch(game: LibraryGame) throws {
+        DebugLog.log("Launch requested: title=\(game.title) romPath=\(game.romPath)")
         guard let emulator = game.emulator else {
+            DebugLog.log("Launch failed: missing emulator")
             throw GameLaunchError.missingEmulator
         }
         let romURL = URL(fileURLWithPath: game.romPath)
         let standardizedPath = (romURL.path as NSString).standardizingPath
         guard FileManager.default.fileExists(atPath: standardizedPath) else {
+            DebugLog.log("Launch failed: missing ROM at \(standardizedPath)")
             throw GameLaunchError.missingRom
         }
 
         let exe = URL(fileURLWithPath: emulator.executablePath)
         guard FileManager.default.fileExists(atPath: exe.path) else {
+            DebugLog.log("Launch failed: missing emulator executable at \(exe.path)")
             throw GameLaunchError.invalidExecutable
         }
 
         let substituted = substituteTemplate(emulator.launchArgumentTemplate, gameFilePath: standardizedPath)
         let parts = parseArguments(substituted)
         let resolvedExe = resolvedExecutableURL(exe)
+        DebugLog.log("Resolved emulator=\(resolvedExe.path)")
+        DebugLog.log("Launch template=\(emulator.launchArgumentTemplate)")
+        DebugLog.log("Launch substituted=\(substituted)")
+        DebugLog.log("Launch args=\(parts.joined(separator: " | "))")
 
         // For already-running .app emulators (e.g. RPCS3), launching a second process can fail
         // with single-instance locks. Send an "open document" event to the running app instead.
         if resolvedExe.pathExtension.lowercased() == "app",
            let runningApp = runningApplication(forBundlePath: resolvedExe.path) {
+            DebugLog.log("Emulator already running (pid=\(runningApp.processIdentifier)); using open document event")
             registerLaunchedApplication(runningApp)
             let config = NSWorkspace.OpenConfiguration()
             NSWorkspace.shared.open([URL(fileURLWithPath: standardizedPath)], withApplicationAt: resolvedExe, configuration: config) { _, error in
                 if let error {
                     NSLog("Launch error: \(error.localizedDescription)")
+                    DebugLog.log("Open document callback error: \(error.localizedDescription)")
+                } else {
+                    DebugLog.log("Open document callback succeeded")
                 }
             }
             return
@@ -68,11 +80,14 @@ enum GameLauncher {
             Task { @MainActor in
                 if let error {
                     NSLog("Launch error: \(error.localizedDescription)")
+                    DebugLog.log("openApplication callback error: \(error.localizedDescription)")
                     return
                 }
                 guard let runningApp else {
+                    DebugLog.log("openApplication callback returned nil app")
                     return
                 }
+                DebugLog.log("openApplication callback success pid=\(runningApp.processIdentifier)")
                 registerLaunchedApplication(runningApp)
             }
         }
@@ -84,6 +99,7 @@ enum GameLauncher {
 
         let inserted = trackedLaunchPIDs.insert(pid).inserted
         if inserted {
+            DebugLog.log("Tracking launched app pid=\(pid); hiding launcher app")
             NSApp.hide(nil)
         }
 
@@ -106,8 +122,10 @@ enum GameLauncher {
     private static func unregisterLaunchedApplication(pid: pid_t) {
         guard trackedLaunchPIDs.contains(pid) else { return }
         trackedLaunchPIDs.remove(pid)
+        DebugLog.log("Launched app terminated pid=\(pid); remaining tracked=\(trackedLaunchPIDs.count)")
 
         if trackedLaunchPIDs.isEmpty {
+            DebugLog.log("No tracked launches remaining; unhiding launcher app")
             NSApp.unhide(nil)
             NSApp.activate(ignoringOtherApps: true)
         }

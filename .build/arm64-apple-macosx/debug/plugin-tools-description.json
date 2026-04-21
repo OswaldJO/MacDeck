@@ -93,6 +93,10 @@
         },
         {
           "kind" : "file",
+          "name" : "/Users/oswald_joshua_olazabal/Desktop/Playnite Mac/Sources/MacGameLibrary/Services/DebugLog.swift"
+        },
+        {
+          "kind" : "file",
           "name" : "/Users/oswald_joshua_olazabal/Desktop/Playnite Mac/Sources/MacGameLibrary/Services/GameLauncher.swift"
         },
         {
@@ -198,6 +202,7 @@
         "/Users/oswald_joshua_olazabal/Desktop/Playnite Mac/.build/arm64-apple-macosx/debug/MacGameLibrary.build/BuiltinEmulatorCatalog.swift.o",
         "/Users/oswald_joshua_olazabal/Desktop/Playnite Mac/.build/arm64-apple-macosx/debug/MacGameLibrary.build/CatalogLaunchArgumentOverrides.swift.o",
         "/Users/oswald_joshua_olazabal/Desktop/Playnite Mac/.build/arm64-apple-macosx/debug/MacGameLibrary.build/CustomEmulatorLibraryStore.swift.o",
+        "/Users/oswald_joshua_olazabal/Desktop/Playnite Mac/.build/arm64-apple-macosx/debug/MacGameLibrary.build/DebugLog.swift.o",
         "/Users/oswald_joshua_olazabal/Desktop/Playnite Mac/.build/arm64-apple-macosx/debug/MacGameLibrary.build/GameLauncher.swift.o",
         "/Users/oswald_joshua_olazabal/Desktop/Playnite Mac/.build/arm64-apple-macosx/debug/MacGameLibrary.build/GamePathScanner.swift.o",
         "/Users/oswald_joshua_olazabal/Desktop/Playnite Mac/.build/arm64-apple-macosx/debug/MacGameLibrary.build/IGDBClient.swift.o",
@@ -333,6 +338,10 @@
         },
         {
           "kind" : "file",
+          "name" : "/Users/oswald_joshua_olazabal/Desktop/Playnite Mac/.build/arm64-apple-macosx/debug/MacGameLibrary.build/DebugLog.swift.o"
+        },
+        {
+          "kind" : "file",
           "name" : "/Users/oswald_joshua_olazabal/Desktop/Playnite Mac/.build/arm64-apple-macosx/debug/MacGameLibrary.build/GameLauncher.swift.o"
         },
         {
@@ -428,6 +437,7 @@
         "/Users/oswald_joshua_olazabal/Desktop/Playnite Mac/Sources/MacGameLibrary/Services/BuiltinEmulatorCatalog.swift",
         "/Users/oswald_joshua_olazabal/Desktop/Playnite Mac/Sources/MacGameLibrary/Services/CatalogLaunchArgumentOverrides.swift",
         "/Users/oswald_joshua_olazabal/Desktop/Playnite Mac/Sources/MacGameLibrary/Services/CustomEmulatorLibraryStore.swift",
+        "/Users/oswald_joshua_olazabal/Desktop/Playnite Mac/Sources/MacGameLibrary/Services/DebugLog.swift",
         "/Users/oswald_joshua_olazabal/Desktop/Playnite Mac/Sources/MacGameLibrary/Services/GameLauncher.swift",
         "/Users/oswald_joshua_olazabal/Desktop/Playnite Mac/Sources/MacGameLibrary/Services/GamePathScanner.swift",
         "/Users/oswald_joshua_olazabal/Desktop/Playnite Mac/Sources/MacGameLibrary/Services/IGDBClient.swift",
@@ -477,6 +487,7 @@
       "/Users/oswald_joshua_olazabal/Desktop/Playnite Mac/Sources/MacGameLibrary/Services/BuiltinEmulatorCatalog.swift",
       "/Users/oswald_joshua_olazabal/Desktop/Playnite Mac/Sources/MacGameLibrary/Services/CatalogLaunchArgumentOverrides.swift",
       "/Users/oswald_joshua_olazabal/Desktop/Playnite Mac/Sources/MacGameLibrary/Services/CustomEmulatorLibraryStore.swift",
+      "/Users/oswald_joshua_olazabal/Desktop/Playnite Mac/Sources/MacGameLibrary/Services/DebugLog.swift",
       "/Users/oswald_joshua_olazabal/Desktop/Playnite Mac/Sources/MacGameLibrary/Services/GameLauncher.swift",
       "/Users/oswald_joshua_olazabal/Desktop/Playnite Mac/Sources/MacGameLibrary/Services/GamePathScanner.swift",
       "/Users/oswald_joshua_olazabal/Desktop/Playnite Mac/Sources/MacGameLibrary/Services/IGDBClient.swift",
@@ -634,6 +645,10 @@
         {
           "kind" : "file",
           "name" : "/Users/oswald_joshua_olazabal/Desktop/Playnite Mac/Sources/MacGameLibrary/Services/CustomEmulatorLibraryStore.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/oswald_joshua_olazabal/Desktop/Playnite Mac/Sources/MacGameLibrary/Services/DebugLog.swift"
         },
         {
           "kind" : "file",

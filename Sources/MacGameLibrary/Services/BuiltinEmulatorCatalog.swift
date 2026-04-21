@@ -26,6 +26,10 @@ public struct BuiltinEmulatorProfileRecord: Codable, Sendable, Hashable, Identif
     public var displayTitle: String {
         "\(emulatorName) — \(profileName)"
     }
+
+    public var supportedFileTypesCSV: String {
+        imageExtensions.joined(separator: ", ")
+    }
 }
 
 public enum BuiltinEmulatorCatalogLoader {

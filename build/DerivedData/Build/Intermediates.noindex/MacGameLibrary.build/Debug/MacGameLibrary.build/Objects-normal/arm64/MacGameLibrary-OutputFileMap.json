@@ -146,6 +146,16 @@
     "swift-dependencies" : "/Users/oswald_joshua_olazabal/Desktop/Playnite Mac/build/DerivedData/Build/Intermediates.noindex/MacGameLibrary.build/Debug/MacGameLibrary.build/Objects-normal/arm64/CustomEmulatorLibraryStore.swiftdeps",
     "swiftmodule" : "/Users/oswald_joshua_olazabal/Desktop/Playnite Mac/build/DerivedData/Build/Intermediates.noindex/MacGameLibrary.build/Debug/MacGameLibrary.build/Objects-normal/arm64/CustomEmulatorLibraryStore~partial.swiftmodule"
   },
+  "/Users/oswald_joshua_olazabal/Desktop/Playnite Mac/Sources/MacGameLibrary/Services/DebugLog.swift" : {
+    "const-values" : "/Users/oswald_joshua_olazabal/Desktop/Playnite Mac/build/DerivedData/Build/Intermediates.noindex/MacGameLibrary.build/Debug/MacGameLibrary.build/Objects-normal/arm64/DebugLog.swiftconstvalues",
+    "dependencies" : "/Users/oswald_joshua_olazabal/Desktop/Playnite Mac/build/DerivedData/Build/Intermediates.noindex/MacGameLibrary.build/Debug/MacGameLibrary.build/Objects-normal/arm64/DebugLog.d",
+    "diagnostics" : "/Users/oswald_joshua_olazabal/Desktop/Playnite Mac/build/DerivedData/Build/Intermediates.noindex/MacGameLibrary.build/Debug/MacGameLibrary.build/Objects-normal/arm64/DebugLog.dia",
+    "index-unit-output-path" : "/MacGameLibrary.build/Debug/MacGameLibrary.build/Objects-normal/arm64/DebugLog.o",
+    "llvm-bc" : "/Users/oswald_joshua_olazabal/Desktop/Playnite Mac/build/DerivedData/Build/Intermediates.noindex/MacGameLibrary.build/Debug/MacGameLibrary.build/Objects-normal/arm64/DebugLog.bc",
+    "object" : "/Users/oswald_joshua_olazabal/Desktop/Playnite Mac/build/DerivedData/Build/Intermediates.noindex/MacGameLibrary.build/Debug/MacGameLibrary.build/Objects-normal/arm64/DebugLog.o",
+    "swift-dependencies" : "/Users/oswald_joshua_olazabal/Desktop/Playnite Mac/build/DerivedData/Build/Intermediates.noindex/MacGameLibrary.build/Debug/MacGameLibrary.build/Objects-normal/arm64/DebugLog.swiftdeps",
+    "swiftmodule" : "/Users/oswald_joshua_olazabal/Desktop/Playnite Mac/build/DerivedData/Build/Intermediates.noindex/MacGameLibrary.build/Debug/MacGameLibrary.build/Objects-normal/arm64/DebugLog~partial.swiftmodule"
+  },
   "/Users/oswald_joshua_olazabal/Desktop/Playnite Mac/Sources/MacGameLibrary/Services/GameLauncher.swift" : {
     "const-values" : "/Users/oswald_joshua_olazabal/Desktop/Playnite Mac/build/DerivedData/Build/Intermediates.noindex/MacGameLibrary.build/Debug/MacGameLibrary.build/Objects-normal/arm64/GameLauncher.swiftconstvalues",
     "dependencies" : "/Users/oswald_joshua_olazabal/Desktop/Playnite Mac/build/DerivedData/Build/Intermediates.noindex/MacGameLibrary.build/Debug/MacGameLibrary.build/Objects-normal/arm64/GameLauncher.d",

@@ -5,7 +5,27 @@ import SwiftUI
 
 @main
 struct MacGameLibraryApp: App {
+    init() {
+        DebugLog.log("App init")
+        let center = NotificationCenter.default
+        center.addObserver(
+            forName: NSApplication.didFinishLaunchingNotification,
+            object: nil,
+            queue: .main
+        ) { _ in
+            DebugLog.log("didFinishLaunching")
+        }
+        center.addObserver(
+            forName: NSApplication.willTerminateNotification,
+            object: nil,
+            queue: .main
+        ) { _ in
+            DebugLog.log("willTerminate")
+        }
+    }
+
     var sharedModelContainer: ModelContainer = {
+        DebugLog.log("Creating ModelContainer at \(PersistenceStoreLocation.storeFileURL.path)")
         let schema = Schema([
             EmulatorProfile.self,
             LibraryGame.self,
@@ -17,8 +37,11 @@ struct MacGameLibraryApp: App {
             cloudKitDatabase: .none
         )
         do {
-            return try ModelContainer(for: schema, configurations: [configuration])
+            let container = try ModelContainer(for: schema, configurations: [configuration])
+            DebugLog.log("ModelContainer created")
+            return container
         } catch {
+            DebugLog.log("ModelContainer creation failed: \(error.localizedDescription)")
             fatalError("Could not create ModelContainer: \(error)")
         }
     }()

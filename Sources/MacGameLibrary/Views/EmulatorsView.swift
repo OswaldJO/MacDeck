@@ -28,6 +28,7 @@ struct EmulatorsView: View {
     @State private var name: String = ""
     @State private var executablePath: String = ""
     @State private var argumentTemplate: String = "\"{ImagePath}\""
+    @State private var supportedFileTypesInput: String = ""
     /// Filter for the “Add emulator” catalog list only (independent from Default Launch Arguments).
     @State private var addEmulatorLibrarySearch: String = ""
     /// Filter for the Default Launch Arguments list.
@@ -39,9 +40,11 @@ struct EmulatorsView: View {
     /// `catalogId` of the bundled row being edited (list hidden while set).
     @State private var editingCatalogRecordId: Int?
     @State private var emulatorsLibraryEditDraft: String = ""
+    @State private var emulatorsLibraryFileTypesDraft: String = ""
     @State private var editingCustomEntryId: UUID?
     @State private var customEditDraftTitle: String = ""
     @State private var customEditDraftArgs: String = ""
+    @State private var customEditDraftFileTypes: String = ""
     @State private var showAddCustomLibraryEntrySheet = false
     @State private var showDefaultLaunchArgumentsInfo = false
     @State private var showRetroArchInfo = false
@@ -95,6 +98,15 @@ struct EmulatorsView: View {
         }
     }
 
+    private func supportedFileTypesCSV(for row: LibraryProfileRow) -> String {
+        switch row {
+        case .builtin(let r):
+            return r.supportedFileTypesCSV
+        case .custom(let e):
+            return e.supportedFileTypesCSV
+        }
+    }
+
     private func macPathWarning(for row: LibraryProfileRow) -> Bool {
         switch row {
         case .builtin(let r):
@@ -105,6 +117,15 @@ struct EmulatorsView: View {
             if a.contains("\\") { return true }
             return false
         }
+    }
+
+    private func normalizeFileTypesCSV(_ raw: String) -> String {
+        raw
+            .split(separator: ",")
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() }
+            .map { $0.hasPrefix(".") ? String($0.dropFirst()) : $0 }
+            .filter { !$0.isEmpty }
+            .joined(separator: ", ")
     }
 
     var body: some View {
@@ -144,6 +165,10 @@ struct EmulatorsView: View {
                                                         .foregroundStyle(.secondary)
                                                         .lineLimit(2)
                                                         .id("\(row.id)-\(catalogOverridesVersion)-\(customLibraryVersion)")
+                                                    Text("Supported File Types: \(supportedFileTypesCSV(for: row))")
+                                                        .font(.caption2)
+                                                        .foregroundStyle(.tertiary)
+                                                        .lineLimit(2)
                                                 }
                                                 Spacer(minLength: 8)
                                                 if macPathWarning(for: row) {
@@ -175,6 +200,7 @@ struct EmulatorsView: View {
 
                     TextField("Path to .app or executable", text: $executablePath)
                     TextField("Launch arguments (Playnite: {ImagePath} for game file; {ROM} and {rom} also work)", text: $argumentTemplate)
+                    TextField("Supported File Types (comma-separated: iso, cso, chd)", text: $supportedFileTypesInput)
                     Button("Add") { addEmulator() }
                         .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty || executablePath.isEmpty)
                 }
@@ -192,6 +218,12 @@ struct EmulatorsView: View {
                                     .font(.caption2)
                                     .foregroundStyle(.tertiary)
                                     .textSelection(.enabled)
+                                if let supported = emu.supportedFileTypesCSV, !supported.isEmpty {
+                                    Text("Supported File Types: \(supported)")
+                                        .font(.caption2)
+                                        .foregroundStyle(.tertiary)
+                                        .textSelection(.enabled)
+                                }
                             }
                             Spacer(minLength: 8)
                             HStack(spacing: 2) {
@@ -234,6 +266,7 @@ struct EmulatorsView: View {
                         EmulatorsLibraryEditPane(
                             record: record,
                             draftArguments: $emulatorsLibraryEditDraft,
+                            draftFileTypes: $emulatorsLibraryFileTypesDraft,
                             onCancel: {
                                 editingCatalogRecordId = nil
                             },
@@ -251,6 +284,7 @@ struct EmulatorsView: View {
                         CustomLibraryEntryEditPane(
                             draftTitle: $customEditDraftTitle,
                             draftArguments: $customEditDraftArgs,
+                            draftFileTypes: $customEditDraftFileTypes,
                             onCancel: {
                                 editingCustomEntryId = nil
                             },
@@ -258,7 +292,8 @@ struct EmulatorsView: View {
                                 CustomEmulatorLibraryStore.update(
                                     id: customId,
                                     displayTitle: customEditDraftTitle,
-                                    startupArguments: customEditDraftArgs
+                                    startupArguments: customEditDraftArgs,
+                                    supportedFileTypesCSV: customEditDraftFileTypes
                                 )
                                 customLibraryVersion += 1
                                 editingCustomEntryId = nil
@@ -295,11 +330,13 @@ struct EmulatorsView: View {
                                                 editingCatalogRecordId = record.catalogId
                                                 emulatorsLibraryEditDraft = CatalogLaunchArgumentOverrides
                                                     .effectiveStartupArguments(for: record)
+                                                emulatorsLibraryFileTypesDraft = record.supportedFileTypesCSV
                                             case .custom(let entry):
                                                 editingCatalogRecordId = nil
                                                 editingCustomEntryId = entry.id
                                                 customEditDraftTitle = entry.displayTitle
                                                 customEditDraftArgs = entry.startupArguments
+                                                customEditDraftFileTypes = entry.supportedFileTypesCSV
                                             }
                                         } label: {
                                             HStack(alignment: .top, spacing: 8) {
@@ -313,6 +350,10 @@ struct EmulatorsView: View {
                                                         .foregroundStyle(.secondary)
                                                         .lineLimit(2)
                                                         .id("\(row.id)-\(catalogOverridesVersion)-\(customLibraryVersion)")
+                                                    Text("Supported File Types: \(supportedFileTypesCSV(for: row))")
+                                                        .font(.caption2)
+                                                        .foregroundStyle(.tertiary)
+                                                        .lineLimit(2)
                                                 }
                                                 Spacer(minLength: 8)
                                                 if macPathWarning(for: row) {
@@ -395,8 +436,12 @@ struct EmulatorsView: View {
             }
         }
         .sheet(isPresented: $showAddCustomLibraryEntrySheet) {
-            AddCustomEmulatorLibraryEntrySheet { displayTitle, startupArguments in
-                CustomEmulatorLibraryStore.add(displayTitle: displayTitle, startupArguments: startupArguments)
+            AddCustomEmulatorLibraryEntrySheet { displayTitle, startupArguments, supportedFileTypesCSV in
+                CustomEmulatorLibraryStore.add(
+                    displayTitle: displayTitle,
+                    startupArguments: startupArguments,
+                    supportedFileTypesCSV: supportedFileTypesCSV
+                )
                 customLibraryVersion += 1
             }
         }
@@ -409,6 +454,7 @@ struct EmulatorsView: View {
         case .custom(let entry):
             name = entry.displayTitle
             argumentTemplate = entry.startupArguments
+            supportedFileTypesInput = entry.supportedFileTypesCSV
             addEmulatorLibrarySearch = ""
         }
     }
@@ -416,6 +462,7 @@ struct EmulatorsView: View {
     private func applyCatalogProfile(_ record: BuiltinEmulatorProfileRecord) {
         name = record.displayTitle
         argumentTemplate = CatalogLaunchArgumentOverrides.effectiveStartupArguments(for: record)
+        supportedFileTypesInput = record.supportedFileTypesCSV
         addEmulatorLibrarySearch = ""
     }
 
@@ -424,12 +471,14 @@ struct EmulatorsView: View {
             name: name.trimmingCharacters(in: .whitespacesAndNewlines),
             executablePath: executablePath.trimmingCharacters(in: .whitespacesAndNewlines),
             launchArgumentTemplate: argumentTemplate,
+            supportedFileTypesCSV: normalizeFileTypesCSV(supportedFileTypesInput),
             sortOrder: emulators.count
         )
         modelContext.insert(profile)
         name = ""
         executablePath = ""
         argumentTemplate = "\"{ImagePath}\""
+        supportedFileTypesInput = ""
         addEmulatorLibrarySearch = ""
     }
 
@@ -456,6 +505,7 @@ struct EmulatorsView: View {
 private struct CustomLibraryEntryEditPane: View {
     @Binding var draftTitle: String
     @Binding var draftArguments: String
+    @Binding var draftFileTypes: String
     let onCancel: () -> Void
     let onSave: () -> Void
     let onDelete: () -> Void
@@ -478,6 +528,8 @@ private struct CustomLibraryEntryEditPane: View {
             TextField("Launch arguments", text: $draftArguments, axis: .vertical)
                 .textFieldStyle(.roundedBorder)
                 .lineLimit(5...12)
+            TextField("Supported File Types (comma-separated)", text: $draftFileTypes)
+                .textFieldStyle(.roundedBorder)
 
             HStack {
                 Button("Delete", role: .destructive) {
@@ -506,7 +558,8 @@ private struct AddCustomEmulatorLibraryEntrySheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var displayTitle: String = ""
     @State private var startupArguments: String = "\"{ImagePath}\""
-    let onCommit: (String, String) -> Void
+    @State private var supportedFileTypesCSV: String = ""
+    let onCommit: (String, String, String) -> Void
 
     var body: some View {
         NavigationStack {
@@ -515,6 +568,7 @@ private struct AddCustomEmulatorLibraryEntrySheet: View {
                     TextField("Display name", text: $displayTitle)
                     TextField("Default launch arguments", text: $startupArguments, axis: .vertical)
                         .lineLimit(4...12)
+                    TextField("Supported File Types (comma-separated)", text: $supportedFileTypesCSV)
                 } footer: {
                     Text("This preset appears in both lists here and under “Add emulator”. Use `{ImagePath}` for the game file.")
                         .font(.caption)
@@ -531,7 +585,8 @@ private struct AddCustomEmulatorLibraryEntrySheet: View {
                     Button("Add") {
                         let t = displayTitle.trimmingCharacters(in: .whitespacesAndNewlines)
                         let a = startupArguments.trimmingCharacters(in: .whitespacesAndNewlines)
-                        onCommit(t, a)
+                        let f = supportedFileTypesCSV.trimmingCharacters(in: .whitespacesAndNewlines)
+                        onCommit(t, a, f)
                         dismiss()
                     }
                     .disabled(
@@ -550,6 +605,7 @@ private struct AddCustomEmulatorLibraryEntrySheet: View {
 private struct EmulatorsLibraryEditPane: View {
     let record: BuiltinEmulatorProfileRecord
     @Binding var draftArguments: String
+    @Binding var draftFileTypes: String
     let onCancel: () -> Void
     let onSave: () -> Void
 
@@ -579,6 +635,12 @@ private struct EmulatorsLibraryEditPane: View {
             TextField("Launch arguments", text: $draftArguments, axis: .vertical)
                 .textFieldStyle(.roundedBorder)
                 .lineLimit(5...12)
+
+            Text("Supported File Types")
+                .font(.subheadline.weight(.semibold))
+            TextField("Supported File Types", text: $draftFileTypes)
+                .textFieldStyle(.roundedBorder)
+                .disabled(true)
 
             HStack {
                 Button("Cancel", role: .cancel) {
@@ -616,6 +678,7 @@ private struct EditEmulatorSheet: View {
     @State private var name: String = ""
     @State private var executablePath: String = ""
     @State private var launchArgumentTemplate: String = ""
+    @State private var supportedFileTypesCSV: String = ""
     @State private var loadFailed = false
 
     var body: some View {
@@ -633,6 +696,7 @@ private struct EditEmulatorSheet: View {
                             TextField("Display name", text: $name)
                             TextField("Path to .app or executable", text: $executablePath)
                             TextField("Launch arguments (Playnite: {ImagePath}; {ROM} and {rom} also work)", text: $launchArgumentTemplate)
+                            TextField("Supported File Types (comma-separated)", text: $supportedFileTypesCSV)
                         }
                     }
                     .formStyle(.grouped)
@@ -675,6 +739,7 @@ private struct EditEmulatorSheet: View {
         name = profile.name
         executablePath = profile.executablePath
         launchArgumentTemplate = profile.launchArgumentTemplate
+        supportedFileTypesCSV = profile.supportedFileTypesCSV ?? ""
         loadFailed = false
     }
 
@@ -691,6 +756,8 @@ private struct EditEmulatorSheet: View {
         profile.name = name.trimmingCharacters(in: .whitespacesAndNewlines)
         profile.executablePath = executablePath.trimmingCharacters(in: .whitespacesAndNewlines)
         profile.launchArgumentTemplate = launchArgumentTemplate
+        let normalized = supportedFileTypesCSV.trimmingCharacters(in: .whitespacesAndNewlines)
+        profile.supportedFileTypesCSV = normalized.isEmpty ? nil : normalized
         try? modelContext.save()
         onFinished()
         dismiss()

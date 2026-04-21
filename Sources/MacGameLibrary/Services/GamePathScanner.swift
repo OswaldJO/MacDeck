@@ -221,6 +221,7 @@ public enum GamePathScanner {
         for entry in romFolderEntries {
             guard let emulator = entry.emulator else { continue }
             let isPS3Emulator = isPS3StyleEmulator(emulator)
+            let emulatorSpecificExtensions = emulator.supportedFileTypesSet
             let root = URL(fileURLWithPath: entry.folderPath)
             var isDir: ObjCBool = false
             guard FileManager.default.fileExists(atPath: root.path, isDirectory: &isDir), isDir.boolValue else {
@@ -287,7 +288,9 @@ public enum GamePathScanner {
                 }
 
                 let ext = item.pathExtension.lowercased()
-                if isPS3Emulator {
+                if !emulatorSpecificExtensions.isEmpty {
+                    guard emulatorSpecificExtensions.contains(ext) else { continue }
+                } else if isPS3Emulator {
                     guard ps3FileExtensions.contains(ext) else { continue }
                 } else {
                     guard romExtensions.contains(ext) else { continue }

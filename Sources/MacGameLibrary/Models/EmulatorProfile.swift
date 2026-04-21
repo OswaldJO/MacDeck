@@ -10,6 +10,8 @@ public final class EmulatorProfile {
     public var executablePath: String
     /// Playnite-style `{ImagePath}` (and `{rom}` / `{ROM}` aliases) is replaced with the game file path when launching.
     public var launchArgumentTemplate: String
+    /// Comma-separated extensions (no dots) used by path scans for this emulator. Empty/nil = global defaults.
+    public var supportedFileTypesCSV: String?
     public var sortOrder: Int
     public var dateCreated: Date
 
@@ -21,6 +23,7 @@ public final class EmulatorProfile {
         name: String,
         executablePath: String,
         launchArgumentTemplate: String = "\"{ImagePath}\"",
+        supportedFileTypesCSV: String? = nil,
         sortOrder: Int = 0,
         dateCreated: Date = Date()
     ) {
@@ -28,7 +31,20 @@ public final class EmulatorProfile {
         self.name = name
         self.executablePath = executablePath
         self.launchArgumentTemplate = launchArgumentTemplate
+        self.supportedFileTypesCSV = supportedFileTypesCSV
         self.sortOrder = sortOrder
         self.dateCreated = dateCreated
+    }
+}
+
+
+extension EmulatorProfile {
+    /// Lowercased extensions (no dots) parsed from `supportedFileTypesCSV`.
+    public var supportedFileTypesSet: Set<String> {
+        Set((supportedFileTypesCSV ?? "")
+            .split(separator: ",")
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() }
+            .map { $0.hasPrefix(".") ? String($0.dropFirst()) : $0 }
+            .filter { !$0.isEmpty })
     }
 }
