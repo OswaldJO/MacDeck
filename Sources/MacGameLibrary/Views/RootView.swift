@@ -39,7 +39,7 @@ public struct RootView: View {
         case .all:
             return games
         case .emulator(let id):
-            return games.filter { $0.emulator?.id == id }
+            return games.filter { $0.emulatorUUID == id }
         }
     }
 
@@ -200,12 +200,23 @@ public struct RootView: View {
 
     private func performScan() {
         do {
-            let added = try GamePathScanner.scan(modelContext: modelContext)
-            scanFeedback =
-                added == 0
-                ? "No new games found. Add folders in Paths or check that files use supported extensions."
-                : "Added \(added) game(s) to the library."
-            if added > 0 {
+            let summary = try GamePathScanner.scan(modelContext: modelContext)
+            if summary.hasAnyChanges {
+                var parts: [String] = []
+                if summary.added > 0 {
+                    parts.append("Added \(summary.added) game(s)")
+                }
+                if summary.reassigned > 0 {
+                    parts.append("Re-linked \(summary.reassigned) existing game(s) to this emulator")
+                }
+                if summary.linkedCovers > 0 {
+                    parts.append("Linked \(summary.linkedCovers) cover image(s)")
+                }
+                scanFeedback = parts.joined(separator: ". ") + "."
+            } else {
+                scanFeedback = "No new games found. Add folders in Paths or check that files use supported extensions."
+            }
+            if summary.added > 0 {
                 MetadataBackgroundFetcher.shared.scheduleExtraPass(container: modelContext.container)
             }
         } catch {
@@ -222,6 +233,15 @@ public struct RootView: View {
         guard let fresh = try? modelContext.fetch(descriptor).first else {
             NSLog("Play: library game no longer in store (id: \(gameID))")
             return
+        }
+        if fresh.emulator == nil, let fallbackID = fresh.emulatorUUID {
+            var emuDescriptor = FetchDescriptor<EmulatorProfile>(
+                predicate: #Predicate { $0.id == fallbackID }
+            )
+            emuDescriptor.fetchLimit = 1
+            if let recovered = try? modelContext.fetch(emuDescriptor).first {
+                fresh.emulator = recovered
+            }
         }
         do {
             try GameLauncher.launch(game: fresh)
@@ -245,11 +265,42 @@ public struct RootView: View {
     }
 
     private func removeAllGames(forEmulatorID emulatorID: UUID) {
-        let snapshot = games.filter { $0.emulator?.id == emulatorID }
+        let emulatorRoots = gameRoots(forEmulatorID: emulatorID)
+        let snapshot = games.filter { game in
+            if game.emulatorUUID == emulatorID {
+                return true
+            }
+            return isPath(game.romPath, insideAny: emulatorRoots)
+        }
         for game in snapshot {
             modelContext.delete(game)
         }
         try? modelContext.save()
+    }
+
+    private func gameRoots(forEmulatorID emulatorID: UUID) -> [String] {
+        guard let emulator = emulators.first(where: { $0.id == emulatorID }) else { return [] }
+        return emulator.folderPaths
+            .filter { $0.resolvedPurpose == .games }
+            .map { normalizedPathForComparison($0.folderPath) }
+            .sorted { $0.count > $1.count }
+    }
+
+    private func isPath(_ path: String, insideAny roots: [String]) -> Bool {
+        let normalizedPath = normalizedPathForComparison(path)
+        for root in roots {
+            if normalizedPath == root { return true }
+            if normalizedPath.hasPrefix(root + "/") { return true }
+        }
+        return false
+    }
+
+    private func normalizedPathForComparison(_ path: String) -> String {
+        var normalized = (path as NSString).standardizingPath
+        while normalized.count > 1, normalized.hasSuffix("/") {
+            normalized.removeLast()
+        }
+        return normalized.lowercased()
     }
 
     private func addGamePlaceholder() {
@@ -257,6 +308,7 @@ public struct RootView: View {
         let game = LibraryGame(
             title: "Sample Game",
             romPath: "/path/to/rom",
+            emulatorIDString: emu?.id.uuidString,
             emulator: emu,
             sortOrder: games.count
         )

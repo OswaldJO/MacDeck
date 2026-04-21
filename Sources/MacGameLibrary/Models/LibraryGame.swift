@@ -10,6 +10,8 @@ public final class LibraryGame {
     public var libraryDisplayName: String?
     /// Absolute path to the ROM or disc image.
     public var romPath: String
+    /// Snapshot of the emulator UUID used for resilient filtering even if relationship data becomes stale.
+    public var emulatorIDString: String?
     public var emulator: EmulatorProfile?
     /// Remote or cached cover image URL (file:// or https://).
     public var coverImageURLString: String?
@@ -26,6 +28,7 @@ public final class LibraryGame {
         title: String,
         libraryDisplayName: String? = nil,
         romPath: String,
+        emulatorIDString: String? = nil,
         emulator: EmulatorProfile? = nil,
         coverImageURLString: String? = nil,
         platformHint: String? = nil,
@@ -38,6 +41,7 @@ public final class LibraryGame {
         self.title = title
         self.libraryDisplayName = libraryDisplayName
         self.romPath = romPath
+        self.emulatorIDString = emulatorIDString
         self.emulator = emulator
         self.coverImageURLString = coverImageURLString
         self.platformHint = platformHint
@@ -52,5 +56,10 @@ public final class LibraryGame {
         let custom = libraryDisplayName?.trimmingCharacters(in: .whitespacesAndNewlines)
         if let custom, !custom.isEmpty { return custom }
         return title
+    }
+
+    public var emulatorUUID: UUID? {
+        guard let emulatorIDString, let uuid = UUID(uuidString: emulatorIDString) else { return nil }
+        return uuid
     }
 }

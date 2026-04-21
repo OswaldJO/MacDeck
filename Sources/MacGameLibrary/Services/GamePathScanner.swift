@@ -3,6 +3,22 @@ import SwiftData
 
 /// Recursively scans configured folders and inserts new `LibraryGame` rows for recognized ROM-like files.
 public enum GamePathScanner {
+    public struct ScanSummary: Sendable {
+        public var added: Int
+        public var reassigned: Int
+        public var linkedCovers: Int
+
+        public init(added: Int, reassigned: Int, linkedCovers: Int) {
+            self.added = added
+            self.reassigned = reassigned
+            self.linkedCovers = linkedCovers
+        }
+
+        public var hasAnyChanges: Bool {
+            added > 0 || reassigned > 0 || linkedCovers > 0
+        }
+    }
+
     /// Common extensions for disc images, archives, and ROMs (lowercase, no dot).
     public static let romExtensions: Set<String> = [
         "nes", "fds", "unf", "unif",
@@ -99,11 +115,21 @@ public enum GamePathScanner {
     }
 
     private static func isPath(_ path: String, insideAny excludedRoots: [String]) -> Bool {
+        let normalizedPath = normalizedPathForComparison(path)
         for root in excludedRoots {
-            if path == root { return true }
-            if path.hasPrefix(root + "/") { return true }
+            let normalizedRoot = normalizedPathForComparison(root)
+            if normalizedPath == normalizedRoot { return true }
+            if normalizedPath.hasPrefix(normalizedRoot + "/") { return true }
         }
         return false
+    }
+
+    private static func normalizedPathForComparison(_ path: String) -> String {
+        var normalized = (path as NSString).standardizingPath
+        while normalized.count > 1, normalized.hasSuffix("/") {
+            normalized.removeLast()
+        }
+        return normalized.lowercased()
     }
 
     /// Minimal parser for PS3 PARAM.SFO key/value string fields.
@@ -203,12 +229,16 @@ public enum GamePathScanner {
         return result
     }
 
-    public static func scan(modelContext: ModelContext) throws -> Int {
+    public static func scan(modelContext: ModelContext) throws -> ScanSummary {
         let gamesFetch = FetchDescriptor<LibraryGame>()
         let existingGames = try modelContext.fetch(gamesFetch)
         var existingPaths = Set(
-            existingGames.map { ($0.romPath as NSString).standardizingPath }
+            existingGames.map { normalizedPathForComparison($0.romPath) }
         )
+        var existingByPath: [String: LibraryGame] = [:]
+        for game in existingGames {
+            existingByPath[normalizedPathForComparison(game.romPath)] = game
+        }
 
         let pathsFetch = FetchDescriptor<GameFolderPath>()
         let folderEntries = try modelContext.fetch(pathsFetch)
@@ -217,24 +247,56 @@ public enum GamePathScanner {
 
         var maxSort = existingGames.map(\.sortOrder).max() ?? 0
         var added = 0
+        var reassignedTotal = 0
 
         for entry in romFolderEntries {
             guard let emulator = entry.emulator else { continue }
             let isPS3Emulator = isPS3StyleEmulator(emulator)
             let emulatorSpecificExtensions = emulator.supportedFileTypesSet
+            var scannedFileLikeItems = 0
+            var skippedByExclude = 0
+            var skippedByExtension = 0
+            var skippedAsExisting = 0
+            var reassignedExisting = 0
+            var addedForEmulator = 0
             let root = URL(fileURLWithPath: entry.folderPath)
             var isDir: ObjCBool = false
             guard FileManager.default.fileExists(atPath: root.path, isDirectory: &isDir), isDir.boolValue else {
+                DebugLog.log("Scan: skipping missing root for emulator=\(emulator.name) root=\(entry.folderPath)")
                 continue
             }
 
             let excludedRoots = folderEntries
                 .filter { $0.emulator?.id == emulator.id && $0.resolvedPurpose == .excludes }
-                .map { ($0.folderPath as NSString).standardizingPath }
+                .map { normalizedPathForComparison($0.folderPath) }
                 .sorted { $0.count > $1.count }
-            let standardizedRoot = (root.path as NSString).standardizingPath
+            let standardizedRoot = normalizedPathForComparison(root.path)
+            let extensionSummary = emulatorSpecificExtensions.isEmpty
+                ? (isPS3Emulator ? "ps3-iso-only" : "global-defaults")
+                : emulatorSpecificExtensions.sorted().joined(separator: ",")
+            DebugLog.log(
+                "Scan start: emulator=\(emulator.name) root=\(root.path) extMode=\(extensionSummary) excludes=\(excludedRoots)"
+            )
             if isPath(standardizedRoot, insideAny: excludedRoots) {
+                DebugLog.log("Scan: root excluded for emulator=\(emulator.name) root=\(root.path)")
                 continue
+            }
+
+            // If excluded roots changed since a prior scan, remove already-imported entries now under exclusion.
+            var removedExistingBecauseExcluded = 0
+            for existingGame in existingGames where existingGame.emulatorUUID == emulator.id {
+                let gamePath = normalizedPathForComparison(existingGame.romPath)
+                if isPath(gamePath, insideAny: excludedRoots) {
+                    modelContext.delete(existingGame)
+                    existingPaths.remove(gamePath)
+                    existingByPath.removeValue(forKey: gamePath)
+                    removedExistingBecauseExcluded += 1
+                }
+            }
+            if removedExistingBecauseExcluded > 0 {
+                DebugLog.log(
+                    "Scan: removed existing excluded games emulator=\(emulator.name) count=\(removedExistingBecauseExcluded)"
+                )
             }
 
             guard let enumerator = FileManager.default.enumerator(
@@ -247,8 +309,9 @@ public enum GamePathScanner {
                 let values = try? item.resourceValues(forKeys: [.isRegularFileKey, .isDirectoryKey, .isSymbolicLinkKey])
 
                 if values?.isDirectory == true, let ps3Launch = ps3LaunchPathIfPresent(for: item) {
-                    let dirPath = (item.path as NSString).standardizingPath
+                    let dirPath = normalizedPathForComparison(item.path)
                     if isPath(dirPath, insideAny: excludedRoots) {
+                        skippedByExclude += 1
                         enumerator.skipDescendants()
                         continue
                     }
@@ -257,11 +320,20 @@ public enum GamePathScanner {
                         continue
                     }
                     let standardized = (ps3Launch.path as NSString).standardizingPath
-                    guard !existingPaths.contains(standardized) else {
+                    let comparisonPath = normalizedPathForComparison(standardized)
+                    if existingPaths.contains(comparisonPath) {
+                        if let existing = existingByPath[comparisonPath], existing.emulatorUUID != emulator.id {
+                            existing.emulator = emulator
+                            existing.emulatorIDString = emulator.id.uuidString
+                            reassignedExisting += 1
+                            reassignedTotal += 1
+                        } else {
+                            skippedAsExisting += 1
+                        }
                         enumerator.skipDescendants()
                         continue
                     }
-                    existingPaths.insert(standardized)
+                    existingPaths.insert(comparisonPath)
 
                     let title = ps3DisplayTitle(for: item)
                     let folderNameKey = item.lastPathComponent.lowercased()
@@ -270,35 +342,59 @@ public enum GamePathScanner {
                     let game = LibraryGame(
                         title: title,
                         romPath: standardized,
+                        emulatorIDString: emulator.id.uuidString,
                         emulator: emulator,
                         coverImageURLString: coverURL?.absoluteString,
                         sortOrder: maxSort
                     )
                     modelContext.insert(game)
                     added += 1
+                    addedForEmulator += 1
                     enumerator.skipDescendants()
                     continue
                 }
 
                 let isFileLike = (values?.isRegularFile == true) || (values?.isSymbolicLink == true)
                 guard isFileLike else { continue }
+                scannedFileLikeItems += 1
                 let itemPath = (item.path as NSString).standardizingPath
-                if isPath(itemPath, insideAny: excludedRoots) {
+                let comparisonItemPath = normalizedPathForComparison(itemPath)
+                if isPath(comparisonItemPath, insideAny: excludedRoots) {
+                    skippedByExclude += 1
                     continue
                 }
 
                 let ext = item.pathExtension.lowercased()
                 if !emulatorSpecificExtensions.isEmpty {
-                    guard emulatorSpecificExtensions.contains(ext) else { continue }
+                    guard emulatorSpecificExtensions.contains(ext) else {
+                        skippedByExtension += 1
+                        continue
+                    }
                 } else if isPS3Emulator {
-                    guard ps3FileExtensions.contains(ext) else { continue }
+                    guard ps3FileExtensions.contains(ext) else {
+                        skippedByExtension += 1
+                        continue
+                    }
                 } else {
-                    guard romExtensions.contains(ext) else { continue }
+                    guard romExtensions.contains(ext) else {
+                        skippedByExtension += 1
+                        continue
+                    }
                 }
 
                 let standardized = itemPath
-                guard !existingPaths.contains(standardized) else { continue }
-                existingPaths.insert(standardized)
+                guard !existingPaths.contains(comparisonItemPath) else {
+                    if let existing = existingByPath[comparisonItemPath], existing.emulatorUUID != emulator.id {
+                        existing.emulator = emulator
+                        existing.emulatorIDString = emulator.id.uuidString
+                        reassignedExisting += 1
+                        reassignedTotal += 1
+                    } else {
+                        skippedAsExisting += 1
+                    }
+                    continue
+                }
+                existingPaths.insert(comparisonItemPath)
 
                 let title = item.deletingPathExtension().lastPathComponent
                 let coverURL = coverIndex[emulator.id]?[title.lowercased()]
@@ -306,28 +402,35 @@ public enum GamePathScanner {
                 let game = LibraryGame(
                     title: title,
                     romPath: standardized,
+                    emulatorIDString: emulator.id.uuidString,
                     emulator: emulator,
                     coverImageURLString: coverURL?.absoluteString,
                     sortOrder: maxSort
                 )
                 modelContext.insert(game)
+                existingByPath[comparisonItemPath] = game
                 added += 1
+                addedForEmulator += 1
             }
+            DebugLog.log(
+                "Scan done: emulator=\(emulator.name) root=\(root.path) scanned=\(scannedFileLikeItems) added=\(addedForEmulator) reassigned=\(reassignedExisting) skipExcluded=\(skippedByExclude) skipExtension=\(skippedByExtension) skipExisting=\(skippedAsExisting)"
+            )
         }
 
         var linkedCovers = 0
         let allGames = try modelContext.fetch(gamesFetch)
         for game in allGames {
-            guard game.coverImageURLString == nil, let emulator = game.emulator else { continue }
+            guard game.coverImageURLString == nil, let emulatorID = game.emulatorUUID else { continue }
             let romStem = URL(fileURLWithPath: game.romPath).deletingPathExtension().lastPathComponent.lowercased()
-            guard let url = coverIndex[emulator.id]?[romStem] else { continue }
+            guard let url = coverIndex[emulatorID]?[romStem] else { continue }
             game.coverImageURLString = url.absoluteString
             linkedCovers += 1
         }
 
-        if added > 0 || linkedCovers > 0 {
+        if added > 0 || reassignedTotal > 0 || linkedCovers > 0 {
             try modelContext.save()
         }
-        return added
+        DebugLog.log("Scan result: added=\(added) reassigned=\(reassignedTotal) linkedCovers=\(linkedCovers)")
+        return ScanSummary(added: added, reassigned: reassignedTotal, linkedCovers: linkedCovers)
     }
 }

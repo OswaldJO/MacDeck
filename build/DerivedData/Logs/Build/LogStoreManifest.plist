@@ -48,48 +48,6 @@
 			<key>uniqueIdentifier</key>
 			<string>0C88D44D-274B-4A31-A5AD-FB96EDBFB777</string>
 		</dict>
-		<key>3153610E-F6E2-4963-B80E-9D2839CFE726</key>
-		<dict>
-			<key>className</key>
-			<string>IDECommandLineBuildLog</string>
-			<key>documentTypeString</key>
-			<string>&lt;nil&gt;</string>
-			<key>domainType</key>
-			<string>Xcode.IDEActivityLogDomainType.BuildLog</string>
-			<key>fileName</key>
-			<string>3153610E-F6E2-4963-B80E-9D2839CFE726.xcactivitylog</string>
-			<key>hasPrimaryLog</key>
-			<true/>
-			<key>primaryObservable</key>
-			<dict>
-				<key>highLevelStatus</key>
-				<string>S</string>
-				<key>totalNumberOfAnalyzerIssues</key>
-				<integer>0</integer>
-				<key>totalNumberOfErrors</key>
-				<integer>0</integer>
-				<key>totalNumberOfTestFailures</key>
-				<integer>0</integer>
-				<key>totalNumberOfWarnings</key>
-				<integer>0</integer>
-			</dict>
-			<key>schemeIdentifier-containerName</key>
-			<string>MacGameLibrary project</string>
-			<key>schemeIdentifier-schemeName</key>
-			<string>MacGameLibraryApp</string>
-			<key>schemeIdentifier-sharedScheme</key>
-			<integer>1</integer>
-			<key>signature</key>
-			<string>Building project MacGameLibrary with scheme MacGameLibraryApp and configuration Debug</string>
-			<key>timeStartedRecording</key>
-			<real>798425298.91482604</real>
-			<key>timeStoppedRecording</key>
-			<real>798425299.28817904</real>
-			<key>title</key>
-			<string>Building project MacGameLibrary with scheme MacGameLibraryApp and configuration Debug</string>
-			<key>uniqueIdentifier</key>
-			<string>3153610E-F6E2-4963-B80E-9D2839CFE726</string>
-		</dict>
 	</dict>
 </dict>
 </plist>
