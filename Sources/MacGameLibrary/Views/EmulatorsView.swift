@@ -43,6 +43,7 @@ struct EmulatorsView: View {
     @State private var customEditDraftTitle: String = ""
     @State private var customEditDraftArgs: String = ""
     @State private var showAddCustomLibraryEntrySheet = false
+    @State private var showDefaultLaunchArgumentsInfo = false
     /// Sheet uses a stable `Identifiable` token (not a managed object) to avoid SwiftData invalidation crashes.
     @State private var editingEmulator: EditingEmulatorToken?
 
@@ -225,7 +226,7 @@ struct EmulatorsView: View {
                     .onDelete(perform: deleteEmulators)
                 }
 
-                Section("Default Launch Arguments") {
+                Section {
                     if let catalogId = editingCatalogRecordId,
                        let record = BuiltinEmulatorCatalogCache.profiles.first(where: { $0.catalogId == catalogId }) {
                         EmulatorsLibraryEditPane(
@@ -336,6 +337,33 @@ struct EmulatorsView: View {
                                 RoundedRectangle(cornerRadius: 8)
                                     .strokeBorder(Color(nsColor: .separatorColor), lineWidth: 1)
                             )
+                        }
+                    }
+                } header: {
+                    HStack(spacing: 6) {
+                        Text("Default Launch Arguments")
+                        Button {
+                            showDefaultLaunchArgumentsInfo = true
+                        } label: {
+                            Image(systemName: "info.circle")
+                        }
+                        .buttonStyle(.plain)
+                        .help("RetroArch path guidance for macOS")
+                        .popover(isPresented: $showDefaultLaunchArgumentsInfo, arrowEdge: .bottom) {
+                            VStack(alignment: .leading, spacing: 10) {
+                                Text("RetroArch macOS path info")
+                                    .font(.headline)
+                                Text("RetroArch cores on Mac are typically stored in the hidden folder `~/Library/Application Support/RetroArch/cores`.")
+                                Text("To access this folder: open Finder, choose Go in the menu bar, select Go to Folder, then paste `~/Library/Application Support/RetroArch/`.")
+                                Text("Paths can differ between standard and Steam installs.")
+                                Text("Example launch arguments:")
+                                    .font(.subheadline.weight(.semibold))
+                                Text("-L \"/Users/{user_name}/Library/Application Support/RetroArch/cores/mgba_libretro.dylib\" --fullscreen \"{ImagePath}\"")
+                                    .font(.system(.caption, design: .monospaced))
+                                    .textSelection(.enabled)
+                            }
+                            .padding(14)
+                            .frame(width: 520)
                         }
                     }
                 }
