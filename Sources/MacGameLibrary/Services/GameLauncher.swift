@@ -42,21 +42,37 @@ enum GameLauncher {
 
         let substituted = substituteTemplate(emulator.launchArgumentTemplate, gameFilePath: standardizedPath)
         let parts = parseArguments(substituted)
+        let resolvedExe = resolvedExecutableURL(exe)
+
+        // For already-running .app emulators (e.g. RPCS3), launching a second process can fail
+        // with single-instance locks. Send an "open document" event to the running app instead.
+        if resolvedExe.pathExtension.lowercased() == "app",
+           let runningApp = runningApplication(forBundlePath: resolvedExe.path) {
+            registerLaunchedApplication(runningApp)
+            let config = NSWorkspace.OpenConfiguration()
+            NSWorkspace.shared.open([URL(fileURLWithPath: standardizedPath)], withApplicationAt: resolvedExe, configuration: config) { _, error in
+                if let error {
+                    NSLog("Launch error: \(error.localizedDescription)")
+                }
+            }
+            return
+        }
+
         let configuration = NSWorkspace.OpenConfiguration()
         configuration.arguments = parts
 
         NSWorkspace.shared.openApplication(
-            at: resolvedExecutableURL(exe),
+            at: resolvedExe,
             configuration: configuration
         ) { runningApp, error in
-            if let error {
-                NSLog("Launch error: \(error.localizedDescription)")
-                return
-            }
-            guard let runningApp else {
-                return
-            }
             Task { @MainActor in
+                if let error {
+                    NSLog("Launch error: \(error.localizedDescription)")
+                    return
+                }
+                guard let runningApp else {
+                    return
+                }
                 registerLaunchedApplication(runningApp)
             }
         }
@@ -188,4 +204,14 @@ enum GameLauncher {
         }
         return url
     }
+
+    private static func runningApplication(forBundlePath bundlePath: String) -> NSRunningApplication? {
+        let target = (bundlePath as NSString).standardizingPath
+        return NSWorkspace.shared.runningApplications.first { app in
+            guard let bundleURL = app.bundleURL else { return false }
+            let runningPath = (bundleURL.path as NSString).standardizingPath
+            return runningPath == target
+        }
+    }
+
 }

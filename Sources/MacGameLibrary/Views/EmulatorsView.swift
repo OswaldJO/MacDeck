@@ -44,6 +44,8 @@ struct EmulatorsView: View {
     @State private var customEditDraftArgs: String = ""
     @State private var showAddCustomLibraryEntrySheet = false
     @State private var showDefaultLaunchArgumentsInfo = false
+    @State private var showRetroArchInfo = false
+    @State private var showRPCS3Info = false
     /// Sheet uses a stable `Identifiable` token (not a managed object) to avoid SwiftData invalidation crashes.
     @State private var editingEmulator: EditingEmulatorToken?
 
@@ -348,19 +350,33 @@ struct EmulatorsView: View {
                             Image(systemName: "info.circle")
                         }
                         .buttonStyle(.plain)
-                        .help("RetroArch path guidance for macOS")
+                        .help("Default launch argument guidance")
                         .popover(isPresented: $showDefaultLaunchArgumentsInfo, arrowEdge: .bottom) {
                             VStack(alignment: .leading, spacing: 10) {
-                                Text("RetroArch macOS path info")
+                                Text("Default Launch Arguments help")
                                     .font(.headline)
-                                Text("RetroArch cores on Mac are typically stored in the hidden folder `~/Library/Application Support/RetroArch/cores`.")
-                                Text("To access this folder: open Finder, choose Go in the menu bar, select Go to Folder, then paste `~/Library/Application Support/RetroArch/`.")
-                                Text("Paths can differ between standard and Steam installs.")
-                                Text("Example launch arguments:")
-                                    .font(.subheadline.weight(.semibold))
-                                Text("-L \"/Users/{user_name}/Library/Application Support/RetroArch/cores/mgba_libretro.dylib\" --fullscreen \"{ImagePath}\"")
-                                    .font(.system(.caption, design: .monospaced))
-                                    .textSelection(.enabled)
+
+                                DisclosureGroup("RetroArch cores on macOS", isExpanded: $showRetroArchInfo) {
+                                    VStack(alignment: .leading, spacing: 8) {
+                                        Text("RetroArch cores on Mac are typically stored in the hidden folder `~/Library/Application Support/RetroArch/cores`.")
+                                        Text("To access this folder: open Finder, choose Go in the menu bar, select Go to Folder, then paste `~/Library/Application Support/RetroArch/`.")
+                                        Text("Paths can differ between standard and Steam installs.")
+                                        Text("Example launch arguments:")
+                                            .font(.subheadline.weight(.semibold))
+                                        Text("-L \"/Users/{user_name}/Library/Application Support/RetroArch/cores/mgba_libretro.dylib\" --fullscreen \"{ImagePath}\"")
+                                            .font(.system(.caption, design: .monospaced))
+                                            .textSelection(.enabled)
+                                    }
+                                    .padding(.top, 4)
+                                }
+
+                                DisclosureGroup("RPCS3 edge case", isExpanded: $showRPCS3Info) {
+                                    VStack(alignment: .leading, spacing: 6) {
+                                        Text("If RPCS3 is already open, launching a different PS3 game from this library may not switch games reliably.")
+                                        Text("Workaround: close RPCS3 first, then launch the other PS3 game from the library.")
+                                    }
+                                    .padding(.top, 4)
+                                }
                             }
                             .padding(14)
                             .frame(width: 520)
