@@ -6,7 +6,7 @@
 	<integer>12</integer>
 	<key>logs</key>
 	<dict>
-		<key>7FEBF013-56D7-4AF3-A970-966A0E2160E5</key>
+		<key>B39B143C-B611-4DD2-8F0E-12D418CE157B</key>
 		<dict>
 			<key>className</key>
 			<string>IDECommandLineBuildLog</string>
@@ -15,7 +15,7 @@
 			<key>domainType</key>
 			<string>Xcode.IDEActivityLogDomainType.BuildLog</string>
 			<key>fileName</key>
-			<string>7FEBF013-56D7-4AF3-A970-966A0E2160E5.xcactivitylog</string>
+			<string>B39B143C-B611-4DD2-8F0E-12D418CE157B.xcactivitylog</string>
 			<key>hasPrimaryLog</key>
 			<true/>
 			<key>primaryObservable</key>
@@ -34,15 +34,15 @@
 			<key>signature</key>
 			<string>Resolve Packages</string>
 			<key>timeStartedRecording</key>
-			<real>798496650.99760401</real>
+			<real>798497677.69540095</real>
 			<key>timeStoppedRecording</key>
-			<real>798496651.02793002</real>
+			<real>798497677.72449303</real>
 			<key>title</key>
 			<string>Resolve Packages</string>
 			<key>uniqueIdentifier</key>
-			<string>7FEBF013-56D7-4AF3-A970-966A0E2160E5</string>
+			<string>B39B143C-B611-4DD2-8F0E-12D418CE157B</string>
 		</dict>
-		<key>E208FF40-5CB1-4FAA-90ED-E55633EB6DF4</key>
+		<key>C80E6099-61E1-4E15-B590-D0804F974466</key>
 		<dict>
 			<key>className</key>
 			<string>IDECommandLineBuildLog</string>
@@ -51,7 +51,7 @@
 			<key>domainType</key>
 			<string>Xcode.IDEActivityLogDomainType.BuildLog</string>
 			<key>fileName</key>
-			<string>E208FF40-5CB1-4FAA-90ED-E55633EB6DF4.xcactivitylog</string>
+			<string>C80E6099-61E1-4E15-B590-D0804F974466.xcactivitylog</string>
 			<key>hasPrimaryLog</key>
 			<true/>
 			<key>primaryObservable</key>
@@ -70,49 +70,13 @@
 			<key>signature</key>
 			<string>Resolve Packages</string>
 			<key>timeStartedRecording</key>
-			<real>798496787.08681798</real>
+			<real>798497597.29446805</real>
 			<key>timeStoppedRecording</key>
-			<real>798496787.11709297</real>
+			<real>798497597.32428896</real>
 			<key>title</key>
 			<string>Resolve Packages</string>
 			<key>uniqueIdentifier</key>
-			<string>E208FF40-5CB1-4FAA-90ED-E55633EB6DF4</string>
-		</dict>
-		<key>EBA84CA7-9D84-4622-B409-F60A3192D1D6</key>
-		<dict>
-			<key>className</key>
-			<string>IDECommandLineBuildLog</string>
-			<key>documentTypeString</key>
-			<string>&lt;nil&gt;</string>
-			<key>domainType</key>
-			<string>Xcode.IDEActivityLogDomainType.BuildLog</string>
-			<key>fileName</key>
-			<string>EBA84CA7-9D84-4622-B409-F60A3192D1D6.xcactivitylog</string>
-			<key>hasPrimaryLog</key>
-			<true/>
-			<key>primaryObservable</key>
-			<dict>
-				<key>highLevelStatus</key>
-				<string>S</string>
-				<key>totalNumberOfAnalyzerIssues</key>
-				<integer>0</integer>
-				<key>totalNumberOfErrors</key>
-				<integer>0</integer>
-				<key>totalNumberOfTestFailures</key>
-				<integer>0</integer>
-				<key>totalNumberOfWarnings</key>
-				<integer>0</integer>
-			</dict>
-			<key>signature</key>
-			<string>Resolve Packages</string>
-			<key>timeStartedRecording</key>
-			<real>798497015.09530699</real>
-			<key>timeStoppedRecording</key>
-			<real>798497015.12548494</real>
-			<key>title</key>
-			<string>Resolve Packages</string>
-			<key>uniqueIdentifier</key>
-			<string>EBA84CA7-9D84-4622-B409-F60A3192D1D6</string>
+			<string>C80E6099-61E1-4E15-B590-D0804F974466</string>
 		</dict>
 	</dict>
 </dict>

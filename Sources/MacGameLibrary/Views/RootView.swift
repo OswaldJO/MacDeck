@@ -27,6 +27,7 @@ public struct RootView: View {
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
     @State private var section: MainSection = .library
     @State private var scanFeedback: String?
+    @State private var cleanupFeedback: String?
     @State private var confirmClearAllGames = false
     @State private var clearEmulatorGamesID: UUID?
     /// Game card showing play / info overlay.
@@ -34,12 +35,23 @@ public struct RootView: View {
     /// Game open in the trailing inspector column.
     @State private var inspectorGameID: UUID?
 
+    private var activeEmulatorIDs: Set<UUID> {
+        Set(emulators.map(\.id))
+    }
+
+    private var visibleLibraryGames: [LibraryGame] {
+        games.filter { game in
+            guard let emulatorID = game.emulatorUUID else { return false }
+            return activeEmulatorIDs.contains(emulatorID)
+        }
+    }
+
     private var filteredGames: [LibraryGame] {
         switch sidebarSelection {
         case .all:
-            return games
+            return visibleLibraryGames
         case .emulator(let id):
-            return games.filter { $0.emulatorUUID == id }
+            return visibleLibraryGames.filter { $0.emulatorUUID == id }
         }
     }
 
@@ -194,7 +206,19 @@ public struct RootView: View {
             }
         }
         .task {
+            let removed = removeOrphanedGamesFromLibrary()
+            if removed > 0 {
+                cleanupFeedback = "Removed \(removed) orphan game(s) from the library. These entries referenced missing emulators and could appear as ghost games."
+            }
             MetadataBackgroundFetcher.shared.startIfNeeded(container: modelContext.container)
+        }
+        .alert("Library Cleanup", isPresented: Binding(
+            get: { cleanupFeedback != nil },
+            set: { if !$0 { cleanupFeedback = nil } }
+        )) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(cleanupFeedback ?? "")
         }
     }
 
@@ -234,15 +258,20 @@ public struct RootView: View {
             NSLog("Play: library game no longer in store (id: \(gameID))")
             return
         }
-        if fresh.emulator == nil, let fallbackID = fresh.emulatorUUID {
-            var emuDescriptor = FetchDescriptor<EmulatorProfile>(
-                predicate: #Predicate { $0.id == fallbackID }
-            )
-            emuDescriptor.fetchLimit = 1
-            if let recovered = try? modelContext.fetch(emuDescriptor).first {
-                fresh.emulator = recovered
-            }
+        guard let emulatorID = fresh.emulatorUUID else {
+            scanFeedback = "This game no longer has a valid emulator reference. Remove it from Library and run Scan Paths."
+            return
         }
+        var emuDescriptor = FetchDescriptor<EmulatorProfile>(
+            predicate: #Predicate { $0.id == emulatorID }
+        )
+        emuDescriptor.fetchLimit = 1
+        guard let recovered = try? modelContext.fetch(emuDescriptor).first else {
+            scanFeedback = "The emulator for this game is missing. Recreate/import the emulator, then run Scan Paths."
+            return
+        }
+        // Force a valid relationship object before launching to avoid stale SwiftData relationship traps.
+        fresh.emulator = recovered
         do {
             try GameLauncher.launch(game: fresh)
             fresh.lastPlayed = Date()
@@ -313,6 +342,22 @@ public struct RootView: View {
             sortOrder: games.count
         )
         modelContext.insert(game)
+    }
+
+    @discardableResult
+    private func removeOrphanedGamesFromLibrary() -> Int {
+        let validIDs = activeEmulatorIDs
+        var removed = 0
+        for game in games {
+            guard let emulatorID = game.emulatorUUID, !validIDs.contains(emulatorID) else { continue }
+            modelContext.delete(game)
+            removed += 1
+        }
+        if removed > 0 {
+            try? modelContext.save()
+            DebugLog.log("Cleanup: removed orphaned library games count=\(removed)")
+        }
+        return removed
     }
 }
 

@@ -84,6 +84,22 @@ struct MacGameLibraryApp: App {
                         """
                     )
                 }
+
+                Button("Missing Orphan Games") {
+                    showHelpDialog(
+                        title: "Missing Orphan Games",
+                        message: """
+                        Why this exists:
+                        Sometimes old library entries can reference emulator records that no longer exist (for example after emulator edits/imports or stale data). Those entries can show up as ghost games in “All” and not in emulator-specific sections.
+
+                        What the app does:
+                        On startup, the app now auto-cleans these orphan entries and shows a cleanup notice if any were removed.
+
+                        Result:
+                        Library sections stay consistent, and stale ghost entries no longer cause play/launch instability.
+                        """
+                    )
+                }
             }
         }
     }
