@@ -7,3 +7,6 @@ DerivedData/
 # Local clones of streaming upstreams (see Vendor/streaming-repos/README.md)
 Vendor/streaming-repos/Apollo/
 Vendor/streaming-repos/moonlight-ios/
+.DS_Store
+build/DerivedData/
+.build/
