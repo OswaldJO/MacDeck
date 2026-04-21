@@ -128,6 +128,14 @@ struct EmulatorsView: View {
             .joined(separator: ", ")
     }
 
+    private var hasUnsavedAddEmulatorChanges: Bool {
+        !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            || !executablePath.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            || argumentTemplate.trimmingCharacters(in: .whitespacesAndNewlines) != "\"{ImagePath}\""
+            || !supportedFileTypesInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            || !addEmulatorLibrarySearch.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
     var body: some View {
         NavigationStack {
             Form {
@@ -201,8 +209,13 @@ struct EmulatorsView: View {
                     TextField("Path to .app or executable", text: $executablePath)
                     TextField("Launch arguments (Playnite: {ImagePath} for game file; {ROM} and {rom} also work)", text: $argumentTemplate)
                     TextField("Supported File Types (comma-separated: iso, cso, chd)", text: $supportedFileTypesInput)
-                    Button("Add") { addEmulator() }
-                        .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty || executablePath.isEmpty)
+                    HStack {
+                        Button("Reset") { resetAddEmulatorForm() }
+                            .disabled(!hasUnsavedAddEmulatorChanges)
+                        Spacer()
+                        Button("Add") { addEmulator() }
+                            .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty || executablePath.isEmpty)
+                    }
                 }
 
                 Section("Configured") {
@@ -475,6 +488,10 @@ struct EmulatorsView: View {
             sortOrder: emulators.count
         )
         modelContext.insert(profile)
+        resetAddEmulatorForm()
+    }
+
+    private func resetAddEmulatorForm() {
         name = ""
         executablePath = ""
         argumentTemplate = "\"{ImagePath}\""
