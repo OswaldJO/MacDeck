@@ -537,13 +537,70 @@ private struct LibraryGameInspectorView: View {
                             pickCoverImage()
                         }
                         if game.coverImageURLString != nil {
-                            Button("Clear cover", systemImage: "xmark.circle", role: .destructive) {
+                            Button("Clear current cover", systemImage: "xmark.circle", role: .destructive) {
                                 game.coverImageURLString = nil
                                 try? modelContext.save()
                             }
                         }
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
+                }
+
+                if !game.coverImageOptions.isEmpty {
+                    Text("Detected covers")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+
+                    VStack(spacing: 8) {
+                        ForEach(Array(game.coverImageOptions.enumerated()), id: \.offset) { index, option in
+                            HStack(spacing: 10) {
+                                CoverThumbnail(urlString: option)
+                                    .frame(width: 42, height: 56)
+                                    .clipShape(RoundedRectangle(cornerRadius: 6))
+                                Text(URL(string: option)?.lastPathComponent ?? option)
+                                    .font(.caption)
+                                    .lineLimit(1)
+                                    .textSelection(.enabled)
+
+                                Spacer()
+
+                                Button {
+                                    setPrimaryCover(index: index)
+                                } label: {
+                                    Image(systemName: game.coverImageURLString == option ? "checkmark.circle.fill" : "circle")
+                                }
+                                .buttonStyle(.plain)
+                                .help("Use as current cover")
+
+                                Button {
+                                    moveCover(from: index, direction: -1)
+                                } label: {
+                                    Image(systemName: "arrow.up")
+                                }
+                                .buttonStyle(.plain)
+                                .disabled(index == 0)
+                                .help("Move up")
+
+                                Button {
+                                    moveCover(from: index, direction: 1)
+                                } label: {
+                                    Image(systemName: "arrow.down")
+                                }
+                                .buttonStyle(.plain)
+                                .disabled(index >= game.coverImageOptions.count - 1)
+                                .help("Move down")
+
+                                Button(role: .destructive) {
+                                    removeCover(at: index)
+                                } label: {
+                                    Image(systemName: "trash")
+                                }
+                                .buttonStyle(.plain)
+                                .help("Remove from lineup")
+                            }
+                            .padding(.vertical, 2)
+                        }
+                    }
                 }
             }
         }
@@ -593,10 +650,45 @@ private struct LibraryGameInspectorView: View {
             let path = (url.path as NSString).standardizingPath
             let fileURL = URL(fileURLWithPath: path)
             DispatchQueue.main.async {
-                game.coverImageURLString = fileURL.absoluteString
+                var options = game.coverImageOptions
+                let candidate = fileURL.absoluteString
+                if !options.contains(candidate) {
+                    options.insert(candidate, at: 0)
+                }
+                game.coverImageOptions = options
+                game.coverImageURLString = candidate
                 try? modelContext.save()
             }
         }
+    }
+
+    private func setPrimaryCover(index: Int) {
+        let options = game.coverImageOptions
+        guard options.indices.contains(index) else { return }
+        game.coverImageURLString = options[index]
+        try? modelContext.save()
+    }
+
+    private func removeCover(at index: Int) {
+        var options = game.coverImageOptions
+        guard options.indices.contains(index) else { return }
+        let removed = options.remove(at: index)
+        game.coverImageOptions = options
+        if game.coverImageURLString == removed {
+            game.coverImageURLString = options.first
+        }
+        try? modelContext.save()
+    }
+
+    private func moveCover(from index: Int, direction: Int) {
+        var options = game.coverImageOptions
+        guard options.indices.contains(index) else { return }
+        let target = index + direction
+        guard options.indices.contains(target) else { return }
+        let item = options.remove(at: index)
+        options.insert(item, at: target)
+        game.coverImageOptions = options
+        try? modelContext.save()
     }
 }
 

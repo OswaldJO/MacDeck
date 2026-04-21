@@ -15,6 +15,8 @@ public final class LibraryGame {
     public var emulator: EmulatorProfile?
     /// Remote or cached cover image URL (file:// or https://).
     public var coverImageURLString: String?
+    /// JSON-encoded ordered cover options detected/imported for this game.
+    public var coverImageOptionsJSON: String?
     /// Optional platform/system hint for metadata search (e.g. "SNES", "PS2").
     public var platformHint: String?
     public var sortOrder: Int
@@ -31,6 +33,7 @@ public final class LibraryGame {
         emulatorIDString: String? = nil,
         emulator: EmulatorProfile? = nil,
         coverImageURLString: String? = nil,
+        coverImageOptionsJSON: String? = nil,
         platformHint: String? = nil,
         sortOrder: Int = 0,
         dateAdded: Date = Date(),
@@ -44,6 +47,7 @@ public final class LibraryGame {
         self.emulatorIDString = emulatorIDString
         self.emulator = emulator
         self.coverImageURLString = coverImageURLString
+        self.coverImageOptionsJSON = coverImageOptionsJSON
         self.platformHint = platformHint
         self.sortOrder = sortOrder
         self.dateAdded = dateAdded
@@ -61,5 +65,47 @@ public final class LibraryGame {
     public var emulatorUUID: UUID? {
         guard let emulatorIDString, let uuid = UUID(uuidString: emulatorIDString) else { return nil }
         return uuid
+    }
+
+    public var coverImageOptions: [String] {
+        get {
+            var options: [String] = []
+            if let json = coverImageOptionsJSON,
+               let data = json.data(using: .utf8),
+               let decoded = try? JSONDecoder().decode([String].self, from: data) {
+                options = decoded
+            }
+            if let primary = coverImageURLString, !primary.isEmpty, !options.contains(primary) {
+                options.insert(primary, at: 0)
+            }
+            return LibraryGame.normalizedCoverOptions(options)
+        }
+        set {
+            let normalized = LibraryGame.normalizedCoverOptions(newValue)
+            if let data = try? JSONEncoder().encode(normalized),
+               let json = String(data: data, encoding: .utf8) {
+                coverImageOptionsJSON = json
+            } else {
+                coverImageOptionsJSON = nil
+            }
+            if let current = coverImageURLString, normalized.contains(current) {
+                coverImageURLString = current
+            } else {
+                coverImageURLString = normalized.first
+            }
+        }
+    }
+
+    private static func normalizedCoverOptions(_ options: [String]) -> [String] {
+        var seen = Set<String>()
+        var out: [String] = []
+        for raw in options {
+            let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty else { continue }
+            if seen.insert(trimmed).inserted {
+                out.append(trimmed)
+            }
+        }
+        return out
     }
 }

@@ -40,7 +40,7 @@ public enum GamePathScanner {
     ]
 
     private static let coverImageExtensions: Set<String> = [
-        "png", "jpg", "jpeg", "webp", "gif", "heic", "bmp", "tif", "tiff"
+        "png", "jpg", "jpeg", "webp", "gif", "heic", "bmp", "tif", "tiff", "avif"
     ]
     /// Restrictive file-based imports for PS3/RPCS3 scanners to avoid importing random assets from `dev_hdd0/game`.
     private static let ps3FileExtensions: Set<String> = ["iso"]
@@ -49,6 +49,12 @@ public enum GamePathScanner {
         let title: String?
         let titleID: String?
         let category: String?
+    }
+
+    private struct CoverCandidate {
+        let url: URL
+        let tokens: Set<String>
+        let order: Int
     }
 
     /// Returns an executable PS3 target path when this folder looks like a PS3 disc dump or RPCS3 installed title.
@@ -186,9 +192,10 @@ public enum GamePathScanner {
         return out.isEmpty ? nil : out
     }
 
-    /// Lowercased file name without extension → first matching image URL found (ordered by cover folder `sortOrder`).
-    private static func buildCoverIndex(folderEntries: [GameFolderPath]) -> [UUID: [String: URL]] {
-        var result: [UUID: [String: URL]] = [:]
+    /// Ordered cover candidates per emulator with fuzzy-match tokens.
+    private static func buildCoverCandidates(folderEntries: [GameFolderPath]) -> [UUID: [CoverCandidate]] {
+        var result: [UUID: [CoverCandidate]] = [:]
+        var globalOrder = 0
         let coverEntries = folderEntries
             .filter { $0.resolvedPurpose == .covers }
             .sorted { $0.sortOrder < $1.sortOrder }
@@ -215,18 +222,96 @@ public enum GamePathScanner {
                 let ext = item.pathExtension.lowercased()
                 guard coverImageExtensions.contains(ext) else { continue }
 
-                let stem = item.deletingPathExtension().lastPathComponent.lowercased()
-                guard !stem.isEmpty else { continue }
+                let stem = strippedImageSuffixes(from: item.lastPathComponent)
+                let tokens = significantTokens(from: stem)
+                guard !tokens.isEmpty else { continue }
 
-                var perEmu = result[emuID] ?? [:]
-                if perEmu[stem] == nil {
-                    let standardized = URL(fileURLWithPath: (item.path as NSString).standardizingPath)
-                    perEmu[stem] = standardized
-                    result[emuID] = perEmu
-                }
+                let standardized = URL(fileURLWithPath: (item.path as NSString).standardizingPath)
+                globalOrder += 1
+                var perEmu = result[emuID] ?? []
+                perEmu.append(CoverCandidate(url: standardized, tokens: tokens, order: globalOrder))
+                result[emuID] = perEmu
             }
         }
         return result
+    }
+
+    private static func strippedImageSuffixes(from fileName: String) -> String {
+        var base = fileName
+        while true {
+            let ext = (base as NSString).pathExtension.lowercased()
+            guard !ext.isEmpty, coverImageExtensions.contains(ext) else { break }
+            base = (base as NSString).deletingPathExtension
+        }
+        return base
+    }
+
+    private static let nonDistinctiveTokens: Set<String> = [
+        "cover", "covers", "art", "image", "img", "scan", "poster", "wallpaper", "game"
+    ]
+
+    private static func significantTokens(from raw: String) -> Set<String> {
+        let lowered = raw.lowercased()
+        let cleaned = lowered.unicodeScalars.map { scalar -> Character in
+            if CharacterSet.alphanumerics.contains(scalar) {
+                return Character(scalar)
+            }
+            return " "
+        }
+        let normalized = String(cleaned)
+        return Set(
+            normalized
+                .split(whereSeparator: \.isWhitespace)
+                .map(String.init)
+                .filter { token in
+                    if token.isEmpty { return false }
+                    if token.allSatisfy(\.isNumber) { return false }
+                    if token.first == "v", token.dropFirst().allSatisfy(\.isNumber) { return false }
+                    if token.rangeOfCharacter(from: .decimalDigits) != nil { return false }
+                    if nonDistinctiveTokens.contains(token) { return false }
+                    return true
+                }
+        )
+    }
+
+    private static func gameTokens(title: String, romPath: String) -> Set<String> {
+        let titleStem = URL(fileURLWithPath: romPath).deletingPathExtension().lastPathComponent
+        let bracketStripped = titleStem.replacingOccurrences(of: "\\[[^\\]]*\\]", with: " ", options: .regularExpression)
+        let combined = title + " " + bracketStripped
+        return significantTokens(from: combined)
+    }
+
+    private static func matchedCoverURLs(
+        for title: String,
+        romPath: String,
+        candidates: [CoverCandidate]
+    ) -> [URL] {
+        let tokens = gameTokens(title: title, romPath: romPath)
+        guard !tokens.isEmpty else { return [] }
+
+        let matches: [(score: Double, order: Int, url: URL)] = candidates.compactMap { candidate in
+            guard !candidate.tokens.isEmpty else { return nil }
+            // Require candidate tokens to be contained in game tokens to avoid sequel/prequel bleed.
+            guard candidate.tokens.isSubset(of: tokens) else { return nil }
+            let recall = Double(candidate.tokens.count) / Double(max(tokens.count, 1))
+            let precision = 1.0
+            let f1 = (2 * precision * recall) / (precision + recall)
+            return (f1, candidate.order, candidate.url)
+        }
+
+        return matches
+            .sorted { lhs, rhs in
+                if lhs.score == rhs.score { return lhs.order < rhs.order }
+                return lhs.score > rhs.score
+            }
+            .map(\.url)
+    }
+
+    private static func applyDetectedCovers(_ urls: [URL], to game: LibraryGame) {
+        guard !urls.isEmpty else { return }
+        let existing = game.coverImageOptions
+        let merged = existing + urls.map(\.absoluteString)
+        game.coverImageOptions = merged
     }
 
     public static func scan(modelContext: ModelContext) throws -> ScanSummary {
@@ -242,7 +327,7 @@ public enum GamePathScanner {
 
         let pathsFetch = FetchDescriptor<GameFolderPath>()
         let folderEntries = try modelContext.fetch(pathsFetch)
-        let coverIndex = buildCoverIndex(folderEntries: folderEntries)
+        let coverCandidates = buildCoverCandidates(folderEntries: folderEntries)
         let romFolderEntries = folderEntries.filter { $0.resolvedPurpose == .games }
 
         var maxSort = existingGames.map(\.sortOrder).max() ?? 0
@@ -336,17 +421,20 @@ public enum GamePathScanner {
                     existingPaths.insert(comparisonPath)
 
                     let title = ps3DisplayTitle(for: item)
-                    let folderNameKey = item.lastPathComponent.lowercased()
-                    let coverURL = coverIndex[emulator.id]?[title.lowercased()] ?? coverIndex[emulator.id]?[folderNameKey]
+                    let matchedCovers = matchedCoverURLs(
+                        for: title,
+                        romPath: standardized,
+                        candidates: coverCandidates[emulator.id] ?? []
+                    )
                     maxSort += 1
                     let game = LibraryGame(
                         title: title,
                         romPath: standardized,
                         emulatorIDString: emulator.id.uuidString,
                         emulator: emulator,
-                        coverImageURLString: coverURL?.absoluteString,
                         sortOrder: maxSort
                     )
+                    applyDetectedCovers(matchedCovers, to: game)
                     modelContext.insert(game)
                     added += 1
                     addedForEmulator += 1
@@ -397,16 +485,20 @@ public enum GamePathScanner {
                 existingPaths.insert(comparisonItemPath)
 
                 let title = item.deletingPathExtension().lastPathComponent
-                let coverURL = coverIndex[emulator.id]?[title.lowercased()]
+                let matchedCovers = matchedCoverURLs(
+                    for: title,
+                    romPath: standardized,
+                    candidates: coverCandidates[emulator.id] ?? []
+                )
                 maxSort += 1
                 let game = LibraryGame(
                     title: title,
                     romPath: standardized,
                     emulatorIDString: emulator.id.uuidString,
                     emulator: emulator,
-                    coverImageURLString: coverURL?.absoluteString,
                     sortOrder: maxSort
                 )
+                applyDetectedCovers(matchedCovers, to: game)
                 modelContext.insert(game)
                 existingByPath[comparisonItemPath] = game
                 added += 1
@@ -420,11 +512,15 @@ public enum GamePathScanner {
         var linkedCovers = 0
         let allGames = try modelContext.fetch(gamesFetch)
         for game in allGames {
-            guard game.coverImageURLString == nil, let emulatorID = game.emulatorUUID else { continue }
-            let romStem = URL(fileURLWithPath: game.romPath).deletingPathExtension().lastPathComponent.lowercased()
-            guard let url = coverIndex[emulatorID]?[romStem] else { continue }
-            game.coverImageURLString = url.absoluteString
-            linkedCovers += 1
+            guard let emulatorID = game.emulatorUUID else { continue }
+            let matched = matchedCoverURLs(
+                for: game.title,
+                romPath: game.romPath,
+                candidates: coverCandidates[emulatorID] ?? []
+            )
+            let before = game.coverImageOptions.count
+            applyDetectedCovers(matched, to: game)
+            linkedCovers += max(0, game.coverImageOptions.count - before)
         }
 
         if added > 0 || reassignedTotal > 0 || linkedCovers > 0 {
