@@ -1,7 +1,7 @@
 import Foundation
 
 /// One emulator profile from Playnite’s built-in `emulator.yaml` definitions.
-/// Source data: [Playnite](https://github.com/JosefNemec/Playnite) (MIT). `{ImagePath}` is converted to `{rom}` for this app.
+/// Source data: [Playnite](https://github.com/JosefNemec/Playnite) (MIT). Startup arguments use Playnite’s `{ImagePath}` placeholder for the game file.
 public struct BuiltinEmulatorProfileRecord: Codable, Sendable, Hashable, Identifiable {
     public let catalogId: Int
     public let emulatorId: String
@@ -15,12 +15,11 @@ public struct BuiltinEmulatorProfileRecord: Codable, Sendable, Hashable, Identif
 
     public var id: Int { catalogId }
 
-    /// True when the Windows/RetroArch-style template likely needs edits on macOS (core `.dylib` path, etc.).
+    /// True when the template still looks Windows-specific (`.dll`, backslash paths) and may need manual edits on macOS.
     public var needsMacPathReview: Bool {
         let a = startupArguments
         if a.contains(".dll") { return true }
-        if a.lowercased().contains("libretro") { return true }
-        if a.contains("\\cores\\") || a.contains(".\\cores") { return true }
+        if a.contains("\\") { return true }
         return false
     }
 

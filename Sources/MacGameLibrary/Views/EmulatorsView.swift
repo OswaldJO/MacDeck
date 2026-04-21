@@ -23,7 +23,7 @@ private enum LibraryProfileRow: Identifiable {
 
 struct EmulatorsView: View {
     @Environment(\.modelContext) private var modelContext
-    @Query(sort: \EmulatorProfile.sortOrder) private var emulators: [EmulatorProfile]
+    @Query(sort: [SortDescriptor(\EmulatorProfile.name, comparator: .localizedStandard)]) private var emulators: [EmulatorProfile]
 
     @State private var name: String = ""
     @State private var executablePath: String = ""
@@ -99,8 +99,7 @@ struct EmulatorsView: View {
         case .custom(let e):
             let a = e.startupArguments
             if a.contains(".dll") { return true }
-            if a.lowercased().contains("libretro") { return true }
-            if a.contains("\\cores\\") || a.contains(".\\cores") { return true }
+            if a.contains("\\") { return true }
             return false
         }
     }

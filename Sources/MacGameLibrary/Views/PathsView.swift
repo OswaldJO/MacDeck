@@ -4,10 +4,12 @@ import SwiftUI
 
 struct PathsView: View {
     @Environment(\.modelContext) private var modelContext
-    @Query(sort: \EmulatorProfile.sortOrder) private var emulators: [EmulatorProfile]
+    @Query(sort: [SortDescriptor(\EmulatorProfile.name, comparator: .localizedStandard)]) private var emulators: [EmulatorProfile]
     @Query(sort: \GameFolderPath.sortOrder) private var allFolderPaths: [GameFolderPath]
 
     @State private var selectedEmulatorID: UUID?
+    @State private var pendingDeletePathIDs: [UUID] = []
+    @State private var pendingDeleteSectionTitle: String = ""
 
     /// Resolved picker value when `emulators` is non-empty (avoids Picker tag/`nil` mismatch).
     private var effectiveEmulatorID: UUID {
@@ -60,10 +62,19 @@ struct PathsView: View {
                                 .foregroundStyle(.secondary)
                         } else {
                             ForEach(gameFoldersForSelection) { entry in
-                                VStack(alignment: .leading, spacing: 4) {
+                                HStack(alignment: .top, spacing: 8) {
                                     Text(entry.folderPath)
                                         .font(.body)
                                         .textSelection(.enabled)
+                                    Spacer(minLength: 8)
+                                    Button(role: .destructive) {
+                                        requestDelete(paths: [entry], sectionTitle: "game folder")
+                                    } label: {
+                                        Label("Delete game folder path", systemImage: "trash")
+                                            .labelStyle(.iconOnly)
+                                    }
+                                    .buttonStyle(.borderless)
+                                    .help("Remove this game folder path")
                                 }
                                 .padding(.vertical, 2)
                             }
@@ -84,10 +95,19 @@ struct PathsView: View {
                                 .foregroundStyle(.secondary)
                         } else {
                             ForEach(coverFoldersForSelection) { entry in
-                                VStack(alignment: .leading, spacing: 4) {
+                                HStack(alignment: .top, spacing: 8) {
                                     Text(entry.folderPath)
                                         .font(.body)
                                         .textSelection(.enabled)
+                                    Spacer(minLength: 8)
+                                    Button(role: .destructive) {
+                                        requestDelete(paths: [entry], sectionTitle: "cover folder")
+                                    } label: {
+                                        Label("Delete cover folder path", systemImage: "trash")
+                                            .labelStyle(.iconOnly)
+                                    }
+                                    .buttonStyle(.borderless)
+                                    .help("Remove this cover folder path")
                                 }
                                 .padding(.vertical, 2)
                             }
@@ -116,6 +136,29 @@ struct PathsView: View {
             if let id = selectedEmulatorID, !ids.contains(id) {
                 selectedEmulatorID = emulators.first?.id
             }
+        }
+        .confirmationDialog(
+            "Remove selected \(pendingDeleteSectionTitle) path\(pendingDeletePathIDs.count == 1 ? "" : "s")?",
+            isPresented: Binding(
+                get: { !pendingDeletePathIDs.isEmpty },
+                set: { isPresented in
+                    if !isPresented {
+                        pendingDeletePathIDs = []
+                        pendingDeleteSectionTitle = ""
+                    }
+                }
+            ),
+            titleVisibility: .visible
+        ) {
+            Button("Remove", role: .destructive) {
+                confirmDeletePendingPaths()
+            }
+            Button("Cancel", role: .cancel) {
+                pendingDeletePathIDs = []
+                pendingDeleteSectionTitle = ""
+            }
+        } message: {
+            Text("This only removes the saved path from Playnite Mac. Files on disk are not deleted.")
         }
     }
 
@@ -167,15 +210,26 @@ struct PathsView: View {
 
     private func deleteGamePaths(at offsets: IndexSet) {
         let toDelete = offsets.map { gameFoldersForSelection[$0] }
-        for item in toDelete {
-            modelContext.delete(item)
-        }
+        requestDelete(paths: toDelete, sectionTitle: "game folder")
     }
 
     private func deleteCoverPaths(at offsets: IndexSet) {
         let toDelete = offsets.map { coverFoldersForSelection[$0] }
+        requestDelete(paths: toDelete, sectionTitle: "cover folder")
+    }
+
+    private func requestDelete(paths: [GameFolderPath], sectionTitle: String) {
+        pendingDeletePathIDs = paths.map(\.id)
+        pendingDeleteSectionTitle = sectionTitle
+    }
+
+    private func confirmDeletePendingPaths() {
+        let ids = Set(pendingDeletePathIDs)
+        let toDelete = allFolderPaths.filter { ids.contains($0.id) }
         for item in toDelete {
             modelContext.delete(item)
         }
+        pendingDeletePathIDs = []
+        pendingDeleteSectionTitle = ""
     }
 }

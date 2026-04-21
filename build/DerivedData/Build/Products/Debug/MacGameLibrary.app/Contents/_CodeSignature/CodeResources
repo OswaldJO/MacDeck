@@ -10,7 +10,7 @@
 		</data>
 		<key>Resources/MacGameLibrary_MacGameLibrary.bundle/Contents/Resources/BuiltinEmulatorCatalog.json</key>
 		<data>
-		2B5O37UWhQ9EIZ7FUCSAOM4HweI=
+		yZjhUUXExhMJ9avPLRTYPLXEU1s=
 		</data>
 	</dict>
 	<key>files2</key>
@@ -19,10 +19,10 @@
 		<dict>
 			<key>cdhash</key>
 			<data>
-			VUKMV0UcORwDcQhPYTv2U6gsSXQ=
+			7IOjVCwea+8j1AUfgI/B4j3WnnA=
 			</data>
 			<key>requirement</key>
-			<string>cdhash H"55428c57451c391c0371084f613bf653a82c4974"</string>
+			<string>cdhash H"ec83a3542c1e6bef23d4051f808fc1e23dd69e70"</string>
 		</dict>
 		<key>MacOS/__preview.dylib</key>
 		<dict>
@@ -44,7 +44,7 @@
 		<dict>
 			<key>hash2</key>
 			<data>
-			pcNx10Hi9Q99fnvZ7J1IHCnF5EfrV1OZu55iQHTrX+k=
+			q0p793LDMCVyYKt7N0uahPAsuSmJ4fs9nVCql1fR+8o=
 			</data>
 		</dict>
 	</dict>

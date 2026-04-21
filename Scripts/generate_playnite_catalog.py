@@ -15,6 +15,17 @@ except ImportError:
     sys.exit(1)
 
 
+def fix_mac_launch_arguments(args_str: str) -> str:
+    """Normalize Playnite’s Windows RetroArch `-L .\\cores\\*.dll` templates for macOS."""
+    t = str(args_str)
+    t = t.replace(".\\cores\\", "cores/")
+    t = t.replace(".\\cores/", "cores/")
+    t = t.replace("\\", "/")
+    if "cores/" in t and ".dll" in t:
+        t = t.replace(".dll", ".dylib")
+    return t
+
+
 def main() -> None:
     root = Path(sys.argv[1] if len(sys.argv) > 1 else "/tmp/Playnite")
     emu_dir = root / "source" / "Playnite" / "Emulation" / "Emulators"
@@ -45,7 +56,7 @@ def main() -> None:
             args = prof.get("StartupArguments")
             if not args:
                 continue
-            args_str = str(args).replace("{ImagePath}", "{rom}")
+            args_str = fix_mac_launch_arguments(str(args))
             pname = prof.get("Name") or "Default"
             platforms = prof.get("Platforms") or []
             if not isinstance(platforms, list):

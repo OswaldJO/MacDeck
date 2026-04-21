@@ -18,7 +18,13 @@ enum GameLaunchError: LocalizedError {
 /// Launches a ROM using the emulator’s argument template.
 /// Playnite uses **`{ImagePath}`** for the game/disc file in profiles ([cmdline arguments](https://github.com/JosefNemec/Playnite/wiki/Cmdline-arguments)).
 /// We accept `{ImagePath}` (same as Playnite), `{rom}`, and `{ROM}` interchangeably.
+@MainActor
 enum GameLauncher {
+    /// Running emulator PIDs we are currently tracking for auto-hide/restore.
+    private static var trackedLaunchPIDs: Set<pid_t> = []
+    /// Notification tokens retained while tracking launched emulator processes.
+    private static var terminationObservers: [NSObjectProtocol] = []
+
     static func launch(game: LibraryGame) throws {
         guard let emulator = game.emulator else {
             throw GameLaunchError.missingEmulator
@@ -42,10 +48,75 @@ enum GameLauncher {
         NSWorkspace.shared.openApplication(
             at: resolvedExecutableURL(exe),
             configuration: configuration
-        ) { _, error in
+        ) { runningApp, error in
             if let error {
                 NSLog("Launch error: \(error.localizedDescription)")
+                return
             }
+            guard let runningApp else {
+                return
+            }
+            Task { @MainActor in
+                registerLaunchedApplication(runningApp)
+            }
+        }
+    }
+
+    private static func registerLaunchedApplication(_ app: NSRunningApplication) {
+        let pid = app.processIdentifier
+        guard pid > 0 else { return }
+
+        let inserted = trackedLaunchPIDs.insert(pid).inserted
+        if inserted {
+            NSApp.hide(nil)
+        }
+
+        let observer = NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.didTerminateApplicationNotification,
+            object: nil,
+            queue: .main
+        ) { notification in
+            guard let terminated = notification.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication else {
+                return
+            }
+            guard terminated.processIdentifier == pid else { return }
+            Task { @MainActor in
+                unregisterLaunchedApplication(pid: pid)
+            }
+        }
+        terminationObservers.append(observer)
+    }
+
+    private static func unregisterLaunchedApplication(pid: pid_t) {
+        guard trackedLaunchPIDs.contains(pid) else { return }
+        trackedLaunchPIDs.remove(pid)
+
+        if trackedLaunchPIDs.isEmpty {
+            NSApp.unhide(nil)
+            NSApp.activate(ignoringOtherApps: true)
+        }
+
+        // Remove stale observers after each termination.
+        let center = NSWorkspace.shared.notificationCenter
+        terminationObservers.forEach { center.removeObserver($0) }
+        terminationObservers.removeAll()
+
+        // Re-register remaining tracked PIDs to keep monitoring if multiple launches overlap.
+        for trackedPID in trackedLaunchPIDs {
+            let observer = center.addObserver(
+                forName: NSWorkspace.didTerminateApplicationNotification,
+                object: nil,
+                queue: .main
+            ) { notification in
+                guard let terminated = notification.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication else {
+                    return
+                }
+                guard terminated.processIdentifier == trackedPID else { return }
+                Task { @MainActor in
+                    unregisterLaunchedApplication(pid: trackedPID)
+                }
+            }
+            terminationObservers.append(observer)
         }
     }
 
