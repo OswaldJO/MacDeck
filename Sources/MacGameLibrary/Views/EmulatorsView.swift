@@ -1,3 +1,4 @@
+import AppKit
 import SwiftData
 import SwiftUI
 
@@ -19,6 +20,32 @@ private enum LibraryProfileRow: Identifiable {
         case .custom(let e): return e.displayTitle
         }
     }
+}
+
+private struct EmulatorTransferRecord: Codable {
+    var name: String
+    var executablePath: String
+    var launchArgumentTemplate: String
+    var supportedFileTypesCSV: String?
+}
+
+private struct EmulatorImportConflict: Identifiable {
+    var existingID: UUID
+    var imported: EmulatorTransferRecord
+    var id: UUID { existingID }
+}
+
+private enum ImportConflictChoice {
+    case keepCurrent
+    case useImport
+    case compare
+}
+
+private enum CompareFieldSource: String, CaseIterable, Identifiable {
+    case current
+    case imported
+
+    var id: String { rawValue }
 }
 
 struct EmulatorsView: View {
@@ -49,6 +76,18 @@ struct EmulatorsView: View {
     @State private var showDefaultLaunchArgumentsInfo = false
     @State private var showRetroArchInfo = false
     @State private var showRPCS3Info = false
+    @State private var importConflicts: [EmulatorImportConflict] = []
+    @State private var currentImportConflict: EmulatorImportConflict?
+    @State private var showImportConflictSheet = false
+    @State private var showCompareImportSheet = false
+    @State private var applyConflictChoiceToAll = false
+    @State private var compareNameSource: CompareFieldSource = .current
+    @State private var compareExecutableSource: CompareFieldSource = .current
+    @State private var compareArgumentsSource: CompareFieldSource = .current
+    @State private var compareFileTypesSource: CompareFieldSource = .current
+    @State private var compareApplyToAll = false
+    @State private var compareTemplate: (CompareFieldSource, CompareFieldSource, CompareFieldSource, CompareFieldSource)?
+    @State private var importStatusMessage: String?
     /// Sheet uses a stable `Identifiable` token (not a managed object) to avoid SwiftData invalidation crashes.
     @State private var editingEmulator: EditingEmulatorToken?
 
@@ -219,6 +258,20 @@ struct EmulatorsView: View {
                 }
 
                 Section("Configured") {
+                    HStack {
+                        Button("Import") {
+                            importConfiguredEmulators()
+                        }
+                        Button("Export") {
+                            exportConfiguredEmulators()
+                        }
+                        Spacer()
+                    }
+                    if let importStatusMessage {
+                        Text(importStatusMessage)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
                     ForEach(emulators) { emu in
                         HStack(alignment: .top, spacing: 12) {
                             VStack(alignment: .leading, spacing: 4) {
@@ -458,6 +511,12 @@ struct EmulatorsView: View {
                 customLibraryVersion += 1
             }
         }
+        .sheet(isPresented: $showImportConflictSheet) {
+            importConflictSheet
+        }
+        .sheet(isPresented: $showCompareImportSheet) {
+            compareConflictSheet
+        }
     }
 
     private func applyLibraryProfileRow(_ row: LibraryProfileRow) {
@@ -497,6 +556,367 @@ struct EmulatorsView: View {
         argumentTemplate = "\"{ImagePath}\""
         supportedFileTypesInput = ""
         addEmulatorLibrarySearch = ""
+    }
+
+    private func exportConfiguredEmulators() {
+        let panel = NSSavePanel()
+        panel.canCreateDirectories = true
+        panel.allowedContentTypes = [.json]
+        panel.nameFieldStringValue = "ConfiguredEmulators.json"
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+
+        let records = emulators
+            .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+            .map { emulator in
+                EmulatorTransferRecord(
+                    name: emulator.name,
+                    executablePath: emulator.executablePath,
+                    launchArgumentTemplate: emulator.launchArgumentTemplate,
+                    supportedFileTypesCSV: emulator.supportedFileTypesCSV
+                )
+            }
+
+        do {
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+            let data = try encoder.encode(records)
+            try data.write(to: url, options: .atomic)
+            importStatusMessage = "Exported \(records.count) configured emulators."
+        } catch {
+            importStatusMessage = "Export failed: \(error.localizedDescription)"
+        }
+    }
+
+    private func importConfiguredEmulators() {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = true
+        panel.canChooseDirectories = false
+        panel.allowsMultipleSelection = false
+        panel.allowedContentTypes = [.json]
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+
+        do {
+            let data = try Data(contentsOf: url)
+            let imported = try JSONDecoder().decode([EmulatorTransferRecord].self, from: data)
+            runImport(records: imported)
+        } catch {
+            importStatusMessage = "Import failed: \(error.localizedDescription)"
+        }
+    }
+
+    private func runImport(records: [EmulatorTransferRecord]) {
+        importStatusMessage = nil
+        importConflicts = []
+        currentImportConflict = nil
+        applyConflictChoiceToAll = false
+        compareApplyToAll = false
+        compareTemplate = nil
+
+        var insertedCount = 0
+        for record in records {
+            if let existing = emulators.first(where: { $0.name.caseInsensitiveCompare(record.name) == .orderedSame }) {
+                importConflicts.append(EmulatorImportConflict(existingID: existing.id, imported: record))
+            } else {
+                let profile = EmulatorProfile(
+                    name: record.name.trimmingCharacters(in: .whitespacesAndNewlines),
+                    executablePath: record.executablePath.trimmingCharacters(in: .whitespacesAndNewlines),
+                    launchArgumentTemplate: record.launchArgumentTemplate.trimmingCharacters(in: .whitespacesAndNewlines),
+                    supportedFileTypesCSV: cleanOptionalCSV(record.supportedFileTypesCSV),
+                    sortOrder: emulators.count + insertedCount
+                )
+                modelContext.insert(profile)
+                insertedCount += 1
+            }
+        }
+
+        if importConflicts.isEmpty {
+            try? modelContext.save()
+            importStatusMessage = "Import complete. Added \(insertedCount) emulators. No conflicts."
+            return
+        }
+
+        currentImportConflict = importConflicts.removeFirst()
+        showImportConflictSheet = true
+        importStatusMessage = "Import found conflicts. Resolve to continue."
+    }
+
+    private func resolveCurrentConflict(choice: ImportConflictChoice) {
+        guard let conflict = currentImportConflict else { return }
+        switch choice {
+        case .keepCurrent:
+            if applyConflictChoiceToAll {
+                resolveRemainingConflictsKeepingCurrent()
+            } else {
+                advanceToNextConflict()
+            }
+        case .useImport:
+            overwriteExisting(with: conflict.imported, existingID: conflict.existingID)
+            if applyConflictChoiceToAll {
+                resolveRemainingConflictsUsingImport()
+            } else {
+                advanceToNextConflict()
+            }
+        case .compare:
+            prepareCompareSources(for: conflict)
+            showImportConflictSheet = false
+            showCompareImportSheet = true
+        }
+    }
+
+    private func resolveRemainingConflictsKeepingCurrent() {
+        importConflicts.removeAll()
+        finishImportResolution()
+    }
+
+    private func resolveRemainingConflictsUsingImport() {
+        for conflict in importConflicts {
+            overwriteExisting(with: conflict.imported, existingID: conflict.existingID)
+        }
+        importConflicts.removeAll()
+        finishImportResolution()
+    }
+
+    private func resolveCompareAndContinue() {
+        guard let conflict = currentImportConflict else { return }
+        let merged = mergedRecord(for: conflict)
+        overwriteExisting(with: merged, existingID: conflict.existingID)
+
+        let shouldApplyTemplateToAll = compareApplyToAll
+        if shouldApplyTemplateToAll {
+            let template = (compareNameSource, compareExecutableSource, compareArgumentsSource, compareFileTypesSource)
+            compareTemplate = template
+            for remaining in importConflicts {
+                let mergedRemaining = mergedRecord(
+                    current: emulators.first(where: { $0.id == remaining.existingID }),
+                    imported: remaining.imported,
+                    template: template
+                )
+                overwriteExisting(with: mergedRemaining, existingID: remaining.existingID)
+            }
+            importConflicts.removeAll()
+            showCompareImportSheet = false
+            finishImportResolution()
+            return
+        }
+
+        showCompareImportSheet = false
+        advanceToNextConflict()
+    }
+
+    private func advanceToNextConflict() {
+        if importConflicts.isEmpty {
+            finishImportResolution()
+            return
+        }
+        currentImportConflict = importConflicts.removeFirst()
+        showImportConflictSheet = true
+        showCompareImportSheet = false
+        applyConflictChoiceToAll = false
+        compareApplyToAll = false
+    }
+
+    private func finishImportResolution() {
+        showImportConflictSheet = false
+        showCompareImportSheet = false
+        applyConflictChoiceToAll = false
+        compareApplyToAll = false
+        currentImportConflict = nil
+        try? modelContext.save()
+        importStatusMessage = "Import complete. Conflicts resolved."
+    }
+
+    private func overwriteExisting(with record: EmulatorTransferRecord, existingID: UUID) {
+        guard let existing = emulators.first(where: { $0.id == existingID }) else { return }
+        existing.name = record.name.trimmingCharacters(in: .whitespacesAndNewlines)
+        existing.executablePath = record.executablePath.trimmingCharacters(in: .whitespacesAndNewlines)
+        existing.launchArgumentTemplate = record.launchArgumentTemplate.trimmingCharacters(in: .whitespacesAndNewlines)
+        existing.supportedFileTypesCSV = cleanOptionalCSV(record.supportedFileTypesCSV)
+    }
+
+    private func cleanOptionalCSV(_ value: String?) -> String? {
+        let trimmed = (value ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
+    }
+
+    private func prepareCompareSources(for conflict: EmulatorImportConflict) {
+        compareNameSource = .current
+        compareExecutableSource = .current
+        compareArgumentsSource = .current
+        compareFileTypesSource = .current
+
+        if let template = compareTemplate {
+            compareNameSource = template.0
+            compareExecutableSource = template.1
+            compareArgumentsSource = template.2
+            compareFileTypesSource = template.3
+        }
+    }
+
+    private func mergedRecord(for conflict: EmulatorImportConflict) -> EmulatorTransferRecord {
+        mergedRecord(
+            current: emulators.first(where: { $0.id == conflict.existingID }),
+            imported: conflict.imported,
+            template: (compareNameSource, compareExecutableSource, compareArgumentsSource, compareFileTypesSource)
+        )
+    }
+
+    private func mergedRecord(
+        current: EmulatorProfile?,
+        imported: EmulatorTransferRecord,
+        template: (CompareFieldSource, CompareFieldSource, CompareFieldSource, CompareFieldSource)
+    ) -> EmulatorTransferRecord {
+        let currentName = current?.name ?? imported.name
+        let currentExecutable = current?.executablePath ?? imported.executablePath
+        let currentArguments = current?.launchArgumentTemplate ?? imported.launchArgumentTemplate
+        let currentFileTypes = current?.supportedFileTypesCSV
+
+        return EmulatorTransferRecord(
+            name: template.0 == .current ? currentName : imported.name,
+            executablePath: template.1 == .current ? currentExecutable : imported.executablePath,
+            launchArgumentTemplate: template.2 == .current ? currentArguments : imported.launchArgumentTemplate,
+            supportedFileTypesCSV: template.3 == .current ? currentFileTypes : imported.supportedFileTypesCSV
+        )
+    }
+
+    @ViewBuilder
+    private var importConflictSheet: some View {
+        NavigationStack {
+            VStack(alignment: .leading, spacing: 12) {
+                if let conflict = currentImportConflict,
+                   let existing = emulators.first(where: { $0.id == conflict.existingID }) {
+                    Text("Conflicting emulator: \(existing.name)")
+                        .font(.headline)
+                    Text("A configured emulator with this name already exists.")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+
+                    Toggle("Do for all remaining conflicts", isOn: $applyConflictChoiceToAll)
+
+                    HStack {
+                        Button("Keep current") {
+                            resolveCurrentConflict(choice: .keepCurrent)
+                        }
+                        Button("Use the import") {
+                            resolveCurrentConflict(choice: .useImport)
+                        }
+                        Button("Compare") {
+                            resolveCurrentConflict(choice: .compare)
+                        }
+                    }
+
+                    Spacer()
+                } else {
+                    Text("No conflict selected.")
+                }
+            }
+            .padding()
+            .navigationTitle("Import conflict")
+        }
+        .frame(minWidth: 520, minHeight: 220)
+    }
+
+    @ViewBuilder
+    private var compareConflictSheet: some View {
+        NavigationStack {
+            VStack(alignment: .leading, spacing: 10) {
+                if let conflict = currentImportConflict,
+                   let existing = emulators.first(where: { $0.id == conflict.existingID }) {
+                    Text("Compare and merge")
+                        .font(.headline)
+                    Text("Choose which value to keep for each field.")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+
+                    compareFieldRow(
+                        title: "Display name",
+                        currentValue: existing.name,
+                        importedValue: conflict.imported.name,
+                        source: $compareNameSource
+                    )
+                    compareFieldRow(
+                        title: "Executable path",
+                        currentValue: existing.executablePath,
+                        importedValue: conflict.imported.executablePath,
+                        source: $compareExecutableSource
+                    )
+                    compareFieldRow(
+                        title: "Launch arguments",
+                        currentValue: existing.launchArgumentTemplate,
+                        importedValue: conflict.imported.launchArgumentTemplate,
+                        source: $compareArgumentsSource
+                    )
+                    compareFieldRow(
+                        title: "Supported File Types",
+                        currentValue: existing.supportedFileTypesCSV ?? "",
+                        importedValue: conflict.imported.supportedFileTypesCSV ?? "",
+                        source: $compareFileTypesSource
+                    )
+
+                    Toggle("Do for all remaining conflicts", isOn: $compareApplyToAll)
+
+                    HStack {
+                        Button("Cancel", role: .cancel) {
+                            showCompareImportSheet = false
+                            showImportConflictSheet = true
+                        }
+                        Spacer()
+                        Button("Keep merged result") {
+                            resolveCompareAndContinue()
+                        }
+                        .keyboardShortcut(.defaultAction)
+                    }
+                } else {
+                    Text("No conflict selected.")
+                }
+            }
+            .padding()
+            .navigationTitle("Compare conflict")
+        }
+        .frame(minWidth: 760, minHeight: 420)
+    }
+
+    @ViewBuilder
+    private func compareFieldRow(
+        title: String,
+        currentValue: String,
+        importedValue: String,
+        source: Binding<CompareFieldSource>
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(title)
+                .font(.subheadline.weight(.semibold))
+            HStack(alignment: .top, spacing: 12) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Current")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                    Text(currentValue.isEmpty ? "—" : currentValue)
+                        .font(.caption)
+                        .textSelection(.enabled)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(8)
+                        .background(Color(nsColor: .textBackgroundColor))
+                        .clipShape(RoundedRectangle(cornerRadius: 6))
+                }
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Imported")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                    Text(importedValue.isEmpty ? "—" : importedValue)
+                        .font(.caption)
+                        .textSelection(.enabled)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(8)
+                        .background(Color(nsColor: .textBackgroundColor))
+                        .clipShape(RoundedRectangle(cornerRadius: 6))
+                }
+            }
+            Picker("Keep", selection: source) {
+                Text("Keep current").tag(CompareFieldSource.current)
+                Text("Use import").tag(CompareFieldSource.imported)
+            }
+            .pickerStyle(.segmented)
+        }
     }
 
     private func deleteEmulator(_ emu: EmulatorProfile) {
