@@ -274,7 +274,7 @@ private struct LibraryGamesGridView: View {
     let onDelete: (LibraryGame) -> Void
 
     private let columns = [
-        GridItem(.adaptive(minimum: 140, maximum: 200), spacing: 16, alignment: .top)
+        GridItem(.adaptive(minimum: LibraryGridMetrics.cardWidth, maximum: LibraryGridMetrics.cardWidth), spacing: LibraryGridMetrics.horizontalSpacing, alignment: .top)
     ]
 
     var body: some View {
@@ -287,7 +287,7 @@ private struct LibraryGamesGridView: View {
                 )
             } else {
                 ScrollView {
-                    LazyVGrid(columns: columns, alignment: .leading, spacing: 20) {
+                    LazyVGrid(columns: columns, alignment: .leading, spacing: LibraryGridMetrics.verticalSpacing) {
                         ForEach(games) { game in
                             GameLibraryTile(
                                 game: game,
@@ -320,12 +320,21 @@ private struct LibraryGamesGridView: View {
                             }
                         }
                     }
-                    .padding(20)
+                    .padding(LibraryGridMetrics.outerPadding)
                 }
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
+}
+
+private enum LibraryGridMetrics {
+    static let cardWidth: CGFloat = 160
+    static let coverHeight: CGFloat = 214
+    static let titleHeight: CGFloat = 52 // reserve up to ~3 lines so rows align
+    static let horizontalSpacing: CGFloat = 16
+    static let verticalSpacing: CGFloat = 20
+    static let outerPadding: CGFloat = 20
 }
 
 private struct GameLibraryTile: View {
@@ -340,7 +349,7 @@ private struct GameLibraryTile: View {
             VStack(alignment: .leading, spacing: 8) {
                 CoverThumbnail(urlString: game.coverImageURLString)
                     .aspectRatio(3 / 4, contentMode: .fill)
-                    .frame(maxWidth: .infinity)
+                    .frame(width: LibraryGridMetrics.cardWidth, height: LibraryGridMetrics.coverHeight)
                     .clipShape(RoundedRectangle(cornerRadius: 8))
                     .overlay {
                         RoundedRectangle(cornerRadius: 8)
@@ -352,7 +361,7 @@ private struct GameLibraryTile: View {
                     .foregroundStyle(.primary)
                     .multilineTextAlignment(.leading)
                     .lineLimit(3)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .frame(width: LibraryGridMetrics.cardWidth, height: LibraryGridMetrics.titleHeight, alignment: .topLeading)
             }
             .contentShape(Rectangle())
             .onTapGesture(perform: onCardTap)
@@ -387,7 +396,7 @@ private struct GameLibraryTile: View {
                 }
             }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(width: LibraryGridMetrics.cardWidth, alignment: .leading)
         .help("Show actions for \(game.libraryListTitle)")
     }
 }

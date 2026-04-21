@@ -29,10 +29,7 @@ struct MacGameLibraryApp: App {
         }
         .modelContainer(sharedModelContainer)
         .commands {
-            CommandGroup(replacing: .appHelp) {
-                // Remove default "Mac Game Library Help" item.
-            }
-            CommandGroup(after: .help) {
+            CommandGroup(replacing: .help) {
                 Button("RetroArch Launch Arguments") {
                     showHelpDialog(
                         title: "RetroArch Launch Arguments",
