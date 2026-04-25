@@ -10,6 +10,12 @@ final class MetadataBackgroundFetcher {
     private var container: ModelContainer?
 
     private init() {}
+    private static let localCoverExtensions: Set<String> = [
+        "png", "jpg", "jpeg", "webp", "gif", "heic", "bmp", "tif", "tiff", "avif"
+    ]
+    private static let likelyCoverFolderNames: Set<String> = [
+        "cover", "covers", "boxart", "art", "images", "image", "posters", "media"
+    ]
 
     func startIfNeeded(container: ModelContainer) {
         self.container = container
@@ -23,7 +29,6 @@ final class MetadataBackgroundFetcher {
     func scheduleExtraPass(container: ModelContainer) {
         Task { @MainActor in
             self.container = container
-            guard MetadataCredentials.isConfigured else { return }
             await processBatch(container: container)
         }
     }
@@ -38,8 +43,6 @@ final class MetadataBackgroundFetcher {
     }
 
     private func processBatch(container: ModelContainer) async {
-        guard MetadataCredentials.isConfigured else { return }
-
         let context = container.mainContext
         var descriptor = FetchDescriptor<LibraryGame>(
             predicate: #Predicate<LibraryGame> { $0.coverImageURLString == nil },
@@ -73,7 +76,25 @@ final class MetadataBackgroundFetcher {
 
         let romStem = URL(fileURLWithPath: game.romPath).deletingPathExtension().lastPathComponent
         let searchTitle = game.libraryListTitle
+        if let localCover = localCoverForGame(path: game.romPath, title: searchTitle, romStem: romStem) {
+            var options = game.coverImageOptions
+            let candidate = localCover.absoluteString
+            if !options.contains(candidate) {
+                options.insert(candidate, at: 0)
+                game.coverImageOptions = options
+            } else if game.coverImageURLString == nil {
+                game.coverImageURLString = candidate
+            }
+            game.metadataLastFetchAt = Date()
+            try? context.save()
+            return
+        }
 
+        guard MetadataCredentials.isConfigured else {
+            game.metadataLastFetchAt = Date()
+            try? context.save()
+            return
+        }
         do {
             guard let result = try await MetadataService.fetchMetadata(
                 displayTitle: searchTitle,
@@ -96,5 +117,87 @@ final class MetadataBackgroundFetcher {
             try? context.save()
             NSLog("Metadata fetch failed: %@", error.localizedDescription)
         }
+    }
+
+    private func localCoverForGame(path: String, title: String, romStem: String) -> URL? {
+        let gameURL = URL(fileURLWithPath: (path as NSString).standardizingPath)
+        let gameDir = gameURL.hasDirectoryPath ? gameURL : gameURL.deletingLastPathComponent()
+        let candidateDirectories = coverSearchDirectories(startingAt: gameDir)
+        let targetTokens = searchableTokens(from: title + " " + romStem)
+        let fallbackStem = romStem.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !targetTokens.isEmpty || !fallbackStem.isEmpty else { return nil }
+
+        let fm = FileManager.default
+        var best: (score: Int, url: URL)?
+        for directory in candidateDirectories {
+            guard let items = try? fm.contentsOfDirectory(
+                at: directory,
+                includingPropertiesForKeys: [.isRegularFileKey],
+                options: [.skipsHiddenFiles]
+            ) else { continue }
+
+            for item in items {
+                let ext = item.pathExtension.lowercased()
+                guard Self.localCoverExtensions.contains(ext) else { continue }
+                let stem = item.deletingPathExtension().lastPathComponent
+                let stemTokens = searchableTokens(from: stem)
+                var score = 0
+                if !targetTokens.isEmpty {
+                    let overlap = targetTokens.intersection(stemTokens).count
+                    score += overlap * 10
+                }
+                if !fallbackStem.isEmpty, stem.lowercased().contains(fallbackStem) {
+                    score += 8
+                }
+                if score <= 0 { continue }
+
+                if let best, best.score >= score { continue }
+                best = (score, item)
+            }
+        }
+        return best?.url
+    }
+
+    private func coverSearchDirectories(startingAt gameDirectory: URL) -> [URL] {
+        var directories: [URL] = []
+        var current = gameDirectory
+        let fm = FileManager.default
+
+        for _ in 0..<3 {
+            directories.append(current)
+            if let children = try? fm.contentsOfDirectory(
+                at: current,
+                includingPropertiesForKeys: [.isDirectoryKey],
+                options: [.skipsHiddenFiles]
+            ) {
+                for child in children {
+                    let isDirectory = (try? child.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) ?? false
+                    guard isDirectory else { continue }
+                    let name = child.lastPathComponent.lowercased()
+                    if Self.likelyCoverFolderNames.contains(name) {
+                        directories.append(child)
+                    }
+                }
+            }
+            let parent = current.deletingLastPathComponent()
+            if parent.path == current.path { break }
+            current = parent
+        }
+        return directories
+    }
+
+    private func searchableTokens(from raw: String) -> Set<String> {
+        let cleaned = raw.lowercased().unicodeScalars.map { scalar -> Character in
+            if CharacterSet.alphanumerics.contains(scalar) {
+                return Character(scalar)
+            }
+            return " "
+        }
+        return Set(
+            String(cleaned)
+                .split(whereSeparator: \.isWhitespace)
+                .map(String.init)
+                .filter { $0.count >= 3 }
+        )
     }
 }

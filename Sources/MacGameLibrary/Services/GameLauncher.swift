@@ -5,12 +5,14 @@ enum GameLaunchError: LocalizedError {
     case missingEmulator
     case missingRom
     case invalidExecutable
+    case unsupportedStandaloneTarget
 
     var errorDescription: String? {
         switch self {
         case .missingEmulator: return "No emulator is assigned to this game."
         case .missingRom: return "The game file could not be found."
         case .invalidExecutable: return "The emulator path is not valid."
+        case .unsupportedStandaloneTarget: return "The selected Mac game path could not be launched."
         }
     }
 }
@@ -27,15 +29,25 @@ enum GameLauncher {
 
     static func launch(game: LibraryGame) throws {
         DebugLog.log("Launch requested: title=\(game.title) romPath=\(game.romPath)")
-        guard let emulator = game.emulator else {
-            DebugLog.log("Launch failed: missing emulator")
-            throw GameLaunchError.missingEmulator
-        }
         let romURL = URL(fileURLWithPath: game.romPath)
         let standardizedPath = (romURL.path as NSString).standardizingPath
         guard FileManager.default.fileExists(atPath: standardizedPath) else {
             DebugLog.log("Launch failed: missing ROM at \(standardizedPath)")
             throw GameLaunchError.missingRom
+        }
+        if game.emulator == nil && game.emulatorUUID == nil {
+            if let epicAppName = game.epicAppName?.trimmingCharacters(in: .whitespacesAndNewlines),
+               !epicAppName.isEmpty {
+                if launchViaEpicLauncher(appName: epicAppName) {
+                    return
+                }
+            }
+            try launchStandaloneTarget(at: URL(fileURLWithPath: standardizedPath))
+            return
+        }
+        guard let emulator = game.emulator else {
+            DebugLog.log("Launch failed: missing emulator")
+            throw GameLaunchError.missingEmulator
         }
 
         let exe = URL(fileURLWithPath: emulator.executablePath)
@@ -230,6 +242,51 @@ enum GameLauncher {
             let runningPath = (bundleURL.path as NSString).standardizingPath
             return runningPath == target
         }
+    }
+
+    private static func launchStandaloneTarget(at url: URL) throws {
+        let standardizedPath = (url.path as NSString).standardizingPath
+        let standardizedURL = URL(fileURLWithPath: standardizedPath)
+        DebugLog.log("Standalone launch target=\(standardizedPath)")
+
+        if standardizedURL.pathExtension.lowercased() == "app" {
+            NSWorkspace.shared.openApplication(
+                at: standardizedURL,
+                configuration: NSWorkspace.OpenConfiguration()
+            ) { runningApp, error in
+                Task { @MainActor in
+                    if let error {
+                        NSLog("Standalone launch error: \(error.localizedDescription)")
+                        DebugLog.log("Standalone openApplication callback error: \(error.localizedDescription)")
+                        return
+                    }
+                    guard let runningApp else {
+                        DebugLog.log("Standalone openApplication callback returned nil app")
+                        return
+                    }
+                    DebugLog.log("Standalone openApplication callback success pid=\(runningApp.processIdentifier)")
+                    registerLaunchedApplication(runningApp)
+                }
+            }
+            return
+        }
+
+        if NSWorkspace.shared.open(standardizedURL) {
+            DebugLog.log("Standalone open succeeded via NSWorkspace.open")
+            return
+        }
+        DebugLog.log("Standalone launch failed for path=\(standardizedPath)")
+        throw GameLaunchError.unsupportedStandaloneTarget
+    }
+
+    private static func launchViaEpicLauncher(appName: String) -> Bool {
+        let escaped = appName.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? appName
+        guard let launchURL = URL(string: "com.epicgames.launcher://apps/\(escaped)?action=launch&silent=true") else {
+            return false
+        }
+        let didOpen = NSWorkspace.shared.open(launchURL)
+        DebugLog.log("Epic launch uri appName=\(appName) opened=\(didOpen)")
+        return didOpen
     }
 
 }

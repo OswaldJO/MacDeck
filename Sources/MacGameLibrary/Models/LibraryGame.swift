@@ -19,6 +19,10 @@ public final class LibraryGame {
     public var coverImageOptionsJSON: String?
     /// Optional platform/system hint for metadata search (e.g. "SNES", "PS2").
     public var platformHint: String?
+    /// Optional source identifier (e.g. "epic") for imported launcher ecosystems.
+    public var librarySourceID: String?
+    /// Epic app name used to launch via Epic Games Launcher URI protocol.
+    public var epicAppName: String?
     public var sortOrder: Int
     public var dateAdded: Date
     public var lastPlayed: Date?
@@ -35,6 +39,8 @@ public final class LibraryGame {
         coverImageURLString: String? = nil,
         coverImageOptionsJSON: String? = nil,
         platformHint: String? = nil,
+        librarySourceID: String? = nil,
+        epicAppName: String? = nil,
         sortOrder: Int = 0,
         dateAdded: Date = Date(),
         lastPlayed: Date? = nil,
@@ -49,6 +55,8 @@ public final class LibraryGame {
         self.coverImageURLString = coverImageURLString
         self.coverImageOptionsJSON = coverImageOptionsJSON
         self.platformHint = platformHint
+        self.librarySourceID = librarySourceID
+        self.epicAppName = epicAppName
         self.sortOrder = sortOrder
         self.dateAdded = dateAdded
         self.lastPlayed = lastPlayed

@@ -13,6 +13,7 @@ private enum MainSection: Hashable {
 
 private enum LibrarySidebarSelection: Hashable {
     case all
+    case macGames
     case emulator(UUID)
 }
 
@@ -29,6 +30,7 @@ public struct RootView: View {
     @State private var scanFeedback: String?
     @State private var cleanupFeedback: String?
     @State private var confirmClearAllGames = false
+    @State private var confirmClearMacGames = false
     @State private var clearEmulatorGamesID: UUID?
     /// Game card showing play / info overlay.
     @State private var actionOverlayGameID: UUID?
@@ -41,7 +43,7 @@ public struct RootView: View {
 
     private var visibleLibraryGames: [LibraryGame] {
         games.filter { game in
-            guard let emulatorID = game.emulatorUUID else { return false }
+            guard let emulatorID = game.emulatorUUID else { return true }
             return activeEmulatorIDs.contains(emulatorID)
         }
     }
@@ -59,9 +61,22 @@ public struct RootView: View {
         switch sidebarSelection {
         case .all:
             return sortedVisible
+        case .macGames:
+            return sortedVisible.filter { $0.emulatorUUID == nil }
         case .emulator(let id):
             return sortedVisible.filter { $0.emulatorUUID == id }
         }
+    }
+
+    @ViewBuilder
+    private var macGamesSidebarItem: some View {
+        Text("Mac Games")
+            .tag(LibrarySidebarSelection.macGames)
+            .contextMenu {
+                Button("Clear Mac Games…", systemImage: "trash", role: .destructive) {
+                    confirmClearMacGames = true
+                }
+            }
     }
 
     @ViewBuilder
@@ -94,96 +109,121 @@ public struct RootView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    public var body: some View {
-        TabView(selection: $section) {
-            NavigationSplitView(columnVisibility: $columnVisibility) {
-                List(selection: $sidebarSelection) {
-                    Section("Library") {
-                        Text("All")
-                            .tag(LibrarySidebarSelection.all)
+    @ViewBuilder
+    private var libraryTab: some View {
+        NavigationSplitView(columnVisibility: $columnVisibility) {
+            List(selection: $sidebarSelection) {
+                Section("Library") {
+                    Text("All")
+                        .tag(LibrarySidebarSelection.all)
+                        .contextMenu {
+                            Button("Clear All Games…", systemImage: "trash", role: .destructive) {
+                                confirmClearAllGames = true
+                            }
+                        }
+                    macGamesSidebarItem
+                    ForEach(emulators, id: \.id) { emu in
+                        Text(emu.name)
+                            .tag(LibrarySidebarSelection.emulator(emu.id))
                             .contextMenu {
-                                Button("Clear All Games…", systemImage: "trash", role: .destructive) {
-                                    confirmClearAllGames = true
+                                Button("Clear Games for “\(emu.name)”…", systemImage: "trash", role: .destructive) {
+                                    clearEmulatorGamesID = emu.id
                                 }
                             }
-                        ForEach(emulators, id: \.id) { emu in
-                            Text(emu.name)
-                                .tag(LibrarySidebarSelection.emulator(emu.id))
-                                .contextMenu {
-                                    Button("Clear Games for “\(emu.name)”…", systemImage: "trash", role: .destructive) {
-                                        clearEmulatorGamesID = emu.id
-                                    }
-                                }
-                        }
                     }
                 }
-                .navigationTitle("Games")
-                .toolbar {
-                    ToolbarItemGroup(placement: .primaryAction) {
-                        Button {
-                            addGamePlaceholder()
-                        } label: {
-                            Label("Add Game", systemImage: "plus")
-                                .labelStyle(.titleAndIcon)
-                        }
-
-                        Button {
-                            performScan()
-                        } label: {
-                            Label("Scan Paths", systemImage: "arrow.triangle.2.circlepath")
-                                .labelStyle(.titleAndIcon)
-                        }
-                    }
-                }
-                .alert("Scan Paths", isPresented: Binding(
-                    get: { scanFeedback != nil },
-                    set: { if !$0 { scanFeedback = nil } }
-                )) {
-                    Button("OK", role: .cancel) {}
-                } message: {
-                    Text(scanFeedback ?? "")
-                }
-                .confirmationDialog(
-                    "Clear entire library?",
-                    isPresented: $confirmClearAllGames,
-                    titleVisibility: .visible
-                ) {
-                    Button("Clear All Games", role: .destructive) {
-                        removeEveryGameFromLibrary()
-                    }
-                    Button("Cancel", role: .cancel) {}
-                } message: {
-                    Text("Every game entry is removed. Your folders on disk are unchanged—use Scan Paths to import again.")
-                }
-                .confirmationDialog(
-                    "Clear games for this emulator?",
-                    isPresented: Binding(
-                        get: { clearEmulatorGamesID != nil },
-                        set: { if !$0 { clearEmulatorGamesID = nil } }
-                    ),
-                    titleVisibility: .visible
-                ) {
-                    Button("Clear Games", role: .destructive) {
-                        if let id = clearEmulatorGamesID {
-                            removeAllGames(forEmulatorID: id)
-                        }
-                        clearEmulatorGamesID = nil
-                    }
-                    Button("Cancel", role: .cancel) {
-                        clearEmulatorGamesID = nil
-                    }
-                } message: {
-                    if let id = clearEmulatorGamesID,
-                       let emu = emulators.first(where: { $0.id == id }) {
-                        Text("Removes all library entries for “\(emu.name)”. Scan Paths can add them again.")
-                    }
-                }
-            } detail: {
-                libraryDetailContent
             }
-            .navigationSplitViewStyle(.balanced)
-            .tabItem { Label("Library", systemImage: "square.grid.2x2") }
-            .tag(MainSection.library)
+            .navigationTitle("Games")
+            .toolbar {
+                ToolbarItemGroup(placement: .primaryAction) {
+                    Button {
+                        addManualMacGame()
+                    } label: {
+                        Label("Add Game", systemImage: "plus")
+                            .labelStyle(.titleAndIcon)
+                    }
+
+                    Button {
+                        performScan()
+                    } label: {
+                        Label("Scan Paths", systemImage: "arrow.triangle.2.circlepath")
+                            .labelStyle(.titleAndIcon)
+                    }
+
+                    Button {
+                        importEpicInstalledGames()
+                    } label: {
+                        Label("Import Epic Installed Games", systemImage: "shippingbox")
+                            .labelStyle(.titleAndIcon)
+                    }
+                }
+            }
+            .alert("Scan Paths", isPresented: Binding(
+                get: { scanFeedback != nil },
+                set: { if !$0 { scanFeedback = nil } }
+            )) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text(scanFeedback ?? "")
+            }
+            .confirmationDialog(
+                "Clear entire library?",
+                isPresented: $confirmClearAllGames,
+                titleVisibility: .visible
+            ) {
+                Button("Clear All Games", role: .destructive) {
+                    removeEveryGameFromLibrary()
+                }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("Every game entry is removed. Your folders on disk are unchanged—use Scan Paths to import again.")
+            }
+            .confirmationDialog(
+                "Clear Mac games?",
+                isPresented: $confirmClearMacGames,
+                titleVisibility: .visible
+            ) {
+                Button("Clear Mac Games", role: .destructive) {
+                    removeAllMacGames()
+                }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("Removes all standalone Mac game entries. Files on disk are unchanged.")
+            }
+            .confirmationDialog(
+                "Clear games for this emulator?",
+                isPresented: Binding(
+                    get: { clearEmulatorGamesID != nil },
+                    set: { if !$0 { clearEmulatorGamesID = nil } }
+                ),
+                titleVisibility: .visible
+            ) {
+                Button("Clear Games", role: .destructive) {
+                    if let id = clearEmulatorGamesID {
+                        removeAllGames(forEmulatorID: id)
+                    }
+                    clearEmulatorGamesID = nil
+                }
+                Button("Cancel", role: .cancel) {
+                    clearEmulatorGamesID = nil
+                }
+            } message: {
+                if let id = clearEmulatorGamesID,
+                   let emu = emulators.first(where: { $0.id == id }) {
+                    Text("Removes all library entries for “\(emu.name)”. Scan Paths can add them again.")
+                }
+            }
+        } detail: {
+            libraryDetailContent
+        }
+        .navigationSplitViewStyle(.balanced)
+        .tabItem { Label("Library", systemImage: "square.grid.2x2") }
+        .tag(MainSection.library)
+    }
+
+    public var body: some View {
+        TabView(selection: $section) {
+            libraryTab
 
             EmulatorsView()
                 .tabItem { Label("Emulators", systemImage: "gearshape.2") }
@@ -234,6 +274,7 @@ public struct RootView: View {
     private func performScan() {
         do {
             let summary = try GamePathScanner.scan(modelContext: modelContext)
+            let epicSummary = try EpicInstalledGamesImporter.importInstalledGames(modelContext: modelContext)
             if summary.hasAnyChanges {
                 var parts: [String] = []
                 if summary.added > 0 {
@@ -245,15 +286,53 @@ public struct RootView: View {
                 if summary.linkedCovers > 0 {
                     parts.append("Linked \(summary.linkedCovers) cover image(s)")
                 }
+                if epicSummary.added > 0 {
+                    parts.append("Imported \(epicSummary.added) Epic game(s)")
+                }
+                if epicSummary.updated > 0 {
+                    parts.append("Updated \(epicSummary.updated) Epic game(s)")
+                }
+                scanFeedback = parts.joined(separator: ". ") + "."
+            } else if epicSummary.hasChanges {
+                var parts: [String] = []
+                if epicSummary.added > 0 {
+                    parts.append("Imported \(epicSummary.added) Epic game(s)")
+                }
+                if epicSummary.updated > 0 {
+                    parts.append("Updated \(epicSummary.updated) Epic game(s)")
+                }
                 scanFeedback = parts.joined(separator: ". ") + "."
             } else {
                 scanFeedback = "No new games found. Add folders in Paths or check that files use supported extensions."
             }
-            if summary.added > 0 {
+            if summary.added > 0 || epicSummary.added > 0 {
                 MetadataBackgroundFetcher.shared.scheduleExtraPass(container: modelContext.container)
             }
         } catch {
             scanFeedback = "Scan failed: \(error.localizedDescription)"
+        }
+    }
+
+    private func importEpicInstalledGames() {
+        do {
+            let epicSummary = try EpicInstalledGamesImporter.importInstalledGames(modelContext: modelContext)
+            if epicSummary.hasChanges {
+                var parts: [String] = []
+                if epicSummary.added > 0 {
+                    parts.append("Imported \(epicSummary.added) Epic game(s)")
+                }
+                if epicSummary.updated > 0 {
+                    parts.append("Updated \(epicSummary.updated) Epic game(s)")
+                }
+                scanFeedback = parts.joined(separator: ". ") + "."
+                if epicSummary.added > 0 {
+                    MetadataBackgroundFetcher.shared.scheduleExtraPass(container: modelContext.container)
+                }
+            } else {
+                scanFeedback = "No installed Epic games found to import."
+            }
+        } catch {
+            scanFeedback = "Epic import failed: \(error.localizedDescription)"
         }
     }
 
@@ -267,25 +346,26 @@ public struct RootView: View {
             NSLog("Play: library game no longer in store (id: \(gameID))")
             return
         }
-        guard let emulatorID = fresh.emulatorUUID else {
-            scanFeedback = "This game no longer has a valid emulator reference. Remove it from Library and run Scan Paths."
-            return
+        if let emulatorID = fresh.emulatorUUID {
+            var emuDescriptor = FetchDescriptor<EmulatorProfile>(
+                predicate: #Predicate { $0.id == emulatorID }
+            )
+            emuDescriptor.fetchLimit = 1
+            guard let recovered = try? modelContext.fetch(emuDescriptor).first else {
+                scanFeedback = "The emulator for this game is missing. Recreate/import the emulator, then run Scan Paths."
+                return
+            }
+            // Force a valid relationship object before launching to avoid stale SwiftData relationship traps.
+            fresh.emulator = recovered
+        } else {
+            fresh.emulator = nil
         }
-        var emuDescriptor = FetchDescriptor<EmulatorProfile>(
-            predicate: #Predicate { $0.id == emulatorID }
-        )
-        emuDescriptor.fetchLimit = 1
-        guard let recovered = try? modelContext.fetch(emuDescriptor).first else {
-            scanFeedback = "The emulator for this game is missing. Recreate/import the emulator, then run Scan Paths."
-            return
-        }
-        // Force a valid relationship object before launching to avoid stale SwiftData relationship traps.
-        fresh.emulator = recovered
         do {
             try GameLauncher.launch(game: fresh)
             fresh.lastPlayed = Date()
             try modelContext.save()
         } catch {
+            scanFeedback = "Launch failed: \(error.localizedDescription)"
             NSLog("%@", error.localizedDescription)
         }
     }
@@ -310,6 +390,14 @@ public struct RootView: View {
             }
             return isPath(game.romPath, insideAny: emulatorRoots)
         }
+        for game in snapshot {
+            modelContext.delete(game)
+        }
+        try? modelContext.save()
+    }
+
+    private func removeAllMacGames() {
+        let snapshot = games.filter { $0.emulatorUUID == nil }
         for game in snapshot {
             modelContext.delete(game)
         }
@@ -341,16 +429,40 @@ public struct RootView: View {
         return normalized.lowercased()
     }
 
-    private func addGamePlaceholder() {
-        let emu = emulators.first
-        let game = LibraryGame(
-            title: "Sample Game",
-            romPath: "/path/to/rom",
-            emulatorIDString: emu?.id.uuidString,
-            emulator: emu,
-            sortOrder: games.count
-        )
-        modelContext.insert(game)
+    private func addManualMacGame() {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = true
+        panel.canChooseDirectories = true
+        panel.allowsMultipleSelection = false
+        panel.prompt = "Add"
+        panel.message = "Choose a Mac game app or executable file."
+        panel.begin { response in
+            guard response == .OK, let url = panel.url else { return }
+            let standardizedPath = (url.path as NSString).standardizingPath
+            let normalized = normalizedPathForComparison(standardizedPath)
+            DispatchQueue.main.async {
+                if games.contains(where: { normalizedPathForComparison($0.romPath) == normalized }) {
+                    scanFeedback = "That game is already in your library."
+                    return
+                }
+                let baseTitle = URL(fileURLWithPath: standardizedPath).deletingPathExtension().lastPathComponent
+                let title = baseTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "Mac Game" : baseTitle
+                let nextSort = (games.map(\.sortOrder).max() ?? -1) + 1
+                let game = LibraryGame(
+                    title: title,
+                    romPath: standardizedPath,
+                    emulatorIDString: nil,
+                    emulator: nil,
+                    sortOrder: nextSort
+                )
+                modelContext.insert(game)
+                do {
+                    try modelContext.save()
+                } catch {
+                    scanFeedback = "Could not add game: \(error.localizedDescription)"
+                }
+            }
+        }
     }
 
     @discardableResult
@@ -522,12 +634,26 @@ private struct LibraryGameInspectorView: View {
                 Text("Renames how this game appears here only. The file on disk is not renamed.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                LabeledContent("File") {
-                    Text(URL(fileURLWithPath: game.romPath).lastPathComponent)
+                if game.emulatorUUID == nil {
+                    TextField("Game path", text: pathBinding, axis: .vertical)
+                        .textFieldStyle(.roundedBorder)
+                    Text("Edit the app/executable path for this Mac game, or choose a new target.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
-                        .textSelection(.enabled)
-                        .multilineTextAlignment(.trailing)
+                    HStack {
+                        Button("Choose Game…", systemImage: "folder") {
+                            pickGamePath()
+                        }
+                        Spacer()
+                    }
+                } else {
+                    LabeledContent("File") {
+                        Text(URL(fileURLWithPath: game.romPath).lastPathComponent)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .textSelection(.enabled)
+                            .multilineTextAlignment(.trailing)
+                    }
                 }
             }
 
@@ -647,6 +773,20 @@ private struct LibraryGameInspectorView: View {
         )
     }
 
+    private var pathBinding: Binding<String> {
+        Binding(
+            get: {
+                game.romPath
+            },
+            set: { new in
+                let trimmed = new.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !trimmed.isEmpty else { return }
+                game.romPath = (trimmed as NSString).standardizingPath
+                try? modelContext.save()
+            }
+        )
+    }
+
     private func pickCoverImage() {
         let panel = NSOpenPanel()
         panel.allowedContentTypes = [.image]
@@ -666,6 +806,22 @@ private struct LibraryGameInspectorView: View {
                 }
                 game.coverImageOptions = options
                 game.coverImageURLString = candidate
+                try? modelContext.save()
+            }
+        }
+    }
+
+    private func pickGamePath() {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = true
+        panel.canChooseDirectories = true
+        panel.allowsMultipleSelection = false
+        panel.prompt = "Choose"
+        panel.begin { response in
+            guard response == .OK, let url = panel.url else { return }
+            let path = (url.path as NSString).standardizingPath
+            DispatchQueue.main.async {
+                game.romPath = path
                 try? modelContext.save()
             }
         }
