@@ -100,6 +100,25 @@ struct MacGameLibraryApp: App {
                         """
                     )
                 }
+
+                Button("Keystrokes permission") {
+                    showHelpDialog(
+                        title: "Keystrokes permission",
+                        message: """
+                        Why macOS prompted this:
+                        Some launcher/game components (for example overlays, anti-cheat, controller/input hooks, or launcher helpers) request Input Monitoring or Accessibility permissions to watch low-level input events.
+
+                        Important:
+                        This prompt is separate from account login. Being signed in to Epic does not always prevent it.
+
+                        What you can do:
+                        You can click Deny first and try launching the game anyway. Many games still run without this permission.
+
+                        If the game fails after Deny:
+                        That specific title/runtime likely requires elevated input access on macOS.
+                        """
+                    )
+                }
             }
         }
     }
