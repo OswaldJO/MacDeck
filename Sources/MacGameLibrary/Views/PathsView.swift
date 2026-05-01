@@ -41,6 +41,11 @@ struct PathsView: View {
         return allFolderPaths.filter { $0.emulator?.id == id && $0.resolvedPurpose == .excludes }
     }
 
+    private var selectedEmulator: EmulatorProfile? {
+        guard !emulators.isEmpty else { return nil }
+        return emulators.first(where: { $0.id == effectiveEmulatorID })
+    }
+
     var body: some View {
         Group {
             if emulators.isEmpty {
@@ -102,6 +107,18 @@ struct PathsView: View {
                         Text("Add folders that contain cover images. On scan, a file whose name matches a ROM (same name before the extension) is used as that game’s cover.")
                             .font(.caption)
                             .foregroundStyle(.secondary)
+                        if let emulator = selectedEmulator {
+                            Toggle("Prioritize ScreenScraper art over local covers", isOn: Binding(
+                                get: { emulator.preferScreenScraperCovers },
+                                set: { newValue in
+                                    emulator.preferScreenScraperCovers = newValue
+                                    try? modelContext.save()
+                                }
+                            ))
+                            Text("If off, local cover folders are preferred as the auto-selected primary cover. All discovered covers are still saved in the game’s cover list.")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
                         if coverFoldersForSelection.isEmpty {
                             Text("No cover folders yet.")
                                 .foregroundStyle(.secondary)

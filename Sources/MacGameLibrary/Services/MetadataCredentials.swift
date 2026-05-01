@@ -1,22 +1,34 @@
 import Foundation
 
-/// Stores Twitch / IGDB API credentials (same flow as Playnite’s IGDB metadata: Twitch Developer app + IGDB API).
+/// Stores ScreenScraper API credentials.
 enum MetadataCredentials {
-    private static let clientIdKey = "Metadata.IGDB.ClientID"
-    private static let clientSecretKey = "Metadata.IGDB.ClientSecret"
+    private static let devIDKey = "Metadata.ScreenScraper.DevID"
+    private static let devPasswordKey = "Metadata.ScreenScraper.DevPassword"
+    private static let userIDKey = "Metadata.ScreenScraper.UserID"
+    private static let userPasswordKey = "Metadata.ScreenScraper.UserPassword"
 
-    static var twitchClientId: String? {
-        get { UserDefaults.standard.string(forKey: clientIdKey)?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty }
-        set { UserDefaults.standard.set(newValue, forKey: clientIdKey) }
+    static var screenScraperDevID: String? {
+        get { UserDefaults.standard.string(forKey: devIDKey)?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty }
+        set { UserDefaults.standard.set(newValue, forKey: devIDKey) }
     }
 
-    static var twitchClientSecret: String? {
-        get { UserDefaults.standard.string(forKey: clientSecretKey)?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty }
-        set { UserDefaults.standard.set(newValue, forKey: clientSecretKey) }
+    static var screenScraperDevPassword: String? {
+        get { UserDefaults.standard.string(forKey: devPasswordKey)?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty }
+        set { UserDefaults.standard.set(newValue, forKey: devPasswordKey) }
+    }
+
+    static var screenScraperUserID: String? {
+        get { UserDefaults.standard.string(forKey: userIDKey)?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty }
+        set { UserDefaults.standard.set(newValue, forKey: userIDKey) }
+    }
+
+    static var screenScraperUserPassword: String? {
+        get { UserDefaults.standard.string(forKey: userPasswordKey)?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty }
+        set { UserDefaults.standard.set(newValue, forKey: userPasswordKey) }
     }
 
     static var isConfigured: Bool {
-        twitchClientId != nil && twitchClientSecret != nil
+        screenScraperDevID != nil && screenScraperDevPassword != nil
     }
 }
 

@@ -26,7 +26,7 @@ public final class LibraryGame {
     public var sortOrder: Int
     public var dateAdded: Date
     public var lastPlayed: Date?
-    /// When metadata (e.g. IGDB cover) was last requested; used to throttle background retries.
+    /// When remote metadata was last requested; used to throttle background retries.
     public var metadataLastFetchAt: Date?
 
     public init(

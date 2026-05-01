@@ -1,10 +1,14 @@
 import Foundation
 import SwiftData
 
-/// Background metadata passes (similar in role to Playnite’s `MetadataDownloader` / library update jobs): periodically fills missing covers via IGDB when credentials are set.
+/// Background metadata passes: periodically fills missing covers from local folders and ScreenScraper when credentials are set.
 @MainActor
 final class MetadataBackgroundFetcher {
     static let shared = MetadataBackgroundFetcher()
+    struct ScrapeSummary: Sendable {
+        var processed: Int
+        var updated: Int
+    }
 
     private var loopTask: Task<Void, Never>?
     private var container: ModelContainer?
@@ -29,94 +33,135 @@ final class MetadataBackgroundFetcher {
     func scheduleExtraPass(container: ModelContainer) {
         Task { @MainActor in
             self.container = container
-            await processBatch(container: container)
+            _ = await processBatch(container: container, forceAll: false, maxGames: 3)
         }
+    }
+
+    /// Trigger a user-requested scrape pass across the full library.
+    func scrapeAllNow(container: ModelContainer) async -> ScrapeSummary {
+        self.container = container
+        return await processBatch(container: container, forceAll: true, maxGames: nil)
     }
 
     private func runLoop() async {
         while !Task.isCancelled {
             if let c = container {
-                await processBatch(container: c)
+                _ = await processBatch(container: c, forceAll: false, maxGames: 3)
             }
             try? await Task.sleep(for: .seconds(45))
         }
     }
 
-    private func processBatch(container: ModelContainer) async {
+    private func processBatch(container: ModelContainer, forceAll: Bool, maxGames: Int?) async -> ScrapeSummary {
         let context = container.mainContext
-        var descriptor = FetchDescriptor<LibraryGame>(
-            predicate: #Predicate<LibraryGame> { $0.coverImageURLString == nil },
-            sortBy: [SortDescriptor(\.sortOrder)]
-        )
-        descriptor.fetchLimit = 80
+        var descriptor = FetchDescriptor<LibraryGame>(sortBy: [SortDescriptor(\.sortOrder)])
+        descriptor.fetchLimit = forceAll ? 0 : 250
 
         let games = (try? context.fetch(descriptor)) ?? []
         let now = Date()
         let retryInterval: TimeInterval = 24 * 3600
 
         let candidates = games.filter { g in
+            if forceAll { return true }
             if let t = g.metadataLastFetchAt {
                 return now.timeIntervalSince(t) > retryInterval
             }
             return true
         }
 
-        for game in candidates.prefix(3) {
+        let selectedCandidates: [LibraryGame]
+        if let maxGames {
+            selectedCandidates = Array(candidates.prefix(maxGames))
+        } else {
+            selectedCandidates = candidates
+        }
+
+        var processed = 0
+        var updated = 0
+        for game in selectedCandidates {
             if Task.isCancelled { break }
-            await fetchAndSave(gameID: game.id, container: container)
+            processed += 1
+            if await fetchAndSave(gameID: game.id, container: container) {
+                updated += 1
+            }
             try? await Task.sleep(for: .milliseconds(450))
         }
+        return ScrapeSummary(processed: processed, updated: updated)
     }
 
-    private func fetchAndSave(gameID: UUID, container: ModelContainer) async {
+    private func fetchAndSave(gameID: UUID, container: ModelContainer) async -> Bool {
         let context = container.mainContext
         var desc = FetchDescriptor<LibraryGame>(predicate: #Predicate { $0.id == gameID })
         desc.fetchLimit = 1
-        guard let game = try? context.fetch(desc).first else { return }
+        guard let game = try? context.fetch(desc).first else { return false }
 
         let romStem = URL(fileURLWithPath: game.romPath).deletingPathExtension().lastPathComponent
         let searchTitle = game.libraryListTitle
-        if let localCover = localCoverForGame(path: game.romPath, title: searchTitle, romStem: romStem) {
-            var options = game.coverImageOptions
-            let candidate = localCover.absoluteString
-            if !options.contains(candidate) {
-                options.insert(candidate, at: 0)
-                game.coverImageOptions = options
-            } else if game.coverImageURLString == nil {
-                game.coverImageURLString = candidate
-            }
-            game.metadataLastFetchAt = Date()
-            try? context.save()
-            return
-        }
-
-        guard MetadataCredentials.isConfigured else {
-            game.metadataLastFetchAt = Date()
-            try? context.save()
-            return
-        }
-        do {
-            guard let result = try await MetadataService.fetchMetadata(
+        let preferScreenScraper = game.emulator?.preferScreenScraperCovers == true
+        let localCoverURL = localCoverForGame(path: game.romPath, title: searchTitle, romStem: romStem)
+        var remoteResult: MetadataResult?
+        if MetadataCredentials.isConfigured {
+            remoteResult = try? await MetadataService.fetchMetadata(
                 displayTitle: searchTitle,
                 romFileNameStem: romStem,
                 platformHint: game.platformHint
-            ) else {
-                game.metadataLastFetchAt = Date()
-                try context.save()
-                return
-            }
-
-            game.title = result.normalizedTitle
-            if let url = result.coverImageURL {
-                game.coverImageURLString = url.absoluteString
-            }
-            game.metadataLastFetchAt = Date()
-            try context.save()
-        } catch {
-            game.metadataLastFetchAt = Date()
-            try? context.save()
-            NSLog("Metadata fetch failed: %@", error.localizedDescription)
+            )
         }
+
+        var didChange = false
+
+        if let normalized = remoteResult?.normalizedTitle.trimmingCharacters(in: .whitespacesAndNewlines),
+           !normalized.isEmpty,
+           game.title != normalized {
+            game.title = normalized
+            didChange = true
+        }
+
+        var options = game.coverImageOptions
+        if let localCoverURL {
+            let localCandidate = localCoverURL.absoluteString
+            if !options.contains(localCandidate) {
+                options.insert(localCandidate, at: 0)
+                didChange = true
+            }
+        }
+        if let remoteURL = remoteResult?.coverImageURL {
+            let remoteCandidate = remoteURL.absoluteString
+            if !options.contains(remoteCandidate) {
+                options.append(remoteCandidate)
+                didChange = true
+            }
+        }
+
+        let priorPrimary = game.coverImageURLString
+        game.coverImageOptions = options
+
+        let preferredPrimary: String? = {
+            if preferScreenScraper {
+                if let remote = remoteResult?.coverImageURL?.absoluteString { return remote }
+                if let local = localCoverURL?.absoluteString { return local }
+            } else {
+                if let local = localCoverURL?.absoluteString { return local }
+                if let remote = remoteResult?.coverImageURL?.absoluteString { return remote }
+            }
+            return game.coverImageURLString
+        }()
+
+        if let preferredPrimary, preferredPrimary != game.coverImageURLString {
+            game.coverImageURLString = preferredPrimary
+            didChange = true
+        }
+
+        game.metadataLastFetchAt = Date()
+        if priorPrimary != game.coverImageURLString {
+            didChange = true
+        }
+        if didChange {
+            try? context.save()
+        } else {
+            try? context.save()
+        }
+        return didChange
     }
 
     private func localCoverForGame(path: String, title: String, romStem: String) -> URL? {
