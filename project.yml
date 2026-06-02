@@ -21,6 +21,10 @@ targets:
     deploymentTarget: "14.0"
     sources:
       - path: MacGameLibraryApp
+    resources:
+      - path: MacGameLibraryApp/Resources/Sunshine
+        buildPhase: resources
+        optional: true
     dependencies:
       - package: MacGameLibrarySPM
         product: MacGameLibrary

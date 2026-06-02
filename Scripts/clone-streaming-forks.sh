@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
-# Clone Apollo + moonlight-ios into Vendor/streaming-repos for local development.
-# Fork the repos on GitHub first, then set APOLLO_GIT_URL / MOONLIGHT_GIT_URL to your forks.
+# Clone Sunshine + Moonlight (iOS + Android) into Vendor/streaming-repos for local development.
+# Fork the repos on GitHub first, then set SUNSHINE_GIT_URL / MOONLIGHT_*_GIT_URL to your forks.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 DEST="${ROOT}/Vendor/streaming-repos"
-APOLLO_GIT_URL="${APOLLO_GIT_URL:-https://github.com/ClassicOldSong/Apollo.git}"
-MOONLIGHT_GIT_URL="${MOONLIGHT_GIT_URL:-https://github.com/moonlight-stream/moonlight-ios.git}"
+SUNSHINE_GIT_URL="${SUNSHINE_GIT_URL:-${APOLLO_GIT_URL:-https://github.com/LizardByte/Sunshine.git}}"
+MOONLIGHT_IOS_GIT_URL="${MOONLIGHT_IOS_GIT_URL:-${MOONLIGHT_GIT_URL:-https://github.com/moonlight-stream/moonlight-ios.git}}"
+MOONLIGHT_ANDROID_GIT_URL="${MOONLIGHT_ANDROID_GIT_URL:-https://github.com/moonlight-stream/moonlight-android.git}"
 
 mkdir -p "${DEST}"
 cd "${DEST}"
@@ -22,9 +23,14 @@ clone_recursive() {
   git clone --recursive "${url}" "${name}"
 }
 
-clone_recursive "Apollo" "${APOLLO_GIT_URL}"
-clone_recursive "moonlight-ios" "${MOONLIGHT_GIT_URL}"
+clone_recursive "Sunshine" "${SUNSHINE_GIT_URL}"
+clone_recursive "moonlight-ios" "${MOONLIGHT_IOS_GIT_URL}"
+clone_recursive "moonlight-android" "${MOONLIGHT_ANDROID_GIT_URL}"
 
-echo "Done. Open Apollo and moonlight-ios Xcode projects from:"
-echo "  ${DEST}/Apollo"
+echo "Done. Open projects from:"
+echo "  ${DEST}/Sunshine"
 echo "  ${DEST}/moonlight-ios"
+echo "  ${DEST}/moonlight-android"
+echo ""
+echo "Mac host: build/run Sunshine, then configure Playnite Mac → Streaming."
+echo "Phones: companion_app/ (Flutter)"

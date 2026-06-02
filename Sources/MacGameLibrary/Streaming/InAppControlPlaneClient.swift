@@ -1,38 +1,34 @@
 import Foundation
 
-/// Calls the host’s HTTPS control plane from native code (no Safari).
-/// Wire these methods to Apollo’s REST routes (same as the web dashboard). Use a
-/// `URLSessionDelegate` to trust the host’s self-signed certificate after first pairing.
+/// Calls the Sunshine host HTTPS control plane from native code (no Safari).
 protocol StreamingControlPlaneClient: Sendable {
-    /// Whether the control plane responds (host process up).
     func ping() async throws -> Bool
+    func submitPairingPIN(_ pin: String, deviceName: String) async throws
+    func fetchPairedClientNames() async throws -> [String]
+}
 
-    /// Request or refresh pairing state; map responses to your fork’s actual JSON.
-    func submitPairingPIN(_ pin: String) async throws
+extension StreamingControlPlaneClient {
+    func submitPairingPIN(_ pin: String) async throws {
+        try await submitPairingPIN(pin, deviceName: "Companion")
+    }
 }
 
 enum StreamingControlPlaneError: Error, LocalizedError {
     case notImplemented
     case hostUnreachable
+    case pairingFailed(String)
+    case missingCredentials
 
     var errorDescription: String? {
         switch self {
         case .notImplemented:
-            return "Control plane client not wired to Apollo yet."
+            return "Control plane client not configured."
         case .hostUnreachable:
-            return "Streaming host is not running or not reachable on the control plane port."
+            return "Sunshine is not running or not reachable on the control plane port (default 47990)."
+        case .pairingFailed(let detail):
+            return detail
+        case .missingCredentials:
+            return "Streaming host credentials are not ready yet. Open the Streaming tab to set up Sunshine."
         }
-    }
-}
-
-/// Stub until `Vendor/streaming-repos/Apollo` is integrated and routes are mapped.
-struct StubStreamingControlPlaneClient: StreamingControlPlaneClient {
-    func ping() async throws -> Bool {
-        throw StreamingControlPlaneError.notImplemented
-    }
-
-    func submitPairingPIN(_ pin: String) async throws {
-        _ = pin
-        throw StreamingControlPlaneError.notImplemented
     }
 }

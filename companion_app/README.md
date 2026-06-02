@@ -1,16 +1,20 @@
-# companion_app
+# Mac Game Library — companion app (iOS + Android)
 
-A new Flutter project.
+Flutter app for **both** mobile platforms: host discovery, PIN pairing with the Mac **Streaming** tab, and stream session controls.
 
-## Getting Started
+## Run
 
-This project is a starting point for a Flutter application.
+```bash
+cd companion_app
+flutter pub get
+flutter run
+```
 
-A few resources to get you started if this is your first Flutter project:
+Pick an iOS simulator, Android emulator, or physical device when prompted.
 
-- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
+## Architecture
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+- **Dart** (`lib/`): shared UI and `StreamingBridge` API.
+- **Native** (`ios/`, `android/`): `MethodChannel` stubs today; wire to your **moonlight-ios** and **moonlight-android** forks for decode/input.
+
+See [`../docs/companion-flutter.md`](../docs/companion-flutter.md) and [`../docs/streaming-setup.md`](../docs/streaming-setup.md).

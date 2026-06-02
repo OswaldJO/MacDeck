@@ -1,14 +1,14 @@
 import AppKit
 import SwiftUI
 
-// MARK: - View
-
 struct StreamingView: View {
     @State private var session: StreamingPairingSession
-    @State private var showFinishPairingSheet = false
-    @State private var pendingDeviceName = ""
+    @State private var hostManager = SunshineHostManager.shared
     @State private var confirmDisconnect = false
     @State private var showOpenSourceReferences = false
+
+    @State private var pinEntry = ""
+    @State private var deviceNameEntry = "Companion"
 
     private let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
@@ -20,14 +20,13 @@ struct StreamingView: View {
         NavigationStack {
             Form {
                 heroSection
-                approachSection
-                controlPlaneSection
+                sunshineHostSection
 
                 switch session.phase {
                 case .idle:
                     idlePairingSection
-                case .awaiting(let code, let expiresAt):
-                    awaitingSections(code: code, expiresAt: expiresAt)
+                case .awaiting(let expiresAt):
+                    awaitingSections(expiresAt: expiresAt)
                 case .paired(let deviceName):
                     pairedSections(deviceName: deviceName)
                 }
@@ -39,16 +38,17 @@ struct StreamingView: View {
             .navigationTitle("Streaming")
         }
         .padding()
-        .frame(minWidth: 520, minHeight: 480)
+        .frame(minWidth: 520, minHeight: 520)
+        .onAppear {
+            Task { await hostManager.ensureReady() }
+            session.refreshHostStatus()
+        }
         .onReceive(timer) { _ in
-            guard case .awaiting(_, let exp) = session.phase, Date() >= exp else { return }
+            guard case .awaiting(let exp) = session.phase, Date() >= exp else { return }
             session.cancelPairing()
         }
-        .sheet(isPresented: $showFinishPairingSheet) {
-            finishPairingSheet
-        }
         .confirmationDialog(
-            "Disconnect “\(pairedNameForDialog)” from streaming?",
+            "Disconnect “\(pairedNameForDialog)” from streaming on this Mac?",
             isPresented: $confirmDisconnect,
             titleVisibility: .visible
         ) {
@@ -72,10 +72,10 @@ struct StreamingView: View {
                     .foregroundStyle(.secondary)
                     .symbolRenderingMode(.hierarchical)
                 VStack(alignment: .leading, spacing: 6) {
-                    Text("Steam Link–style, open stack")
+                    Text("Stream to your phone")
                         .font(.headline)
                     Text(
-                        "Target experience: low-latency game video to your iPhone on the same network, with pairing and trust handled entirely inside this Mac app and a companion app—like Steam Link, not like signing in through a browser."
+                        "Playnite starts Sunshine for you. Pair from the companion app on iOS or Android—enter the PIN here when the phone shows it. No browser or manual Sunshine setup."
                     )
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
@@ -86,43 +86,74 @@ struct StreamingView: View {
         }
     }
 
-    private var approachSection: some View {
-        Section("How we use Sunshine / Moonlight ideas") {
-            Text(
-                "Sunshine and forks such as Apollo are open hosts that speak the protocol Moonlight clients expect; Moonlight for iOS is the usual phone client. Expand “Upstream open-source references” below for the GitHub projects."
-            )
-            .font(.subheadline)
-            .foregroundStyle(.secondary)
-
-            Text(
-                "Those hosts often rely on a local web UI for first-time login and advanced settings. This app’s direction is to keep pairing, credentials, and everyday controls in native UI on the Mac and on the phone—no Safari setup step for normal use."
-            )
-            .font(.subheadline)
-            .foregroundStyle(.secondary)
+    private var sunshineHostSection: some View {
+        Section("Streaming host") {
+            hostStateRow
+            if let lanIP = LocalNetworkAddress.primaryIPv4() {
+                LabeledContent("LAN IP (enter in companion Settings)") {
+                    Text(lanIP)
+                        .textSelection(.enabled)
+                }
+            }
+            if let binary = SunshineBinaryLocator.resolvedLabel() {
+                LabeledContent("Sunshine binary") {
+                    Text(binary)
+                        .font(.caption.monospaced())
+                        .foregroundStyle(.secondary)
+                }
+            }
+            if !session.statusMessage.isEmpty {
+                Text(session.statusMessage)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            if let err = session.lastError {
+                Text(err)
+                    .font(.caption)
+                    .foregroundStyle(.red)
+            }
+            Button("Restart streaming host") {
+                hostManager.stopManagedProcess()
+                Task {
+                    await hostManager.ensureReady()
+                    session.refreshHostStatus()
+                }
+            }
         }
     }
 
-    private var controlPlaneSection: some View {
-        Section("In-app control plane (Apollo)") {
-            LabeledContent("HTTPS base") {
-                Text(URL.localhostControlPlane().absoluteString)
-                    .font(.body.monospaced())
-                    .textSelection(.enabled)
-            }
-            Text(
-                "Fork Apollo and Moonlight iOS under Vendor (see Scripts + README). The Mac app will talk to this URL with URLSession—same HTTP as the web UI, without Safari. Pairing PIN is the channel; TLS trust is handled in-app."
-            )
-            .font(.caption)
-            .foregroundStyle(.secondary)
+    @ViewBuilder
+    private var hostStateRow: some View {
+        switch hostManager.state {
+        case .running where session.hostReachable:
+            Label("Running and reachable", systemImage: "checkmark.circle.fill")
+                .foregroundStyle(.green)
+        case .running:
+            Label("Running", systemImage: "checkmark.circle")
+                .foregroundStyle(.green)
+        case .preparing, .starting:
+            Label(hostManager.statusLine, systemImage: "arrow.trianglehead.2.clockwise")
+                .foregroundStyle(.secondary)
+        case .unavailable(let message):
+            Label(message, systemImage: "exclamationmark.triangle")
+                .foregroundStyle(.orange)
+        case .idle:
+            Label("Not started", systemImage: "circle.dashed")
+                .foregroundStyle(.secondary)
         }
+    }
+
+    private var hostIsUnavailable: Bool {
+        if case .unavailable = hostManager.state { return true }
+        return false
     }
 
     private var idlePairingSection: some View {
         Section("Pairing") {
             VStack(alignment: .leading, spacing: 10) {
-                pairingStepRow(number: 1, text: "Install the Mac Game Library companion app on your iPhone (Moonlight-compatible client path).")
-                pairingStepRow(number: 2, text: "Put the phone on the same Wi‑Fi as this Mac.")
-                pairingStepRow(number: 3, text: "Tap Start pairing, then enter the code on the phone when asked—same rhythm as Steam Link, without opening a browser on either device.")
+                pairingStepRow(number: 1, text: "Phone → Pairing → Start pairing. Keep that screen open until it says “Waiting for Mac…”.")
+                pairingStepRow(number: 2, text: "Mac → Start pairing below, enter the same 4-digit PIN, then Submit PIN to Sunshine.")
+                pairingStepRow(number: 3, text: "Do not submit on the Mac until the phone is waiting.")
             }
             .padding(.vertical, 4)
 
@@ -131,19 +162,27 @@ struct StreamingView: View {
             } label: {
                 Label("Start pairing", systemImage: "key.horizontal")
             }
+            .disabled(hostIsUnavailable)
         }
     }
 
-    private func awaitingSections(code: String, expiresAt: Date) -> some View {
+    private func awaitingSections(expiresAt: Date) -> some View {
         Group {
-            Section("Enter this code on your phone") {
-                Text(code)
-                    .font(.system(size: 40, weight: .semibold, design: .rounded))
-                    .monospacedDigit()
-                    .tracking(10)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 8)
-                    .accessibilityLabel("Pairing code \(code)")
+            Section("PIN from companion") {
+                Text("The companion app displays a 4-digit PIN. Enter the same PIN here so Sunshine can accept the pairing.")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+
+                TextField("4-digit PIN", text: $pinEntry)
+                    .textFieldStyle(.roundedBorder)
+                    .font(.title2.monospacedDigit())
+                    .onChange(of: pinEntry) { _, newValue in
+                        let filtered = String(newValue.filter(\.isNumber).prefix(4))
+                        if filtered != newValue { pinEntry = filtered }
+                    }
+
+                TextField("Device name", text: $deviceNameEntry)
+                    .textFieldStyle(.roundedBorder)
 
                 TimelineView(.periodic(from: .now, by: 1)) { context in
                     let remaining = max(0, expiresAt.timeIntervalSince(context.date))
@@ -154,55 +193,107 @@ struct StreamingView: View {
                     }
                 }
 
-                HStack {
-                    Button("Copy code") {
-                        NSPasteboard.general.clearContents()
-                        NSPasteboard.general.setString(code, forType: .string)
-                    }
-                    Spacer()
-                    Button("Cancel pairing", role: .cancel) {
-                        session.cancelPairing()
-                    }
-                }
+                pinSubmitFeedback
 
-                Button {
-                    pendingDeviceName = defaultPhoneName()
-                    showFinishPairingSheet = true
-                } label: {
-                    Label("Phone shows connected", systemImage: "checkmark.circle")
+                HStack {
+                    Button("Cancel", role: .cancel) {
+                        session.cancelPairing()
+                        pinEntry = ""
+                    }
+                    .disabled(session.pinSubmitState == .submitting)
+
+                    Spacer()
+
+                    Button {
+                        session.submitPIN(pinEntry, deviceName: deviceNameEntry)
+                    } label: {
+                        if session.pinSubmitState == .submitting {
+                            HStack(spacing: 8) {
+                                ProgressView()
+                                    .controlSize(.small)
+                                Text("Submitting…")
+                            }
+                        } else {
+                            Label("Submit PIN to Sunshine", systemImage: "paperplane.fill")
+                        }
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(pinEntry.count != 4 || session.pinSubmitState == .submitting)
                 }
-                .buttonStyle(.borderedProminent)
             }
 
             Section {
-                Text(
-                    "With a real host implementation, this screen advances automatically when the phone completes the handshake (same role as Moonlight pairing with a Sunshine PIN, but driven from native UI)."
-                )
-                .font(.caption)
-                .foregroundStyle(.tertiary)
+                if session.pinSubmitState == .accepted {
+                    Text("Sunshine accepted the PIN. Keep the phone on the Pairing screen until this advances to Paired.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                } else {
+                    Text("Wait until the phone shows “Waiting for Mac…” before submitting. This screen advances automatically when pairing completes.")
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
+                }
             }
+        }
+    }
+
+    @ViewBuilder
+    private var pinSubmitFeedback: some View {
+        switch session.pinSubmitState {
+        case .idle:
+            EmptyView()
+        case .submitting:
+            HStack(spacing: 10) {
+                ProgressView()
+                Text("Sending PIN to Sunshine…")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.vertical, 4)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        case .accepted:
+            Label {
+                Text("PIN accepted — waiting for phone to finish pairing.")
+                    .font(.subheadline)
+            } icon: {
+                Image(systemName: "checkmark.circle.fill")
+            }
+            .foregroundStyle(.green)
+            .padding(10)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(RoundedRectangle(cornerRadius: 8).fill(Color.green.opacity(0.12)))
+        case .failed(let message):
+            Label {
+                Text(message)
+                    .font(.subheadline)
+                    .fixedSize(horizontal: false, vertical: true)
+            } icon: {
+                Image(systemName: "exclamationmark.triangle.fill")
+            }
+            .foregroundStyle(.red)
+            .padding(10)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(RoundedRectangle(cornerRadius: 8).fill(Color.red.opacity(0.10)))
         }
     }
 
     private func pairedSections(deviceName: String) -> some View {
         Group {
             Section("Status") {
-                LabeledContent("Phone") {
-                    Label(deviceName, systemImage: "iphone")
-                        .foregroundStyle(.primary)
+                LabeledContent("Device") {
+                    Label(deviceName, systemImage: "iphone.gen3")
                 }
                 LabeledContent("Mac") {
                     Text(ProcessInfo.processInfo.hostName)
                         .textSelection(.enabled)
                 }
                 LabeledContent("Streaming") {
-                    Label("Ready when you start a game", systemImage: "checkmark.circle.fill")
+                    Label("Ready — start a stream from the companion", systemImage: "checkmark.circle.fill")
                         .foregroundStyle(.secondary)
                 }
             }
 
             Section {
-                Button("Disconnect phone…", systemImage: "link.badge.minus", role: .destructive) {
+                Button("Disconnect…", systemImage: "link.badge.minus", role: .destructive) {
                     confirmDisconnect = true
                 }
             }
@@ -211,30 +302,24 @@ struct StreamingView: View {
 
     private var capabilitiesSection: some View {
         Section("After pairing") {
-            Label("Encode on the Mac, decode on the phone over LAN (host/client model as in Sunshine + Moonlight)", systemImage: "arrow.left.arrow.right")
-            Label("Resolution and bitrate tuned for the phone without forcing a browser for routine changes", systemImage: "rectangle.on.rectangle")
-            Label("Session controls stay in-app (goal: parity with Steam Link’s simplicity)", systemImage: "slider.horizontal.3")
+            Label("Encode on the Mac with Sunshine; decode on the phone via Moonlight protocol", systemImage: "arrow.left.arrow.right")
+            Label("Session start/stop from the companion app (stream stub for now)", systemImage: "play.circle")
         }
     }
 
     private var openSourceReferencesSection: some View {
         Section {
-            DisclosureGroup("Upstream open-source references", isExpanded: $showOpenSourceReferences) {
+            DisclosureGroup("Upstream references", isExpanded: $showOpenSourceReferences) {
                 VStack(alignment: .leading, spacing: 10) {
                     referenceRow(
                         title: "Sunshine",
-                        subtitle: "Self-hosted stream host for Moonlight clients.",
+                        subtitle: "Mac host — fork this for in-app pairing changes.",
                         url: URL(string: "https://github.com/LizardByte/Sunshine")!
                     )
                     referenceRow(
-                        title: "Apollo",
-                        subtitle: "Sunshine fork focused on native client resolution.",
-                        url: URL(string: "https://github.com/ClassicOldSong/Apollo")!
-                    )
-                    referenceRow(
-                        title: "Moonlight iOS",
-                        subtitle: "GameStream/Moonlight client for iPhone and Apple TV.",
-                        url: URL(string: "https://github.com/moonlight-stream/moonlight-ios")!
+                        title: "Moonlight iOS / Android",
+                        subtitle: "Client cores; companion uses a Dart pairing shim for now.",
+                        url: URL(string: "https://github.com/moonlight-stream/moonlight-android")!
                     )
                 }
                 .padding(.vertical, 4)
@@ -253,37 +338,6 @@ struct StreamingView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    private var finishPairingSheet: some View {
-        NavigationStack {
-            Form {
-                Section {
-                    Text("The phone can supply its device name automatically once the protocol is wired up.")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                }
-                Section("Device name") {
-                    TextField("e.g. Josh’s iPhone", text: $pendingDeviceName)
-                }
-            }
-            .formStyle(.grouped)
-            .navigationTitle("Finish pairing")
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") {
-                        showFinishPairingSheet = false
-                    }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") {
-                        session.markPaired(deviceName: pendingDeviceName)
-                        showFinishPairingSheet = false
-                    }
-                }
-            }
-        }
-        .frame(minWidth: 400, minHeight: 220)
-    }
-
     private func pairingStepRow(number: Int, text: String) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: 10) {
             Text("\(number)")
@@ -299,18 +353,9 @@ struct StreamingView: View {
 
     private func formatRemaining(_ seconds: TimeInterval) -> String {
         let s = Int(seconds.rounded(.down))
-        let m = s / 60
-        let r = s % 60
-        return String(format: "%d:%02d", m, r)
-    }
-
-    private func defaultPhoneName() -> String {
-        let name = Host.current().localizedName ?? "Mac"
-        return "\(name)’s iPhone"
+        return String(format: "%d:%02d", s / 60, s % 60)
     }
 }
-
-// MARK: - Previews
 
 #Preview("Idle") {
     StreamingView()
@@ -318,6 +363,6 @@ struct StreamingView: View {
 
 #Preview("Paired") {
     let s = StreamingPairingSession()
-    s.phase = .paired(deviceName: "Demo iPhone")
+    s.phase = .paired(deviceName: "Demo phone")
     return StreamingView(session: s)
 }

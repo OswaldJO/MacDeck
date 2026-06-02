@@ -91,6 +91,72 @@ Per **selected emulator**:
 
 ---
 
+## Streaming tab (Sunshine host)
+
+Playnite Mac acts as a **Sunshine streaming host** so a phone/tablet can pair over Moonlight protocol and (eventually) receive game video from this Mac.
+
+### Host lifecycle
+
+- **`SunshineHostManager`** — ensures Sunshine is installed/located (`SunshineBinaryLocator`, Homebrew or staged binary), starts/stops the process, surfaces status in the UI.
+- **`StreamingView`** — shows **Running and reachable**, **LAN IP** (`LocalNetworkAddress`), binary path, **Restart streaming host**, and pairing controls.
+- Credentials for the Sunshine **control plane** live in `StreamingHostSettings` (dev builds; used by `SunshineControlPlaneClient` with `SunshineTLSDelegate` for HTTPS to port **47990**).
+
+### Pairing (Mac side)
+
+- **`StreamingPairingSession`** — phases: `idle` → `awaiting` (10-minute window) → `paired(deviceName)`.
+- User flow: companion starts pairing first; Mac **Start pairing** → enter same 4-digit PIN → **Submit PIN to Sunshine** (`POST /api/pin`).
+- After PIN accept, session polls **`fetchPairedClientNames()`** until a new client name appears (baseline snapshot taken at pairing start).
+- **`InAppControlPlaneClient`** — alternate/test control-plane implementation; production path uses **`SunshineControlPlaneClient`**.
+
+**Key types:** `StreamingView.swift`, `StreamingPairingSession.swift`, `SunshineControlPlaneClient.swift`, `SunshineHostManager.swift`, `StreamingHostSettings.swift`, `ControlPlanePorts.swift`.
+
+### Moonlight ports (defaults)
+
+| Port | Role |
+|------|------|
+| 47989 | HTTP — `/serverinfo`, `/pair` |
+| 47984 | HTTPS — `pairchallenge` (mTLS) |
+| 47990 | Sunshine control plane — `/api/pin`, `/api/clients/list` |
+
+Setup and staging: `docs/streaming-quickstart.md`, `docs/streaming-setup.md`, `docs/streaming-bundled-host.md`.
+
+---
+
+## Companion app (`companion_app/`)
+
+Flutter app (iOS + Android) for discovery, pairing, and (stub) streaming session.
+
+### Tabs
+
+- **Settings** — Mac LAN IP (no port suffix); saved in `StreamingHostSettings` (SharedPreferences).
+- **Hosts** — `discoverHosts()` via HTTP `serverinfo` on configured IP.
+- **Pairing** — **`SunshinePairingService.pair()`**; status is separate from host discovery (`home_page.dart`).
+- **Session** — `StreamingBridge.startStream` / `stopStream` call native MethodChannel stubs; video not implemented yet.
+
+### Pairing (companion side)
+
+Port of moonlight-android **`PairingManager`** logic in Dart:
+
+1. Generate/load persistent RSA client cert (`PairingCryptoStore`).
+2. Long-poll **`getservercert`** with salt + PIN until Mac submits matching PIN.
+3. AES challenge exchange over HTTP `/pair`.
+4. **`clientpairingsecret`** — client cert registered with Sunshine.
+5. HTTPS **`pairchallenge`** — `SecurityContext` with client cert; server cert pinned from `plaincert`; hostname mismatch skipped when connecting by LAN IP (same as Moonlight).
+
+Fixed Moonlight **`uniqueid`**: `0123456789ABCDEF`. Device name in pair URL: `roth`.
+
+**Key types:** `sunshine_pairing_service.dart`, `streaming_bridge.dart`, `pairing_crypto_store.dart`, `streaming_host_settings.dart`, `home_page.dart`.
+
+### Correct pairing order
+
+1. Phone: **Pairing → Start pairing** — wait for **Waiting for Mac…** (keep app in foreground).
+2. Mac: **Streaming → Start pairing** — same PIN → **Submit PIN to Sunshine**.
+3. Phone completes HTTPS step; both sides show **Paired**.
+
+**Doc:** `docs/companion-flutter.md`.
+
+---
+
 ## Data model (SwiftData)
 
 - **`EmulatorProfile`** — name, paths, launch template, extensions, `preferScreenScraperCovers` (default `false` for migration).
@@ -110,6 +176,9 @@ Per **selected emulator**:
 - **ScreenScraper** quotas, threading, and API shape can change; search-by-name without `systemeid` may mismatch platforms.
 - **SwiftData migration:** new non-optional attributes need defaults or optional types; a prior crash on `preferScreenScraperCovers` was fixed with `= false` on the property.
 - **Full-library scrape** is synchronous per game with delays; large libraries take time and network.
+- **Streaming pairing** requires phone **Start pairing before** Mac PIN submit; backgrounding the companion during long-poll can stall until reconnect/retry. Mac “PIN accepted” only means Sunshine got the PIN — the phone must still finish the HTTP/HTTPS handshake.
+- **Companion Session tab** does not decode video yet; pairing is the supported integration test today.
+- **Sunshine** must be reachable on LAN (firewall, same Wi‑Fi); companion must not use `127.0.0.1` for the Mac IP.
 
 ---
 
@@ -117,3 +186,6 @@ Per **selected emulator**:
 
 - **What changed lately:** `docs/source control log.md`
 - **Credential setup detail:** `docs/metadata-setup.md`
+- **Streaming quickstart:** `docs/streaming-quickstart.md`
+- **Streaming setup / bundled host:** `docs/streaming-setup.md`, `docs/streaming-bundled-host.md`
+- **Companion app:** `docs/companion-flutter.md`, `companion_app/README.md`

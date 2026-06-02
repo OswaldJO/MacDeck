@@ -16,14 +16,7 @@ import UIKit
       channel.setMethodCallHandler { call, result in
         switch call.method {
         case "discoverHosts":
-          result([
-            [
-              "id": "local-mac",
-              "name": "My Mac Host",
-              "address": "192.168.1.10",
-              "paired": false,
-            ],
-          ])
+          result([])
         case "pairWithPin":
           if
             let args = call.arguments as? [String: Any],

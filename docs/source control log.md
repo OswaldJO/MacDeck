@@ -9,6 +9,9 @@ For the **living product and architecture handbook**, see `Features and Inner Wo
 current release: 1  
 
 ## Updates
+- **Streaming (Sunshine host):** **Streaming** tab starts and monitors Sunshine via `SunshineHostManager`; shows LAN IP, binary path, and host reachability. Pairing uses `StreamingPairingSession` + `SunshineControlPlaneClient` — Mac submits a 4-digit PIN to Sunshine `/api/pin` (port **47990**) and polls `api/clients/list` until the companion appears as a new paired client. No Sunshine web UI required.
+- **Companion app (Flutter):** Moonlight-compatible pairing in `SunshinePairingService` — full HTTP handshake (`getservercert` → challenge exchange → `clientpairingsecret`) plus HTTPS **`pairchallenge`** with mTLS client cert. Client cert/key persist in `PairingCryptoStore`. Pairing UI on **Pairing** tab with separate status from host discovery; progress + reconnect if Android drops the long-poll. **Session** tab stream start/stop remains a stub.
+- **Streaming docs:** `streaming-quickstart.md`, `streaming-setup.md`, `companion-flutter.md`; vendor forks under `Vendor/streaming-repos/`; `Scripts/clone-streaming-forks.sh` and `stage-sunshine-for-mac-app.sh`.
 - **Metadata:** Replaced IGDB with **ScreenScraper** (`ScreenScraperClient`, `jeuRecherche.php`). Credentials in `MetadataCredentials` (dev + optional user). Settings: `ScreenScraperSettingsSheet`; Library toolbar **Metadata Settings**.
 - **Covers:** Local folder discovery still runs first; remote art is **appended** to each game’s `coverImageOptions` so the Info panel cover list shows scraped images. Primary cover respects **Paths → per-emulator** toggle: default favors local; optional “prioritize ScreenScraper over local.”
 - **Library UI:** **Mac Games** filter; **Add Game** opens a file picker for native `.app`/executables; **Import Epic Installed Games** (toolbar); context menu to clear Mac-only entries. **Cover Art and Metadata → Screen Scrapper** sidebar: credentials + **Scrape Library Now** (full pass).
@@ -18,11 +21,13 @@ current release: 1
 - **Persistence:** `EmulatorProfile.preferScreenScraperCovers` added with **default `false`** so existing stores migrate without crashing.
 
 ## Focus for next release
+- Wire **Moonlight streaming** on the companion **Session** tab (video decode + input); persist paired state in the app.
 - Harden ScreenScraper matching (system IDs, checksum-based `jeuInfos` where useful).
 - Optional progress UI for full-library scrape; rate-limit awareness vs. ScreenScraper quotas.
 
 ## Minimum for next release
+- Smoke test: Sunshine host running, companion **Pairing** end-to-end (phone Start pairing → Mac Submit PIN → both show Paired).
 - Smoke test: fresh install, migrate from prior store, Paths toggle + scrape + grid/Info covers.
 
 ## Future plans
-- Keychain for ScreenScraper secrets; richer metadata fields in inspector if API responses are expanded.
+- Bundle Sunshine in the Mac app build; Keychain for ScreenScraper and streaming credentials; richer metadata fields in inspector if API responses are expanded.

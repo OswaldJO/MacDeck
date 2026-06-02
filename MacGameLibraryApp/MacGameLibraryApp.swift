@@ -21,6 +21,7 @@ struct MacGameLibraryApp: App {
             queue: .main
         ) { _ in
             DebugLog.log("willTerminate")
+            StreamingLifecycle.stopManagedHostOnQuit()
         }
     }
 

@@ -11,17 +11,7 @@ class MainActivity : FlutterActivity() {
         super.configureFlutterEngine(flutterEngine)
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, channelName).setMethodCallHandler { call, result ->
             when (call.method) {
-                "discoverHosts" -> {
-                    val hosts = listOf(
-                        mapOf(
-                            "id" to "local-mac",
-                            "name" to "My Mac Host",
-                            "address" to "192.168.1.10",
-                            "paired" to false
-                        )
-                    )
-                    result.success(hosts)
-                }
+                "discoverHosts" -> result.success(emptyList<Map<String, Any>>())
 
                 "pairWithPin" -> {
                     val pin = call.argument<String>("pin").orEmpty()

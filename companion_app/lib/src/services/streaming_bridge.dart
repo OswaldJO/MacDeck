@@ -1,38 +1,48 @@
 import 'package:flutter/services.dart';
 
 import '../models/host_info.dart';
+import 'streaming_host_settings.dart';
+import 'sunshine_pairing_service.dart';
 
-/// Native bridge for discovery, PIN pairing, and streaming session control.
-///
-/// Implementations live in:
-/// - Android: `MainActivity.kt` (`MethodChannel`)
-/// - iOS: `AppDelegate.swift` (`FlutterMethodChannel`)
+/// Discovery and pairing via Sunshine/Moonlight HTTP (Dart, shared on iOS + Android).
 class StreamingBridge {
   static const String channelName = 'com.playnite.companion/streaming_bridge';
 
-  StreamingBridge({MethodChannel? channel})
-      : _channel = channel ?? MethodChannel(StreamingBridge.channelName);
+  StreamingBridge({
+    MethodChannel? channel,
+    SunshinePairingService? sunshine,
+    StreamingHostSettings? settings,
+  })  : _channel = channel ?? const MethodChannel(channelName),
+        _settingsFuture = settings != null
+            ? Future.value(settings)
+            : StreamingHostSettings.load(),
+        _sunshineOverride = sunshine;
 
   final MethodChannel _channel;
+  final Future<StreamingHostSettings> _settingsFuture;
+  final SunshinePairingService? _sunshineOverride;
 
-  Future<List<HostInfo>> discoverHosts() async {
-    final raw = await _channel.invokeMethod<List<dynamic>>('discoverHosts');
-    final list = raw ?? <dynamic>[];
-    return list.map((entry) {
-      final map = Map<dynamic, dynamic>.from(entry as Map<dynamic, dynamic>);
-      return HostInfo.fromMap(map);
-    }).toList();
+  Future<SunshinePairingService> _sunshine() async {
+    final override = _sunshineOverride;
+    if (override != null) {
+      return override;
+    }
+    final settings = await _settingsFuture;
+    return SunshinePairingService(settings);
   }
 
-  Future<bool> pairWithPin({
+  Future<List<HostInfo>> discoverHosts() async {
+    final sunshine = await _sunshine();
+    return sunshine.discoverHosts();
+  }
+
+  Future<PairingOutcome> pairWithPin({
     required String hostId,
     required String pin,
+    void Function(String status)? onProgress,
   }) async {
-    final paired = await _channel.invokeMethod<bool>('pairWithPin', {
-      'hostId': hostId,
-      'pin': pin,
-    });
-    return paired ?? false;
+    final sunshine = await _sunshine();
+    return sunshine.pair(pin: pin, onProgress: onProgress);
   }
 
   Future<bool> startStream({

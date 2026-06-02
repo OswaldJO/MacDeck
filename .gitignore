@@ -5,8 +5,13 @@ DerivedData/
 *.xcworkspace/xcuserdata/
 
 # Local clones of streaming upstreams (see Vendor/streaming-repos/README.md)
+Vendor/streaming-repos/Sunshine/
 Vendor/streaming-repos/Apollo/
 Vendor/streaming-repos/moonlight-ios/
+Vendor/streaming-repos/moonlight-android/
 .DS_Store
 build/DerivedData/
 .build/
+
+# Staged Sunshine executable (see Scripts/stage-sunshine-for-mac-app.sh)
+MacGameLibraryApp/Resources/Sunshine/sunshine
