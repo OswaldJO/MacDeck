@@ -9,7 +9,10 @@ For the **living product and architecture handbook**, see `Features and Inner Wo
 current release: 1  
 
 ## Updates
-- **Streaming (verified end-to-end on Android):** Companion **Session → Start Desktop 1080p60** completes Moonlight `/launch` (HTTP **200**, RTSP session on **48010**), HEVC/H.264 decode on device, and live Mac desktop video. Requires Sunshine **Screen Recording** on the Homebrew binary (`/opt/homebrew/opt/sunshine/bin/sunshine`); control-plane ping alone is not enough — check `~/.config/sunshine/sunshine.log` for `Found H.264 encoder` vs. `No screen capture permission!`.
+- **Native Playnite streaming (Android video verified, Jun 3 2026):** Mac **in-app host** (ScreenCaptureKit + H.264, no Sunshine) — companion opens **`PlayniteVideoActivity`**, TCP **`PNV1`** on **28766**, Annex-B + `c2.android.avc.decoder`. Latest phone log: **913 frames received / 908 rendered** (~34 s), clean stop via Back. Ports: control **28765**, video **28766**, audio **28767**, input **28768**.
+- **Touch (root cause found):** `playnite_stream.log` showed hundreds of **`Input send failed: null`** while video played — UDP `DatagramSocket.send()` was running on the **UI thread** (`NetworkOnMainThreadException`). Fix: `PlayniteInputSender` posts sends on a **background executor**. Mac side: pointer maps to **captured display** (not `NSScreen.main` only); Accessibility under **Mac Game Library**; **Test cursor** in Streaming tab.
+- **Audio (still open):** Phone logs **`Audio subscribed`** every ~3 s (retry) but never **`First audio packet`** / **`AudioTrack started`** — Mac not delivering `PNA1` yet (ScreenCaptureKit audio often uses **AudioBufferList**; fix merged into `PlayniteDisplayCapture`). Audio does **not** appear in macOS **Sound → Output** (network PCM to phone, not a virtual output device).
+- **Streaming (legacy Sunshine path, pre-native host):** Companion Moonlight `/launch` path still documented in older notes; current default is native host above.
 - **Streaming (Sunshine host):** **Streaming** tab starts and monitors Sunshine via `SunshineHostManager`; shows LAN IP, binary path, and host reachability. Pairing uses `StreamingPairingSession` + `SunshineControlPlaneClient` — Mac submits a 4-digit PIN to Sunshine `/api/pin` (port **47990**) and polls `api/clients/list` until the companion appears as a new paired client. No Sunshine web UI required. Run **only one** Sunshine instance (avoid port **48010** “already in use”).
 - **Companion app (Flutter):** Moonlight-compatible pairing in `SunshinePairingService` — full HTTP handshake (`getservercert` → challenge exchange → `clientpairingsecret`) plus HTTPS **`pairchallenge`** with mTLS client cert. Client cert/key persist in `PairingCryptoStore`; paired host + pinned server cert in `PairingStateStore`. **Hosts** tab shows **Paired** after HTTPS `applist` probe. **Session:** `MoonlightStreamService` + `StreamingBridge` → **Android** `StreamLaunchHelper` / **`Game`** activity (`moonlight-stream`); **iOS** `PlayniteMoonlight` pod + `PlayniteStreamLaunchHelper` (patched Limelight `StreamFrameViewController`). Identity sync: Android `filesDir`; iOS Documents (`client.crt`, `client.key`, `client.p12`). **Android crypto:** platform RSA (no BC `KeyFactory` on API 28+). **Android** E2E stream verified; **iOS** release build succeeds (`flutter build ios --no-codesign`).
 - **Streaming docs:** `streaming-quickstart.md`, `streaming-setup.md`, `companion-flutter.md`; vendor forks under `Vendor/streaming-repos/`; `Scripts/clone-streaming-forks.sh` and `stage-sunshine-for-mac-app.sh`.
@@ -22,15 +25,17 @@ current release: 1
 - **Persistence:** `EmulatorProfile.preferScreenScraperCovers` added with **default `false`** so existing stores migrate without crashing.
 
 ## Focus for next release
-- **iOS Moonlight streaming** on companion **Session** tab; harden Android stream stop/lifecycle and Mac host readiness (log-based capture/encoder check, not only port **47990** ping).
-- Document macOS Sunshine permission flow in setup docs (Screen Recording on `sunshine` binary; restart host after granting).
+- **Audio:** Confirm Mac console shows `[PlayniteAudio] phone subscribed` → `first capture buffer` → `sent packet #1`; phone log should show `First audio packet` / `AudioTrack started`. Check Mac firewall for UDP **28767**.
+- **Touch:** Re-test after `PlayniteInputSender` background-thread fix; expect `Input UDP #1` in `playnite_stream.log` and `[PlayniteInput] packet #1` in Xcode console.
+- **iOS:** Native video receiver still stub; Android is reference path.
 - Harden ScreenScraper matching (system IDs, checksum-based `jeuInfos` where useful).
 - Optional progress UI for full-library scrape; rate-limit awareness vs. ScreenScraper quotas.
 
 ## Minimum for next release
-- Smoke test: Sunshine host running, companion **Pairing** end-to-end (phone Start pairing → Mac Submit PIN → both show Paired).
-- Smoke test: **Hosts** → **Paired**; **Session** → **Start Desktop 1080p60** on Android (desktop stream visible) — **passed** on LAN with Sunshine 2026.516 + Homebrew host.
+- Smoke test: Mac **Streaming** host running; companion **Pair** + **Start Desktop stream** on Android — video visible (**passed** Jun 3: 908/913 rendered).
+- Smoke test: phone touch moves Mac cursor (`Input UDP #1` in export log; Mac `[PlayniteInput]` lines).
+- Smoke test: Mac audio audible on phone (`AudioTrack started` in export log).
 - Smoke test: fresh install, migrate from prior store, Paths toggle + scrape + grid/Info covers.
 
 ## Future plans
-- Bundle Sunshine in the Mac app build; Keychain for ScreenScraper and streaming credentials; richer metadata fields in inspector if API responses are expanded.
+- Keychain for ScreenScraper and streaming credentials; richer metadata fields in inspector if API responses are expanded; optional virtual audio device only if UDP PCM path is insufficient.

@@ -13,7 +13,8 @@ Vendor/streaming-repos/moonlight-android/
 build/DerivedData/
 .build/
 
-# Staged Sunshine executable (see Scripts/stage-sunshine-for-mac-app.sh)
+# Staged streaming host (see Scripts/stage-sunshine-for-mac-app.sh)
+MacGameLibraryApp/Host/PlayniteSunshine
 MacGameLibraryApp/Resources/Sunshine/sunshine
 
 # Generated Moonlight companion iOS pod artifacts

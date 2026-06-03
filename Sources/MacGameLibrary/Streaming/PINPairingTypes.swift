@@ -1,6 +1,6 @@
 import Foundation
 
-/// PIN shown on the Mac and typed on the phone—bridges UI to Apollo/Sunshine pairing APIs.
+/// PIN shown on the phone and confirmed on the Mac for Playnite native pairing.
 struct PINPairingChallenge: Equatable, Sendable {
     var pin: String
     var expiresAt: Date

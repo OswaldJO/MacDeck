@@ -1,9 +1,8 @@
 import Foundation
 
-/// App-level hooks for the managed Sunshine host (callable from the MacGameLibraryApp target).
+/// App-level hooks for the native Playnite stream host.
 public enum StreamingLifecycle {
-    @MainActor
     public static func stopManagedHostOnQuit() {
-        SunshineHostManager.shared.stopManagedProcess()
+        Task { await PlayniteStreamHostManager.shared.stop() }
     }
 }

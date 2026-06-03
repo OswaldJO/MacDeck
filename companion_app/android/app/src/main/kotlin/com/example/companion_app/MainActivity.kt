@@ -1,5 +1,6 @@
 package com.example.companion_app
 
+import android.content.Intent
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
@@ -13,33 +14,48 @@ class MainActivity : FlutterActivity() {
             when (call.method) {
                 "discoverHosts" -> result.success(emptyList<Map<String, Any>>())
 
-                "pairWithPin" -> {
-                    val pin = call.argument<String>("pin").orEmpty()
-                    result.success(pin.length >= 4)
-                }
+                "pairWithPin" -> result.success(true)
 
                 "startStream" -> {
-                    val args = call.arguments as? Map<String, Any?> ?: run {
-                        result.error("invalid_args", "Missing stream configuration", null)
+                    val host = call.argument<String>("host").orEmpty()
+                    val port = call.argument<Int>("videoPort") ?: 28766
+                    val audioPort = call.argument<Int>("audioPort") ?: 28767
+                    val inputPort = call.argument<Int>("inputPort") ?: 28768
+                    val width = call.argument<Int>("width") ?: 1920
+                    val height = call.argument<Int>("height") ?: 1080
+                    if (host.isEmpty()) {
+                        result.error("invalid_args", "Missing host", null)
                         return@setMethodCallHandler
                     }
-                    try {
-                        val started = StreamLaunchHelper.startStream(this, args)
-                        result.success(started)
-                    } catch (e: IllegalStateException) {
-                        result.error(
-                            "identity_sync_failed",
-                            e.message ?: "Could not sync Moonlight client certificate",
-                            null,
-                        )
-                    } catch (e: Exception) {
-                        result.error("stream_start_failed", e.message, null)
+                    val intent = Intent(this, PlayniteVideoActivity::class.java).apply {
+                        putExtra(PlayniteVideoActivity.EXTRA_HOST, host)
+                        putExtra(PlayniteVideoActivity.EXTRA_VIDEO_PORT, port)
+                        putExtra(PlayniteVideoActivity.EXTRA_AUDIO_PORT, audioPort)
+                        putExtra(PlayniteVideoActivity.EXTRA_INPUT_PORT, inputPort)
+                        putExtra(PlayniteVideoActivity.EXTRA_WIDTH, width)
+                        putExtra(PlayniteVideoActivity.EXTRA_HEIGHT, height)
                     }
+                    startActivity(intent)
+                    result.success(true)
                 }
 
                 "stopStream" -> {
-                    StreamLaunchHelper.stopStream()
-                    result.success(null)
+                    val activity = PlayniteVideoActivity.current
+                    if (activity != null) {
+                        activity.runOnUiThread { activity.finishFromHost() }
+                    } else {
+                        PlayniteStreamLog.endSession("stop requested (video activity not open)")
+                    }
+                    val logPath = PlayniteStreamLog.logFilePath(applicationContext)
+                    result.success(
+                        hashMapOf(
+                            "logPath" to logPath,
+                        ),
+                    )
+                }
+
+                "listConnectedControllers" -> {
+                    result.success(ConnectedControllerProbe.list(this))
                 }
 
                 else -> result.notImplemented()

@@ -1,20 +1,29 @@
-# Mac Game Library — companion app (iOS + Android)
+# Playnite companion app
 
-Flutter app for **both** mobile platforms: host discovery, PIN pairing with the Mac **Streaming** tab, and stream session controls.
+Flutter app (iOS + Android) for LAN pairing with Mac Game Library’s native stream host.
 
-## Run
+## Setup
 
 ```bash
-cd companion_app
 flutter pub get
 flutter run
 ```
 
-Pick an iOS simulator, Android emulator, or physical device when prompted.
+**Settings:** enter the Mac’s LAN IPv4 from Mac → Streaming (port **28765** is automatic).
 
-## Architecture
+**Pairing:** phone starts pairing first; Mac confirms the same PIN in Streaming.
 
-- **Dart** (`lib/`): shared UI and `StreamingBridge` API.
-- **Native** (`ios/`, `android/`): `StreamingBridge` → Moonlight decode (`moonlight-stream` on Android, `PlayniteMoonlight` pod on iOS). Clone forks with `../Scripts/clone-streaming-forks.sh` before first native build.
+**Video:** not wired yet — pairing and discovery work over `playnite-stream/1`.
 
-See [`../docs/companion-flutter.md`](../docs/companion-flutter.md) and [`../docs/streaming-setup.md`](../docs/streaming-setup.md).
+## iOS
+
+```bash
+cd ios && pod install && cd ..
+flutter run
+```
+
+Moonlight pods were removed; only Flutter + GameController remain.
+
+## Android
+
+No NDK / Moonlight module. `startStream` returns a clear “not implemented” error until native decode lands.

@@ -40,6 +40,13 @@ tasks.register("syncMoonlightVendor") {
             moonlightCacheRoot.resolve("java/com/limelight/binding/crypto/AndroidCryptoProvider.java"),
         )
 
+        val patchScript = file("patch_moonlight_android.py")
+        if (patchScript.exists()) {
+            exec {
+                commandLine("python3", patchScript.absolutePath, moonlightCacheRoot.resolve("java").absolutePath)
+            }
+        }
+
         logger.lifecycle("Synced Moonlight sources to ${moonlightCacheRoot.path}")
     }
 }
@@ -102,7 +109,12 @@ android {
 
     sourceSets {
         getByName("main") {
-            java.setSrcDirs(listOf(moonlightCacheRoot.resolve("java")))
+            java.setSrcDirs(
+                listOf(
+                    moonlightCacheRoot.resolve("java"),
+                    file("playnite-support"),
+                ),
+            )
             res.setSrcDirs(listOf(moonlightCacheRoot.resolve("res")))
             assets.setSrcDirs(listOf(moonlightCacheRoot.resolve("assets")))
         }

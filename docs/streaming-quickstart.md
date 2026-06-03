@@ -1,50 +1,33 @@
-# Streaming quickstart (Playnite Mac + companion)
+# Streaming quickstart (Playnite native)
 
-Playnite Mac **starts Sunshine for you** — no browser, no manual Sunshine credentials. See [`streaming-bundled-host.md`](streaming-bundled-host.md) for staging the binary.
+## Mac
 
-## 1. Stage Sunshine (once per machine)
+1. Run **MacGameLibraryApp** in Xcode (⌘R).
+2. **Streaming** → grant Screen Recording for **Mac Game Library** → **Restart streaming host**.
+3. Note **LAN IP** and keep this tab open for pairing approvals.
 
-```bash
-./Scripts/stage-sunshine-for-mac-app.sh --install
-```
-
-(Sunshine lives on the **LizardByte** tap — not `brew install sunshine` from core Homebrew alone.)
-
-Rebuild **MacGameLibrary** in Xcode.
-
-## 2. Run Playnite Mac
-
-1. Open **Streaming** — wait until the host shows **Running and reachable**.
-2. Copy **LAN IP** for the companion app.
-
-## 3. Run the companion app
+## Companion
 
 ```bash
 cd companion_app
 flutter pub get
-flutter run   # iOS or Android on same Wi‑Fi
+flutter run
 ```
 
-1. **Settings** → Mac LAN IP → **Save & discover**.
-2. **Hosts** → **Discover**.
-3. **Pairing** → **Start pairing** (note the 4-digit PIN).
-4. On Mac **Streaming** → **Start pairing** → same PIN → **Submit PIN to Sunshine**.
-5. **Hosts** → **Discover** — should show **Paired**.
-6. **Session** → **Start Desktop 1080p60** (Android: full-screen Moonlight stream).
+1. **Settings** → Mac LAN IP → save.
+2. **Hosts** → **Discover** → **Pair** on your Mac.
+3. On Mac **Streaming** → **Pairing requests** → **Pair** (or **Deny**).
+4. **Session** → **Start Desktop 1080p60** when status shows Paired.
 
 ## Ports
 
 | Port | Use |
 |------|-----|
-| 47989 | Moonlight HTTP (`/pair`, `/serverinfo`) |
-| 47984 | Moonlight HTTPS |
-| 47990 | Sunshine control plane + `/api/pin` |
+| 28765 | HTTP control (`playnite-stream/1`) |
+| 28766 | H.264 video (`PNV1` framed TCP) |
 
-## Troubleshooting
+## Reset
 
-- **Host unavailable**: Run `stage-sunshine-for-mac-app.sh` or `brew install sunshine`, then **Restart streaming host**.
-- **Mac not reachable from phone**: Firewall, wrong IP, different Wi‑Fi.
-- **PIN submit fails**: Start pairing on the **phone first**, then submit on Mac within ~10 minutes.
-- **Hosts not Paired after upgrade**: Pair once more so the app saves the pinned server cert (`PairingStateStore`).
-- **Android build / NDK**: If the repo lives in a path with spaces (`Playnite Mac`), native Moonlight builds use `~/.cache/playnite-moonlight-ndk`. Run `Scripts/clone-streaming-forks.sh` first.
-- **Stream fails on Android**: Confirm **Paired** on Hosts; re-pair if you cleared app data (client cert must match Sunshine).
+```bash
+./Scripts/reset-streaming-state.sh
+```

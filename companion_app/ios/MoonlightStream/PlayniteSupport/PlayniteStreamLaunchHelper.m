@@ -68,6 +68,20 @@ static NSString *playniteLastStreamStartErrorMessage;
 
     PlayniteStreamSettings *settings =
         [PlayniteStreamSettings settingsWithWidth:streamWidth height:streamHeight frameRate:streamFps];
+
+    NSNumber *multiController = arguments[@"multiController"];
+    if (multiController != nil) {
+        settings.multiController = multiController.boolValue;
+    }
+    NSNumber *swapFaceButtons = arguments[@"swapFaceButtons"];
+    if (swapFaceButtons != nil) {
+        settings.swapABXYButtons = swapFaceButtons.boolValue;
+    }
+    NSNumber *onScreenControls = arguments[@"onScreenControls"];
+    if (onScreenControls != nil) {
+        settings.onscreenControls = onScreenControls.boolValue ? @(1) : @(0);
+    }
+
     [PlayniteStreamContext shared].streamSettings = settings;
 
     StreamConfiguration *config = [[StreamConfiguration alloc] init];

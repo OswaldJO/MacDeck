@@ -1,17 +1,19 @@
 import 'package:shared_preferences/shared_preferences.dart';
 
-/// Persisted Sunshine host address and control-plane credentials (dev builds).
+/// Persisted Playnite stream host address (native protocol — no Sunshine).
 class StreamingHostSettings {
   static const _hostKey = 'streaming.host.address';
   static const _httpPortKey = 'streaming.host.httpPort';
   static const _httpsPortKey = 'streaming.host.httpsPort';
   static const _controlPortKey = 'streaming.host.controlPort';
-  static const _userKey = 'streaming.host.username';
-  static const _passKey = 'streaming.host.password';
 
-  static const defaultHttpPort = 47989;
-  static const defaultHttpsPort = 47984;
-  static const defaultControlPort = 47990;
+  /// Playnite-native control plane (see PlayniteStreamPorts.swift).
+  static const defaultControlPort = 28765;
+  static const defaultVideoPort = 28766;
+  static const defaultAudioPort = 28767;
+  static const defaultInputPort = 28768;
+  static const defaultHttpPort = defaultControlPort;
+  static const defaultHttpsPort = defaultControlPort;
 
   final SharedPreferences _prefs;
 
@@ -29,29 +31,20 @@ class StreamingHostSettings {
 
   int get controlPort => _prefs.getInt(_controlPortKey) ?? defaultControlPort;
 
-  String get username => _prefs.getString(_userKey) ?? '';
-
-  String get password => _prefs.getString(_passKey) ?? '';
-
   Future<void> save({
     required String hostAddress,
     int? httpPort,
     int? httpsPort,
     int? controlPort,
-    String? username,
-    String? password,
   }) async {
     await _prefs.setString(_hostKey, hostAddress.trim());
-    if (httpPort != null) await _prefs.setInt(_httpPortKey, httpPort);
-    if (httpsPort != null) await _prefs.setInt(_httpsPortKey, httpsPort);
-    if (controlPort != null) await _prefs.setInt(_controlPortKey, controlPort);
-    if (username != null) await _prefs.setString(_userKey, username);
-    if (password != null) await _prefs.setString(_passKey, password);
+    final port = controlPort ?? httpPort ?? defaultControlPort;
+    await _prefs.setInt(_controlPortKey, port);
+    await _prefs.setInt(_httpPortKey, httpPort ?? port);
+    await _prefs.setInt(_httpsPortKey, httpsPort ?? port);
   }
 
   bool get isConfigured => hostAddress.isNotEmpty;
 
-  Uri httpBase() => Uri(scheme: 'http', host: hostAddress, port: httpPort);
-
-  Uri httpsBase() => Uri(scheme: 'https', host: hostAddress, port: httpsPort);
+  Uri controlBase() => Uri(scheme: 'http', host: hostAddress, port: controlPort);
 }

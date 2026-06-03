@@ -8,7 +8,6 @@
 
 /* Begin PBXBuildFile section */
 		06BB2CA6AD7B85797075F8E7 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = CBBBA7CF96D4DC4AE6070A14 /* Assets.xcassets */; };
-		90A8B426B0DAC2AD9FD43E2D /* README.md in Resources */ = {isa = PBXBuildFile; fileRef = DBAD0558F58847269506DC28 /* README.md */; };
 		B823262E21D64FB91F3B2A77 /* MacGameLibraryApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3ADA88B61EF842D279B6BBBB /* MacGameLibraryApp.swift */; };
 		E8AE9F32BAC4BD6BB78D8C94 /* MacGameLibrary in Frameworks */ = {isa = PBXBuildFile; productRef = 56D82AD326518A1F77B9C0B7 /* MacGameLibrary */; };
 /* End PBXBuildFile section */
@@ -16,9 +15,7 @@
 /* Begin PBXFileReference section */
 		0185917D8DBCFCD687823ED0 /* Playnite Mac */ = {isa = PBXFileReference; lastKnownFileType = folder; name = "Playnite Mac"; path = .; sourceTree = SOURCE_ROOT; };
 		3ADA88B61EF842D279B6BBBB /* MacGameLibraryApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacGameLibraryApp.swift; sourceTree = "<group>"; };
-		A1D7A2873D187C862B484A1D /* sunshine */ = {isa = PBXFileReference; path = sunshine; sourceTree = "<group>"; };
 		CBBBA7CF96D4DC4AE6070A14 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
-		DBAD0558F58847269506DC28 /* README.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = README.md; sourceTree = "<group>"; };
 		F32A48C480B07A01B18FACEC /* MacGameLibraryApp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = MacGameLibraryApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -55,7 +52,6 @@
 		8E9E70AACAE4B7967D8956B5 /* Resources */ = {
 			isa = PBXGroup;
 			children = (
-				DD4E4E5E19DC142D3C19C007 /* Sunshine */,
 			);
 			path = Resources;
 			sourceTree = "<group>";
@@ -66,15 +62,6 @@
 				0185917D8DBCFCD687823ED0 /* Playnite Mac */,
 			);
 			name = Packages;
-			sourceTree = "<group>";
-		};
-		DD4E4E5E19DC142D3C19C007 /* Sunshine */ = {
-			isa = PBXGroup;
-			children = (
-				DBAD0558F58847269506DC28 /* README.md */,
-				A1D7A2873D187C862B484A1D /* sunshine */,
-			);
-			path = Sunshine;
 			sourceTree = "<group>";
 		};
 		F7BE821B00C91B170FB055C5 = {
@@ -148,7 +135,6 @@
 			buildActionMask = 2147483647;
 			files = (
 				06BB2CA6AD7B85797075F8E7 /* Assets.xcassets in Resources */,
-				90A8B426B0DAC2AD9FD43E2D /* README.md in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -233,6 +219,7 @@
 				INFOPLIST_KEY_CFBundleDisplayName = "Mac Game Library";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.games";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				INFOPLIST_KEY_NSScreenCaptureUsageDescription = "Mac Game Library streams your desktop to your phone using an embedded streaming host.";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
@@ -257,6 +244,7 @@
 				INFOPLIST_KEY_CFBundleDisplayName = "Mac Game Library";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.games";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				INFOPLIST_KEY_NSScreenCaptureUsageDescription = "Mac Game Library streams your desktop to your phone using an embedded streaming host.";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",

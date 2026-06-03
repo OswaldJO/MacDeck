@@ -3,12 +3,8 @@ import SwiftUI
 
 struct StreamingView: View {
     @State private var session: StreamingPairingSession
-    @State private var hostManager = SunshineHostManager.shared
+    @State private var hostManager = PlayniteStreamHostManager.shared
     @State private var confirmDisconnect = false
-    @State private var showOpenSourceReferences = false
-
-    @State private var pinEntry = ""
-    @State private var deviceNameEntry = "Companion"
 
     private let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
@@ -20,19 +16,15 @@ struct StreamingView: View {
         NavigationStack {
             Form {
                 heroSection
-                sunshineHostSection
+                streamHostSection
+                pairingRequestsSection
 
-                switch session.phase {
-                case .idle:
-                    idlePairingSection
-                case .awaiting(let expiresAt):
-                    awaitingSections(expiresAt: expiresAt)
-                case .paired(let deviceName):
+                if case .paired(let deviceName) = session.phase {
                     pairedSections(deviceName: deviceName)
                 }
 
+                accessibilitySection
                 capabilitiesSection
-                openSourceReferencesSection
             }
             .formStyle(.grouped)
             .navigationTitle("Streaming")
@@ -40,12 +32,21 @@ struct StreamingView: View {
         .padding()
         .frame(minWidth: 520, minHeight: 520)
         .onAppear {
-            Task { await hostManager.ensureReady() }
-            session.refreshHostStatus()
+            Task {
+                await hostManager.ensureReady()
+                await hostManager.refreshPendingPairRequests()
+                session.refreshHostStatus()
+                session.beginListeningForRequests()
+            }
         }
-        .onReceive(timer) { _ in
-            guard case .awaiting(let exp) = session.phase, Date() >= exp else { return }
-            session.cancelPairing()
+        .onDisappear {
+            session.stopListeningForRequests()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            Task {
+                await hostManager.refreshCapturePermission()
+                session.refreshHostStatus()
+            }
         }
         .confirmationDialog(
             "Disconnect “\(pairedNameForDialog)” from streaming on this Mac?",
@@ -75,7 +76,7 @@ struct StreamingView: View {
                     Text("Stream to your phone")
                         .font(.headline)
                     Text(
-                        "Playnite starts Sunshine for you. Pair from the companion app on iOS or Android—enter the PIN here when the phone shows it. No browser or manual Sunshine setup."
+                        "On the companion app: Discover your Mac, then tap Pair. Approve or deny the request here — no PINs. Grant Screen Recording for Mac Game Library once."
                     )
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
@@ -86,7 +87,7 @@ struct StreamingView: View {
         }
     }
 
-    private var sunshineHostSection: some View {
+    private var streamHostSection: some View {
         Section("Streaming host") {
             hostStateRow
             if let lanIP = LocalNetworkAddress.primaryIPv4() {
@@ -95,12 +96,30 @@ struct StreamingView: View {
                         .textSelection(.enabled)
                 }
             }
-            if let binary = SunshineBinaryLocator.resolvedLabel() {
-                LabeledContent("Sunshine binary") {
-                    Text(binary)
-                        .font(.caption.monospaced())
-                        .foregroundStyle(.secondary)
-                }
+            LabeledContent("Protocol") {
+                Text(PlayniteStreamPorts.protocolVersion)
+                    .font(.caption.monospaced())
+                    .foregroundStyle(.secondary)
+            }
+            LabeledContent("Ports") {
+                Text(
+                    "control \(PlayniteStreamPorts.controlHTTP), video \(PlayniteStreamPorts.videoTCP), " +
+                        "audio \(PlayniteStreamPorts.audioUDP), input \(PlayniteStreamPorts.inputUDP)"
+                )
+                .font(.caption.monospaced())
+                .foregroundStyle(.secondary)
+            }
+            if hostManager.isVideoStreaming {
+                Label("Streaming video to phone", systemImage: "dot.radiowaves.left.and.right")
+                    .font(.caption)
+                    .foregroundStyle(.green)
+            }
+            screenRecordingPermissionBlock
+            if let guidance = hostManager.captureGuidance {
+                Text(guidance)
+                    .font(.caption)
+                    .foregroundStyle(.orange)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             if !session.statusMessage.isEmpty {
                 Text(session.statusMessage)
@@ -113,9 +132,8 @@ struct StreamingView: View {
                     .foregroundStyle(.red)
             }
             Button("Restart streaming host") {
-                hostManager.stopManagedProcess()
                 Task {
-                    await hostManager.ensureReady()
+                    await hostManager.restartHost()
                     session.refreshHostStatus()
                 }
             }
@@ -123,15 +141,98 @@ struct StreamingView: View {
     }
 
     @ViewBuilder
+    private var pairingRequestsSection: some View {
+        Section("Pairing requests") {
+            if hostManager.pendingPairRequests.isEmpty {
+                Text("No pending requests. Open the companion app, discover this Mac, and tap Pair.")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            } else {
+                ForEach(hostManager.pendingPairRequests) { request in
+                    VStack(alignment: .leading, spacing: 10) {
+                        Label {
+                            Text("\(request.deviceName) is trying to pair")
+                                .font(.headline)
+                        } icon: {
+                            Image(systemName: "iphone.gen3.circle")
+                        }
+                        Text("Device ID: \(request.deviceID)")
+                            .font(.caption.monospaced())
+                            .foregroundStyle(.tertiary)
+                            .textSelection(.enabled)
+                        HStack {
+                            Button("Deny", role: .destructive) {
+                                session.deny(request)
+                            }
+                            Spacer()
+                            Button("Pair") {
+                                session.approve(request)
+                            }
+                            .buttonStyle(.borderedProminent)
+                            .keyboardShortcut(.defaultAction)
+                        }
+                    }
+                    .padding(.vertical, 6)
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var screenRecordingPermissionBlock: some View {
+        if hostManager.isCaptureReady {
+            Label("Screen Recording enabled for Mac Game Library", systemImage: "checkmark.circle.fill")
+                .font(.caption)
+                .foregroundStyle(.green)
+        } else if case .running = hostManager.state {
+            VStack(alignment: .leading, spacing: 8) {
+                Label("Screen Recording required", systemImage: "rectangle.dashed.badge.record")
+                    .font(.subheadline.weight(.medium))
+                if hostManager.needsScreenCaptureConsent {
+                    Text(
+                        "Tap Allow below for the macOS permission prompt. You only need to do this once; pairing will not ask again after access is granted."
+                    )
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    Button {
+                        Task {
+                            _ = await hostManager.requestScreenCaptureAccess()
+                            session.refreshHostStatus()
+                        }
+                    } label: {
+                        Label("Allow Screen Recording", systemImage: "checkmark.shield")
+                    }
+                    .buttonStyle(.borderedProminent)
+                } else {
+                    Text("Permission is on but capture is not ready. Restart the streaming host.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Button("Open Screen Recording settings") {
+                    PlayniteScreenCapturePipeline.openScreenRecordingSettings()
+                }
+                .font(.caption)
+            }
+            .padding(.vertical, 4)
+        }
+    }
+
+    @ViewBuilder
     private var hostStateRow: some View {
         switch hostManager.state {
-        case .running where session.hostReachable:
-            Label("Running and reachable", systemImage: "checkmark.circle.fill")
+        case .running where session.hostReachable && hostManager.isCaptureReady:
+            Label("Ready to pair and stream", systemImage: "checkmark.circle.fill")
                 .foregroundStyle(.green)
+        case .running where session.hostReachable:
+            Label("Host up — grant Screen Recording", systemImage: "exclamationmark.triangle.fill")
+                .foregroundStyle(.orange)
         case .running:
             Label("Running", systemImage: "checkmark.circle")
                 .foregroundStyle(.green)
-        case .preparing, .starting:
+        case .preparing:
             Label(hostManager.statusLine, systemImage: "arrow.trianglehead.2.clockwise")
                 .foregroundStyle(.secondary)
         case .unavailable(let message):
@@ -143,142 +244,9 @@ struct StreamingView: View {
         }
     }
 
-    private var hostIsUnavailable: Bool {
-        if case .unavailable = hostManager.state { return true }
-        return false
-    }
-
-    private var idlePairingSection: some View {
-        Section("Pairing") {
-            VStack(alignment: .leading, spacing: 10) {
-                pairingStepRow(number: 1, text: "Phone → Pairing → Start pairing. Keep that screen open until it says “Waiting for Mac…”.")
-                pairingStepRow(number: 2, text: "Mac → Start pairing below, enter the same 4-digit PIN, then Submit PIN to Sunshine.")
-                pairingStepRow(number: 3, text: "Do not submit on the Mac until the phone is waiting.")
-            }
-            .padding(.vertical, 4)
-
-            Button {
-                session.startPairing()
-            } label: {
-                Label("Start pairing", systemImage: "key.horizontal")
-            }
-            .disabled(hostIsUnavailable)
-        }
-    }
-
-    private func awaitingSections(expiresAt: Date) -> some View {
-        Group {
-            Section("PIN from companion") {
-                Text("The companion app displays a 4-digit PIN. Enter the same PIN here so Sunshine can accept the pairing.")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-
-                TextField("4-digit PIN", text: $pinEntry)
-                    .textFieldStyle(.roundedBorder)
-                    .font(.title2.monospacedDigit())
-                    .onChange(of: pinEntry) { _, newValue in
-                        let filtered = String(newValue.filter(\.isNumber).prefix(4))
-                        if filtered != newValue { pinEntry = filtered }
-                    }
-
-                TextField("Device name", text: $deviceNameEntry)
-                    .textFieldStyle(.roundedBorder)
-
-                TimelineView(.periodic(from: .now, by: 1)) { context in
-                    let remaining = max(0, expiresAt.timeIntervalSince(context.date))
-                    LabeledContent("Time left") {
-                        Text(formatRemaining(remaining))
-                            .monospacedDigit()
-                            .foregroundStyle(remaining < 60 ? .orange : .secondary)
-                    }
-                }
-
-                pinSubmitFeedback
-
-                HStack {
-                    Button("Cancel", role: .cancel) {
-                        session.cancelPairing()
-                        pinEntry = ""
-                    }
-                    .disabled(session.pinSubmitState == .submitting)
-
-                    Spacer()
-
-                    Button {
-                        session.submitPIN(pinEntry, deviceName: deviceNameEntry)
-                    } label: {
-                        if session.pinSubmitState == .submitting {
-                            HStack(spacing: 8) {
-                                ProgressView()
-                                    .controlSize(.small)
-                                Text("Submitting…")
-                            }
-                        } else {
-                            Label("Submit PIN to Sunshine", systemImage: "paperplane.fill")
-                        }
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .disabled(pinEntry.count != 4 || session.pinSubmitState == .submitting)
-                }
-            }
-
-            Section {
-                if session.pinSubmitState == .accepted {
-                    Text("Sunshine accepted the PIN. Keep the phone on the Pairing screen until this advances to Paired.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                } else {
-                    Text("Wait until the phone shows “Waiting for Mac…” before submitting. This screen advances automatically when pairing completes.")
-                        .font(.caption)
-                        .foregroundStyle(.tertiary)
-                }
-            }
-        }
-    }
-
-    @ViewBuilder
-    private var pinSubmitFeedback: some View {
-        switch session.pinSubmitState {
-        case .idle:
-            EmptyView()
-        case .submitting:
-            HStack(spacing: 10) {
-                ProgressView()
-                Text("Sending PIN to Sunshine…")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-            }
-            .padding(.vertical, 4)
-            .frame(maxWidth: .infinity, alignment: .leading)
-        case .accepted:
-            Label {
-                Text("PIN accepted — waiting for phone to finish pairing.")
-                    .font(.subheadline)
-            } icon: {
-                Image(systemName: "checkmark.circle.fill")
-            }
-            .foregroundStyle(.green)
-            .padding(10)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(RoundedRectangle(cornerRadius: 8).fill(Color.green.opacity(0.12)))
-        case .failed(let message):
-            Label {
-                Text(message)
-                    .font(.subheadline)
-                    .fixedSize(horizontal: false, vertical: true)
-            } icon: {
-                Image(systemName: "exclamationmark.triangle.fill")
-            }
-            .foregroundStyle(.red)
-            .padding(10)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(RoundedRectangle(cornerRadius: 8).fill(Color.red.opacity(0.10)))
-        }
-    }
-
     private func pairedSections(deviceName: String) -> some View {
         Group {
-            Section("Status") {
+            Section("Paired device") {
                 LabeledContent("Device") {
                     Label(deviceName, systemImage: "iphone.gen3")
                 }
@@ -286,15 +254,41 @@ struct StreamingView: View {
                     Text(ProcessInfo.processInfo.hostName)
                         .textSelection(.enabled)
                 }
-                LabeledContent("Streaming") {
-                    Label("Ready — start a stream from the companion", systemImage: "checkmark.circle.fill")
-                        .foregroundStyle(.secondary)
-                }
             }
 
             Section {
-                Button("Disconnect…", systemImage: "link.badge.minus", role: .destructive) {
+                Button("Forget pairing…", systemImage: "link.badge.minus", role: .destructive) {
                     confirmDisconnect = true
+                }
+            }
+        }
+    }
+
+    private var accessibilitySection: some View {
+        Section("Remote touch (Mac pointer)") {
+            if AccessibilityPermission.isGranted {
+                Label("Accessibility enabled", systemImage: "checkmark.circle.fill")
+                    .foregroundStyle(.green)
+                Button("Test cursor on streamed display") {
+                    PlayniteRemoteInputPlayback.wigglePointerForTest()
+                }
+                Text("If the Mac cursor jumps, touch injection works. Restart the Mac app after changing Accessibility.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            } else {
+                Label("Accessibility required for phone touch", systemImage: "exclamationmark.triangle")
+                    .foregroundStyle(.orange)
+                Text(
+                    "In System Settings → Privacy & Security → Accessibility, enable **\(AccessibilityPermission.settingsAppName)**. " +
+                        "There is no separate “touch” entry — it is the same permission as controller mapping."
+                )
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                Button("Show permission dialog…") {
+                    AccessibilityPermission.promptIfNeeded()
+                }
+                Button("Open Accessibility Settings…") {
+                    AccessibilityPermission.openSystemSettings()
                 }
             }
         }
@@ -302,67 +296,19 @@ struct StreamingView: View {
 
     private var capabilitiesSection: some View {
         Section("After pairing") {
-            Label("Encode on the Mac with Sunshine; decode on the phone via Moonlight protocol", systemImage: "arrow.left.arrow.right")
-            Label("Session start/stop from the companion app (stream stub for now)", systemImage: "play.circle")
+            Label("Phone: Session → Start Desktop stream", systemImage: "play.circle")
+            Label("Video TCP \(PlayniteStreamPorts.videoTCP), audio UDP \(PlayniteStreamPorts.audioUDP)", systemImage: "film")
+            Label("Touch on the phone moves the Mac pointer (UDP \(PlayniteStreamPorts.inputUDP))", systemImage: "hand.tap")
+            Text(
+                "Audio is sent over the network to your phone — it does not appear in System Settings → Sound → Output. " +
+                    "Play something on the Mac while streaming; volume on the phone controls playback there."
+            )
+            .font(.caption)
+            .foregroundStyle(.secondary)
         }
-    }
-
-    private var openSourceReferencesSection: some View {
-        Section {
-            DisclosureGroup("Upstream references", isExpanded: $showOpenSourceReferences) {
-                VStack(alignment: .leading, spacing: 10) {
-                    referenceRow(
-                        title: "Sunshine",
-                        subtitle: "Mac host — fork this for in-app pairing changes.",
-                        url: URL(string: "https://github.com/LizardByte/Sunshine")!
-                    )
-                    referenceRow(
-                        title: "Moonlight iOS / Android",
-                        subtitle: "Client cores; companion uses a Dart pairing shim for now.",
-                        url: URL(string: "https://github.com/moonlight-stream/moonlight-android")!
-                    )
-                }
-                .padding(.vertical, 4)
-            }
-        }
-    }
-
-    private func referenceRow(title: String, subtitle: String, url: URL) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Link(title, destination: url)
-                .font(.body.weight(.medium))
-            Text(subtitle)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    private func pairingStepRow(number: Int, text: String) -> some View {
-        HStack(alignment: .firstTextBaseline, spacing: 10) {
-            Text("\(number)")
-                .font(.caption.weight(.bold))
-                .foregroundStyle(.white)
-                .frame(width: 22, height: 22)
-                .background(Circle().fill(Color.accentColor))
-            Text(text)
-                .font(.subheadline)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-    }
-
-    private func formatRemaining(_ seconds: TimeInterval) -> String {
-        let s = Int(seconds.rounded(.down))
-        return String(format: "%d:%02d", s / 60, s % 60)
     }
 }
 
 #Preview("Idle") {
     StreamingView()
-}
-
-#Preview("Paired") {
-    let s = StreamingPairingSession()
-    s.phase = .paired(deviceName: "Demo phone")
-    return StreamingView(session: s)
 }

@@ -1,24 +1,18 @@
 import Flutter
+import GameController
 import UIKit
 
 @main
 @objc class AppDelegate: FlutterAppDelegate {
   private let channelName = "com.playnite.companion/streaming_bridge"
   private var streamingChannelRegistered = false
+  private var videoController: PlayniteVideoViewController?
 
   override func application(
     _ application: UIApplication,
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
   ) -> Bool {
     GeneratedPluginRegistrant.register(with: self)
-
-    NotificationCenter.default.addObserver(
-      self,
-      selector: #selector(playniteStreamDidEnd),
-      name: NSNotification.Name("PlayniteMoonlightStreamDidEndNotification"),
-      object: nil
-    )
-
     let result = super.application(application, didFinishLaunchingWithOptions: launchOptions)
     registerStreamingChannelIfNeeded()
     return result
@@ -35,47 +29,38 @@ import UIKit
     streamingChannelRegistered = true
 
     let channel = FlutterMethodChannel(name: channelName, binaryMessenger: controller.binaryMessenger)
-    channel.setMethodCallHandler { [weak controller] call, result in
+    channel.setMethodCallHandler { [weak self, weak controller] call, result in
       switch call.method {
       case "discoverHosts":
         result([])
 
       case "pairWithPin":
-        if let args = call.arguments as? [String: Any], let pin = args["pin"] as? String {
-          result(pin.count >= 4)
-        } else {
-          result(false)
-        }
+        result(true)
 
       case "startStream":
         guard let controller else {
           result(FlutterError(code: "no_controller", message: "Missing root view controller", details: nil))
           return
         }
-        guard let args = call.arguments as? [String: Any] else {
+        guard let args = call.arguments as? [String: Any],
+              let host = args["host"] as? String,
+              let port = args["videoPort"] as? Int else {
           result(FlutterError(code: "invalid_args", message: "Missing stream configuration", details: nil))
           return
         }
-        let started = PlayniteStreamLaunchHelper.startStream(
-          from: controller,
-          arguments: args
-        )
-        if started {
-          result(true)
-        } else {
-          result(
-            FlutterError(
-              code: "stream_start_failed",
-              message: PlayniteStreamLaunchHelper.lastStreamStartErrorMessage()
-                ?? "Native stream failed to start",
-              details: nil
-            )
-          )
-        }
+        let player = PlayniteVideoViewController(host: host, port: UInt16(port))
+        player.modalPresentationStyle = .fullScreen
+        controller.present(player, animated: true)
+        self?.videoController = player
+        result(true)
 
       case "stopStream":
-        PlayniteStreamLaunchHelper.stopStream()
+        self?.videoController?.dismiss(animated: true)
+        self?.videoController = nil
         result(nil)
+
+      case "listConnectedControllers":
+        result(Self.listConnectedControllers())
 
       default:
         result(FlutterMethodNotImplemented)
@@ -83,7 +68,16 @@ import UIKit
     }
   }
 
-  @objc private func playniteStreamDidEnd() {
-    // Reserved for future cleanup hooks.
+  private static func listConnectedControllers() -> [[String: Any]] {
+    GCController.startWirelessControllerDiscovery(completionHandler: {})
+    return GCController.controllers().map { controller in
+      let name = controller.vendorName?.trimmingCharacters(in: .whitespacesAndNewlines)
+      let displayName = (name?.isEmpty == false) ? name! : "Game Controller"
+      return [
+        "id": controller.playerIndex.rawValue.description,
+        "name": displayName,
+        "vendor": controller.productCategory,
+      ]
+    }
   }
 }
