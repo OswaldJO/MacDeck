@@ -97,13 +97,14 @@ The Mac app embeds its own **Playnite stream host** (ScreenCaptureKit → H.264,
 
 ### Host lifecycle
 
-- **`PlayniteStreamHostManager`** — starts HTTP control (**28765**), TCP video listener (**28766**), UDP audio (**28767**), UDP input (**28768**); begins capture when the phone calls `POST /playnite/v1/stream/start`.
-- **`PlayniteStreamControlServer`** — pairing queue, stream start/stop, returns `videoPort`, `audioPort`, `inputPort` to the companion.
+- **`PlayniteStreamHostManager`** — starts HTTP control (**28765**), TCP video (**28766**), UDP audio subscribe (**28767**), TCP audio downlink (**28769**), UDP input (**28768**); on stream start calls **`PlayniteLocalOutputMute`** to mute Mac default output; unmutes on stream stop or host stop.
+- **`PlayniteStreamControlServer`** — pairing queue, stream start/stop; JSON includes `videoPort`, `audioPort`, `audioTcpPort`, `inputPort`.
 - **`PlayniteVideoStreamServer`** — one TCP client; sends framed **`PNV1`** H.264 (Annex-B from `PlayniteH264Encoder`).
-- **`PlayniteDisplayCapture`** — SCK display capture; optional **system audio** (`capturesAudio`) forwarded as PCM to the audio server.
-- **`PlayniteAudioStreamServer`** — after phone sends **`PNAS`** subscribe datagram, replies with **`PNA1`** PCM (s16le) over UDP.
-- **`PlayniteStreamInputServer`** — receives **`PNI1`** touch packets; **`PlayniteRemoteInputPlayback`** posts `CGEvent` pointer events.
-- **`StreamingView`** — LAN IP, all four ports, Screen Recording + **Accessibility** status, **Test cursor on streamed display**, pairing approve/deny.
+- **`PlayniteDisplayCapture`** — SCK display + **system audio** (`capturesAudio`); PCM converted to s16le (packed or planar stereo interleave when ScreenCaptureKit returns multiple buffers).
+- **`PlayniteAudioStreamServer`** — phone sends **`PNAS`** on UDP **28767**; Mac streams **`PNA1`** PCM primarily over **TCP 28769** (4-byte little-endian length + frame); UDP downlink remains as fallback. Serial TCP send queue with subscribe ack (silent frames) on connect.
+- **`PlayniteStreamInputServer`** — receives **`PNI1`** touch packets; **`PlayniteRemoteInputPlayback`** posts `CGEvent` pointer events (relative move, tap, drag).
+- **`PlayniteLocalOutputMute`** — CoreAudio mute on default output device during an active stream; restores prior mute state afterward.
+- **`StreamingView`** — LAN IP, port summary, Screen Recording + **Accessibility** status, **Test cursor on streamed display**, pairing approve/deny; notes that playback is on the phone and Mac speakers are muted while streaming.
 
 ### macOS permissions
 
@@ -112,7 +113,7 @@ The Mac app embeds its own **Playnite stream host** (ScreenCaptureKit → H.264,
 | **Screen Recording** | Desktop video + system audio capture | Mac Game Library |
 | **Accessibility** | Synthetic mouse move/click from phone touch | Mac Game Library (same list entry; not a separate “touch” item) |
 
-Restart the Mac app after toggling Accessibility. Audio is **not** routed through **System Settings → Sound → Output**; it is sent over the network to the phone speaker.
+Restart the Mac app after toggling Accessibility. Stream audio is **not** a separate item in **System Settings → Sound → Output**; it is captured and sent to the phone. While a stream is active, the Mac’s default output is **muted** so speakers stay quiet and the phone is the playback device (use phone **media** volume during a stream).
 
 ### Playnite stream ports
 
@@ -120,10 +121,11 @@ Restart the Mac app after toggling Accessibility. Audio is **not** routed throug
 |------|----------|------|
 | 28765 | HTTP | Control — `playnite-stream/1`, pairing, stream start/stop |
 | 28766 | TCP | Video — `PNV1` framed H.264 |
-| 28767 | UDP | Audio — phone `PNAS` subscribe → Mac `PNA1` PCM |
+| 28767 | UDP | Audio subscribe — phone `PNAS` → Mac registers client; optional UDP `PNA1` fallback |
+| 28769 | TCP | Audio downlink — length-prefixed `PNA1` PCM (primary path on Android) |
 | 28768 | UDP | Input — phone `PNI1` normalized touch |
 
-**Key types:** `StreamingView.swift`, `PlayniteStreamHostManager.swift`, `PlayniteStreamControlServer.swift`, `PlayniteVideoStreamServer.swift`, `PlayniteDisplayCapture.swift`, `PlayniteAudioStreamServer.swift`, `PlayniteStreamInputServer.swift`, `PlayniteRemoteInputPlayback.swift`, `PlayniteStreamPorts.swift`, `AccessibilityPermission.swift`.
+**Key types:** `StreamingView.swift`, `PlayniteStreamHostManager.swift`, `PlayniteStreamControlServer.swift`, `PlayniteVideoStreamServer.swift`, `PlayniteDisplayCapture.swift`, `PlayniteAudioStreamServer.swift`, `PlayniteLocalOutputMute.swift`, `PlayniteStreamInputServer.swift`, `PlayniteRemoteInputPlayback.swift`, `PlayniteStreamPorts.swift`, `AccessibilityPermission.swift`.
 
 Setup: `docs/streaming-native.md`.
 
@@ -138,13 +140,13 @@ Flutter shell (iOS + Android) for discovery, HTTP pairing with the native Mac ho
 - **Settings** — Mac LAN IP; saved in `StreamingHostSettings`.
 - **Hosts** — discover Mac via Playnite HTTP control plane.
 - **Pairing** — device requests pairing; user approves on Mac **Streaming** tab.
-- **Session** — **`StreamingBridge.startPlayniteStream`** → **Android** `PlayniteVideoActivity` (full-screen `SurfaceView` + `MediaCodec`). Passes `videoPort`, `audioPort`, `inputPort`, width/height from stream start response.
+- **Session** — **`StreamingBridge.startPlayniteStream`** → **Android** `PlayniteVideoActivity` (full-screen `SurfaceView` + `MediaCodec`). Passes `videoPort`, `audioPort`, `audioTcpPort`, `inputPort`, width/height from stream start response.
 
 ### Android native (Playnite video)
 
 - **`PlayniteVideoActivity`** — TCP `PNV1` reader thread; codec pump on `HandlerThread`; decode profiles (Annex-B passthrough + `c2.android.avc.decoder` first).
-- **`PlayniteAudioReceiver`** — UDP subscribe `PNAS`, play `PNA1` via `AudioTrack` (background thread, subscribe retry on timeout).
-- **`PlayniteInputSender`** — finger drag/tap on the video `SurfaceView` → UDP `PNI1` to Mac (background thread). This is the primary pointer path during a native stream; the old **Mouse emulation** settings toggle was removed.
+- **`PlayniteAudioReceiver`** — prefers **TCP 28769** (length-prefixed `PNA1`); falls back to UDP after `PNAS` subscribe on **28767**. Separate network and playback threads; `AudioTrack` buffer ~150 ms with low-latency mode; small PCM queue to avoid blocking the socket reader.
+- **`PlayniteInputSender`** — relative cursor, tap/drag gestures on the video `SurfaceView` → UDP `PNI1` to Mac (background thread). Tunables in **Settings → Controllers → Touchpad (stream view)**. Primary pointer path during native stream (no Moonlight mouse-emulation toggle).
 - **`PlayniteRemoteInputPlayback`** (Mac) — maps normalized touch to the **captured display** frame; Y uses `minY + ny × height` so finger-up on the phone moves the cursor up on the Mac.
 - **`PlayniteStreamLog`** — writes `playnite_stream.log` under app files dir for export/debug.
 
@@ -155,9 +157,12 @@ Flutter shell (iOS + Android) for discovery, HTTP pairing with the native Mac ho
 | Log line | Meaning |
 |----------|---------|
 | `Rendered frame #N` | Video path healthy |
-| `Audio subscribed` | Phone listening; if no `First audio packet` / `AudioTrack started`, Mac is not sending `PNA1` |
+| `Audio TCP connected` | Phone opened TCP downlink on **28769** |
+| `Audio packet #N` | `PNA1` frames received and queued for playback |
+| `AudioTrack started … buf=…` | Playback started; `buf` should be tens of KB, not multi-MB |
+| `Audio subscribed` | UDP fallback path only (TCP preferred) |
 | `Input UDP #1` | Touch packets leaving the phone |
-| `Input send failed` | Usually main-thread UDP (fixed with executor) or network/firewall |
+| `Input send failed` | Network/firewall or socket error on input port |
 | `Back pressed — stopping stream` | Clean shutdown |
 
 **Doc:** `docs/companion-flutter.md`, `docs/streaming-native.md`.
@@ -183,9 +188,9 @@ Flutter shell (iOS + Android) for discovery, HTTP pairing with the native Mac ho
 - **ScreenScraper** quotas, threading, and API shape can change; search-by-name without `systemeid` may mismatch platforms.
 - **SwiftData migration:** new non-optional attributes need defaults or optional types; a prior crash on `preferScreenScraperCovers` was fixed with `= false` on the property.
 - **Full-library scrape** is synchronous per game with delays; large libraries take time and network.
-- **Native streaming video (Android)** is verified: Annex-B H.264 over TCP **28766**, typically **~99%** frames rendered vs. received in export logs.
-- **Audio** may stay silent while video works: phone retries `Audio subscribed` every ~3 s until Mac sends `PNA1`; check Mac console for `[PlayniteAudio] phone subscribed` and `sent packet #1`; allow UDP **28767** through the Mac firewall.
-- **Touch** requires Mac **Accessibility** for **Mac Game Library** and UDP **28768** open; phone must log `Input UDP #1` (not `Input send failed`). Verified on Android; rebuild Mac app after Y-mapping changes.
+- **Native streaming (Android)** is verified: video over TCP **28766** (~99% rendered vs. received); audio over TCP **28769** with Mac output muted during stream; touch over UDP **28768** with Accessibility granted.
+- **Audio troubleshooting:** expect `Audio TCP connected`, then `Audio packet #1` and `AudioTrack started` with a modest buffer size. Mac console: `[PlayniteAudio] phone connected (TCP audio)`, `muted Mac default output`, `sent TCP audio frame #N`. If silent, check phone **media** volume and Mac firewall for **28767** / **28769**.
+- **Touch** requires Mac **Accessibility** for **Mac Game Library**; phone should log `Input UDP #1`. Rebuild Mac app after input-mapping changes.
 - **Companion iOS** native video receiver is still limited; Android `PlayniteVideoActivity` is the reference client.
 - Use the Mac’s **LAN IP** (e.g. `192.168.1.x`), not `127.0.0.1`, on the phone.
 

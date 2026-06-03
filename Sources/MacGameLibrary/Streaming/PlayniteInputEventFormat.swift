@@ -1,6 +1,8 @@
 import Foundation
 
-/// `PNI1` touch / pointer events from the companion (normalized 0…65535).
+/// `PNI1` touch / pointer events from the companion.
+/// Move: signed deltas in x/y (Int16 bit pattern, scale ≈ view fraction × 32767).
+/// Down/up: x/y ignored — click at the current Mac cursor.
 enum PlayniteInputEventFormat {
     static let packetSize = 13
 

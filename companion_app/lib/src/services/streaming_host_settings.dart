@@ -11,6 +11,7 @@ class StreamingHostSettings {
   static const defaultControlPort = 28765;
   static const defaultVideoPort = 28766;
   static const defaultAudioPort = 28767;
+  static const defaultAudioTcpPort = 28769;
   static const defaultInputPort = 28768;
   static const defaultHttpPort = defaultControlPort;
   static const defaultHttpsPort = defaultControlPort;

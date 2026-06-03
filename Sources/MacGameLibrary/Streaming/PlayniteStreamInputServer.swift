@@ -19,7 +19,7 @@ actor PlayniteStreamInputServer {
     func startListener(port: UInt16 = PlayniteStreamPorts.inputUDP) async throws {
         if udp != nil { return }
         let socket = PlayniteUDPSocket()
-        socket.onDatagram = { (data: Data, _: sockaddr_storage) in
+        socket.onDatagram = { (data: Data, _: sockaddr_storage, _: socklen_t) in
             guard let event = PlayniteInputEventFormat.parse(data) else { return }
             PlayniteStreamInputServer.noteReceived(event)
             PlayniteRemoteInputPlayback.handle(event)

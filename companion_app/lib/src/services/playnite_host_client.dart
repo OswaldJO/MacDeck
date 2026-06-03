@@ -159,11 +159,13 @@ class PlayniteHostClient {
       final host = json?['host'] as String? ?? _settings.hostAddress;
       final videoPort = json?['videoPort'] as int? ?? StreamingHostSettings.defaultVideoPort;
       final audioPort = json?['audioPort'] as int? ?? StreamingHostSettings.defaultAudioPort;
+      final audioTcpPort = json?['audioTcpPort'] as int? ?? StreamingHostSettings.defaultAudioTcpPort;
       final inputPort = json?['inputPort'] as int? ?? StreamingHostSettings.defaultInputPort;
       return StreamStartOutcome.success(
         host: host,
         videoPort: videoPort,
         audioPort: audioPort,
+        audioTcpPort: audioTcpPort,
         inputPort: inputPort,
         width: width,
         height: height,
@@ -198,6 +200,7 @@ class StreamStartOutcome {
     this.host,
     this.videoPort,
     this.audioPort,
+    this.audioTcpPort,
     this.inputPort,
     this.width,
     this.height,
@@ -208,6 +211,7 @@ class StreamStartOutcome {
   final String? host;
   final int? videoPort;
   final int? audioPort;
+  final int? audioTcpPort;
   final int? inputPort;
   final int? width;
   final int? height;
@@ -216,6 +220,7 @@ class StreamStartOutcome {
     required String host,
     required int videoPort,
     required int audioPort,
+    required int audioTcpPort,
     required int inputPort,
     required int width,
     required int height,
@@ -225,6 +230,7 @@ class StreamStartOutcome {
         host: host,
         videoPort: videoPort,
         audioPort: audioPort,
+        audioTcpPort: audioTcpPort,
         inputPort: inputPort,
         width: width,
         height: height,

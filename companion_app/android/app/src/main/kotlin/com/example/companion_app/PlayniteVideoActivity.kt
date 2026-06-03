@@ -66,6 +66,7 @@ class PlayniteVideoActivity : Activity(), SurfaceHolder.Callback {
 
     private var streamHost = ""
     private var audioPort = 28767
+    private var audioTcpPort = 28769
     private var inputPort = 28768
     private var audioReceiver: PlayniteAudioReceiver? = null
     private var inputSender: PlayniteInputSender? = null
@@ -125,7 +126,12 @@ class PlayniteVideoActivity : Activity(), SurfaceHolder.Callback {
         streamHost = intent.getStringExtra(EXTRA_HOST).orEmpty()
         val port = intent.getIntExtra(EXTRA_VIDEO_PORT, 28766)
         audioPort = intent.getIntExtra(EXTRA_AUDIO_PORT, 28767)
+        audioTcpPort = intent.getIntExtra(EXTRA_AUDIO_TCP_PORT, 28769)
         inputPort = intent.getIntExtra(EXTRA_INPUT_PORT, 28768)
+        val cursorSpeed = intent.getFloatExtra(EXTRA_CURSOR_SPEED, 1f)
+        val tapSlopPercent = intent.getIntExtra(EXTRA_TAP_SLOP_PERCENT, 100)
+        val tapTimeoutMs = intent.getLongExtra(EXTRA_TAP_TIMEOUT_MS, PlayniteInputSender.TAP_TIMEOUT_MS)
+        val tapPressure = intent.getFloatExtra(EXTRA_TAP_PRESSURE, 0.35f)
         configuredWidth = intent.getIntExtra(EXTRA_WIDTH, 1920)
         configuredHeight = intent.getIntExtra(EXTRA_HEIGHT, 1080)
 
@@ -142,16 +148,19 @@ class PlayniteVideoActivity : Activity(), SurfaceHolder.Callback {
 
         surfaceView = SurfaceView(this)
         surfaceView.holder.addCallback(this)
+        val touchSlop = android.view.ViewConfiguration.get(this).scaledTouchSlop.toFloat() *
+            (tapSlopPercent.coerceIn(50, 200) / 100f)
         inputSender = PlayniteInputSender(
             host = streamHost,
             port = inputPort,
             viewWidth = { surfaceView.width.coerceAtLeast(1) },
             viewHeight = { surfaceView.height.coerceAtLeast(1) },
+            touchSlopPx = touchSlop,
+            cursorSensitivity = cursorSpeed.coerceIn(0.25f, 3f),
+            tapTimeoutMs = tapTimeoutMs.coerceIn(150L, 800L),
+            minTapPressure = tapPressure.coerceIn(0.1f, 0.9f),
         )
         surfaceView.setOnTouchListener { _, event ->
-            if (event.actionMasked == MotionEvent.ACTION_DOWN) {
-                surfaceView.performClick()
-            }
             inputSender?.handleTouch(event) == true
         }
 
@@ -192,7 +201,7 @@ class PlayniteVideoActivity : Activity(), SurfaceHolder.Callback {
 
         running.set(true)
         PlayniteStreamLog.i(
-            "Starting stream host=$streamHost video=$port audio=$audioPort input=$inputPort " +
+            "Starting stream host=$streamHost video=$port audio=$audioPort tcp=$audioTcpPort input=$inputPort " +
                 "${configuredWidth}x$configuredHeight",
         )
         streamThread = Thread {
@@ -207,7 +216,7 @@ class PlayniteVideoActivity : Activity(), SurfaceHolder.Callback {
                 socket = sock
                 streamConnectedAt = SystemClock.elapsedRealtime()
                 PlayniteStreamLog.i("TCP connected, waiting for PNV1 frames")
-                val audio = PlayniteAudioReceiver(streamHost, audioPort)
+                val audio = PlayniteAudioReceiver(streamHost, audioPort, audioTcpPort)
                 audioReceiver = audio
                 audio.start()
                 try {
@@ -724,7 +733,12 @@ class PlayniteVideoActivity : Activity(), SurfaceHolder.Callback {
         const val EXTRA_HOST = "host"
         const val EXTRA_VIDEO_PORT = "videoPort"
         const val EXTRA_AUDIO_PORT = "audioPort"
+        const val EXTRA_AUDIO_TCP_PORT = "audioTcpPort"
         const val EXTRA_INPUT_PORT = "inputPort"
+        const val EXTRA_CURSOR_SPEED = "cursorSpeed"
+        const val EXTRA_TAP_SLOP_PERCENT = "tapSlopPercent"
+        const val EXTRA_TAP_TIMEOUT_MS = "tapTimeoutMs"
+        const val EXTRA_TAP_PRESSURE = "tapPressure"
         const val EXTRA_WIDTH = "width"
         const val EXTRA_HEIGHT = "height"
 

@@ -46,6 +46,12 @@ final class PlayniteDisplayCapture: NSObject, @unchecked Sendable {
             config.capturesAudio = true
             config.sampleRate = 48_000
             config.channelCount = 2
+            config.excludesCurrentProcessAudio = false
+            Self.audioBuffersSeen = 0
+            Self.audioExtractFailures = 0
+            Self.loggedAudioFormatFailure = false
+            Self.loggedAudioFormat = false
+            print("[PlayniteAudio] ScreenCaptureKit audio enabled 48kHz stereo")
         }
 
         let stream = SCStream(filter: filter, configuration: config, delegate: nil)
@@ -85,8 +91,14 @@ extension PlayniteDisplayCapture: SCStreamOutput {
             let pts = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
             encoder.encode(pixelBuffer: pixelBuffer, presentationTime: pts)
         case .audio:
-            guard let audioHandler,
-                  let pcm = Self.extractPCM16(from: sampleBuffer) else { return }
+            guard let audioHandler else { return }
+            guard let pcm = Self.extractPCM16(from: sampleBuffer) else {
+                Self.audioExtractFailures += 1
+                if Self.audioExtractFailures == 1 || Self.audioExtractFailures % 120 == 0 {
+                    print("[PlayniteAudio] extractPCM16 failed (#\(Self.audioExtractFailures))")
+                }
+                return
+            }
             Self.audioBuffersSeen += 1
             if Self.audioBuffersSeen == 1 {
                 print("[PlayniteAudio] first capture buffer bytes=\(pcm.data.count) \(pcm.sampleRate)Hz ch=\(pcm.channels)")
@@ -104,19 +116,31 @@ extension PlayniteDisplayCapture: SCStreamOutput {
     }
 
     private nonisolated(unsafe) static var audioBuffersSeen = 0
+    private nonisolated(unsafe) static var audioExtractFailures = 0
     private nonisolated(unsafe) static var loggedAudioFormatFailure = false
+    private nonisolated(unsafe) static var loggedAudioFormat = false
 
     private static func extractPCM16(from sampleBuffer: CMSampleBuffer) -> PCM16? {
         guard let format = CMSampleBufferGetFormatDescription(sampleBuffer),
               let asbdPtr = CMAudioFormatDescriptionGetStreamBasicDescription(format) else { return nil }
         let asbd = asbdPtr.pointee
         let channels = UInt8(max(1, min(Int(asbd.mChannelsPerFrame), 2)))
-        let sampleRate = UInt16(min(max(asbd.mSampleRate, 8_000), 96_000))
+        let sampleRate = UInt16(min(max(asbd.mSampleRate.rounded(), 8_000), 96_000))
 
-        if let pcm = extractPCM16FromBlockBuffer(sampleBuffer, asbd: asbd, sampleRate: sampleRate, channels: channels) {
+        if !loggedAudioFormat {
+            loggedAudioFormat = true
+            let planar = (asbd.mFormatFlags & kAudioFormatFlagIsNonInterleaved) != 0
+            print(
+                "[PlayniteAudio] capture format \(sampleRate)Hz ch=\(channels) " +
+                    "bits=\(asbd.mBitsPerChannel) bytesPerFrame=\(asbd.mBytesPerFrame) " +
+                    "float=\((asbd.mFormatFlags & kAudioFormatFlagIsFloat) != 0) planar=\(planar)"
+            )
+        }
+
+        if let pcm = extractPCM16FromAudioBufferList(sampleBuffer, asbd: asbd, sampleRate: sampleRate, channels: channels) {
             return pcm
         }
-        if let pcm = extractPCM16FromAudioBufferList(sampleBuffer, asbd: asbd, sampleRate: sampleRate, channels: channels) {
+        if let pcm = extractPCM16FromBlockBuffer(sampleBuffer, asbd: asbd, sampleRate: sampleRate, channels: channels) {
             return pcm
         }
 
@@ -136,6 +160,8 @@ extension PlayniteDisplayCapture: SCStreamOutput {
         sampleRate: UInt16,
         channels: UInt8
     ) -> PCM16? {
+        guard (asbd.mFormatFlags & kAudioFormatFlagIsNonInterleaved) == 0 else { return nil }
+
         guard let block = CMSampleBufferGetDataBuffer(sampleBuffer) else { return nil }
         var length = 0
         var dataPointer: UnsafeMutablePointer<Int8>?
@@ -157,13 +183,31 @@ extension PlayniteDisplayCapture: SCStreamOutput {
     ) -> PCM16? {
         guard CMSampleBufferGetNumSamples(sampleBuffer) > 0 else { return nil }
 
-        var audioBufferList = AudioBufferList()
+        var bufferListSizeNeeded = 0
+        let probeStatus = CMSampleBufferGetAudioBufferListWithRetainedBlockBuffer(
+            sampleBuffer,
+            bufferListSizeNeededOut: &bufferListSizeNeeded,
+            bufferListOut: nil,
+            bufferListSize: 0,
+            blockBufferAllocator: nil,
+            blockBufferMemoryAllocator: nil,
+            flags: 0,
+            blockBufferOut: nil
+        )
+        guard probeStatus == noErr, bufferListSizeNeeded > 0 else { return nil }
+
+        let rawList = UnsafeMutableRawPointer.allocate(
+            byteCount: bufferListSizeNeeded,
+            alignment: MemoryLayout<AudioBufferList>.alignment
+        )
+        defer { rawList.deallocate() }
+
         var blockBuffer: CMBlockBuffer?
         let status = CMSampleBufferGetAudioBufferListWithRetainedBlockBuffer(
             sampleBuffer,
             bufferListSizeNeededOut: nil,
-            bufferListOut: &audioBufferList,
-            bufferListSize: MemoryLayout<AudioBufferList>.size,
+            bufferListOut: rawList.assumingMemoryBound(to: AudioBufferList.self),
+            bufferListSize: bufferListSizeNeeded,
             blockBufferAllocator: kCFAllocatorDefault,
             blockBufferMemoryAllocator: kCFAllocatorDefault,
             flags: kCMSampleBufferFlag_AudioBufferList_Assure16ByteAlignment,
@@ -171,26 +215,78 @@ extension PlayniteDisplayCapture: SCStreamOutput {
         )
         guard status == noErr else { return nil }
 
-        let buffers = UnsafeMutableAudioBufferListPointer(&audioBufferList)
-        var combined = Data()
-        for buffer in buffers {
-            guard let data = buffer.mData else { continue }
-            let byteCount = Int(buffer.mDataByteSize)
-            guard byteCount > 0 else { continue }
-            combined.append(data.assumingMemoryBound(to: UInt8.self), count: byteCount)
-        }
-        guard !combined.isEmpty else { return nil }
+        let buffers = UnsafeMutableAudioBufferListPointer(rawList.assumingMemoryBound(to: AudioBufferList.self))
+        guard !buffers.isEmpty else { return nil }
 
-        return combined.withUnsafeBytes { raw in
-            guard let base = raw.baseAddress?.assumingMemoryBound(to: Int8.self) else { return nil }
-            return pcm16(
-                fromRawBytes: base,
-                byteCount: combined.count,
-                asbd: asbd,
-                sampleRate: sampleRate,
-                channels: channels
-            )
+        var planes = [AudioBuffer]()
+        for buffer in buffers {
+            guard buffer.mData != nil, buffer.mDataByteSize > 0 else { continue }
+            planes.append(buffer)
         }
+
+        if planes.count >= 2, channels >= 2,
+           let interleaved = interleavePlanarStereo(left: planes[0], right: planes[1], asbd: asbd) {
+            return PCM16(data: interleaved, sampleRate: sampleRate, channels: channels)
+        }
+
+        guard let plane = planes.first ?? buffers.first,
+              let data = plane.mData else { return nil }
+        let byteCount = Int(plane.mDataByteSize)
+        guard byteCount > 0 else { return nil }
+        return pcm16(
+            fromRawBytes: data.assumingMemoryBound(to: Int8.self),
+            byteCount: byteCount,
+            asbd: asbd,
+            sampleRate: sampleRate,
+            channels: channels
+        )
+    }
+
+    private static func interleavePlanarStereo(
+        left: AudioBuffer,
+        right: AudioBuffer,
+        asbd: AudioStreamBasicDescription
+    ) -> Data? {
+        guard let leftData = left.mData, let rightData = right.mData else { return nil }
+        let leftBytes = Int(left.mDataByteSize)
+        let rightBytes = Int(right.mDataByteSize)
+        guard leftBytes > 0, leftBytes == rightBytes else { return nil }
+        let left = leftData
+        let right = rightData
+
+        let isFloat = (asbd.mFormatFlags & kAudioFormatFlagIsFloat) != 0
+        if isFloat {
+            let sampleCount = leftBytes / MemoryLayout<Float>.size
+            var out = Data(count: sampleCount * 2 * MemoryLayout<Int16>.size)
+            out.withUnsafeMutableBytes { dest in
+                guard let destBase = dest.baseAddress?.assumingMemoryBound(to: Int16.self) else { return }
+                let l = left.assumingMemoryBound(to: Float.self)
+                let r = right.assumingMemoryBound(to: Float.self)
+                for i in 0 ..< sampleCount {
+                    let lv = max(-1.0, min(1.0, l[i]))
+                    let rv = max(-1.0, min(1.0, r[i]))
+                    destBase[i * 2] = Int16(clamping: Int32((lv * 32767.0).rounded()))
+                    destBase[i * 2 + 1] = Int16(clamping: Int32((rv * 32767.0).rounded()))
+                }
+            }
+            return out
+        }
+
+        if asbd.mBitsPerChannel == 16 {
+            let sampleCount = leftBytes / MemoryLayout<Int16>.size
+            var out = Data(count: sampleCount * 2 * MemoryLayout<Int16>.size)
+            out.withUnsafeMutableBytes { dest in
+                guard let destBase = dest.baseAddress?.assumingMemoryBound(to: Int16.self) else { return }
+                let l = left.assumingMemoryBound(to: Int16.self)
+                let r = right.assumingMemoryBound(to: Int16.self)
+                for i in 0 ..< sampleCount {
+                    destBase[i * 2] = l[i]
+                    destBase[i * 2 + 1] = r[i]
+                }
+            }
+            return out
+        }
+        return nil
     }
 
     private static func pcm16(
@@ -208,14 +304,29 @@ extension PlayniteDisplayCapture: SCStreamOutput {
         }
 
         if isFloat {
-            let sampleCount = byteCount / MemoryLayout<Float>.size
+            let floatCount = byteCount / MemoryLayout<Float>.size
+            guard floatCount > 0 else { return nil }
+            var out = Data(count: floatCount * MemoryLayout<Int16>.size)
+            out.withUnsafeMutableBytes { dest in
+                guard let destBase = dest.baseAddress?.assumingMemoryBound(to: Int16.self) else { return }
+                let src = dataPointer.withMemoryRebound(to: Float.self, capacity: floatCount) { $0 }
+                for i in 0 ..< floatCount {
+                    let clamped = max(-1.0, min(1.0, src[i]))
+                    destBase[i] = Int16(clamping: Int32((clamped * 32767.0).rounded()))
+                }
+            }
+            return PCM16(data: out, sampleRate: sampleRate, channels: channels)
+        }
+
+        if asbd.mBitsPerChannel == 32, !isFloat {
+            let sampleCount = byteCount / MemoryLayout<Int32>.size
             var out = Data(count: sampleCount * MemoryLayout<Int16>.size)
             out.withUnsafeMutableBytes { dest in
                 guard let destBase = dest.baseAddress?.assumingMemoryBound(to: Int16.self) else { return }
-                let src = dataPointer.withMemoryRebound(to: Float.self, capacity: sampleCount) { $0 }
+                let src = dataPointer.withMemoryRebound(to: Int32.self, capacity: sampleCount) { $0 }
                 for i in 0 ..< sampleCount {
-                    let clamped = max(-1.0, min(1.0, src[i]))
-                    destBase[i] = Int16(clamped * 32767.0)
+                    let scaled = max(-32_768, min(32_767, src[i] >> 16))
+                    destBase[i] = Int16(truncatingIfNeeded: scaled)
                 }
             }
             return PCM16(data: out, sampleRate: sampleRate, channels: channels)

@@ -74,6 +74,7 @@ final class PlayniteStreamHostManager {
             try await server.start()
             try await video.startListener()
             try await audio.startListener()
+            try await audio.startTCPListener()
             try await input.startListener()
             AccessibilityPermission.promptIfNeeded()
             state = .running
@@ -86,23 +87,21 @@ final class PlayniteStreamHostManager {
 
     func restartHost() async {
         stopPendingPoll()
-        await video.stop()
+        await endVideoStream()
         await audio.stop()
         await input.stop()
         await server.stop()
         state = .idle
-        isVideoStreaming = false
         await ensureReady()
     }
 
     func stop() async {
         stopPendingPoll()
-        await video.stop()
+        await endVideoStream()
         await audio.stop()
         await input.stop()
         await server.stop()
         state = .idle
-        isVideoStreaming = false
         pendingPairRequests = []
     }
 
@@ -159,17 +158,20 @@ final class PlayniteStreamHostManager {
         }
         let audioServer = audio
         do {
+            PlayniteLocalOutputMute.setStreamingMuted(true)
             try await video.startStream(width: width, height: height, fps: fps) { pcm, sampleRate, channels in
                 Task { await audioServer.sendPCM(pcm, sampleRate: sampleRate, channels: channels) }
             }
             isVideoStreaming = true
         } catch {
+            PlayniteLocalOutputMute.setStreamingMuted(false)
             isVideoStreaming = false
         }
     }
 
     private func endVideoStream() async {
         await video.stopStream()
+        PlayniteLocalOutputMute.setStreamingMuted(false)
         isVideoStreaming = false
     }
 

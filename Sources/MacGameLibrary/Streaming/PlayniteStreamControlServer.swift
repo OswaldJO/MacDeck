@@ -227,6 +227,7 @@ actor PlayniteStreamControlServer {
                 "pendingCount": pendingByDeviceID.count,
                 "videoPort": PlayniteStreamPorts.videoTCP,
                 "audioPort": PlayniteStreamPorts.audioUDP,
+                "audioTcpPort": PlayniteStreamPorts.audioTCP,
                 "inputPort": PlayniteStreamPorts.inputUDP,
             ])
         case ("POST", "/playnite/v1/pair/request"), ("POST", "/playnite/v1/pair/begin"):
@@ -285,6 +286,7 @@ actor PlayniteStreamControlServer {
                 "ok": true,
                 "videoPort": PlayniteStreamPorts.videoTCP,
                 "audioPort": PlayniteStreamPorts.audioUDP,
+                "audioTcpPort": PlayniteStreamPorts.audioTCP,
                 "inputPort": PlayniteStreamPorts.inputUDP,
                 "host": LocalNetworkAddress.primaryIPv4() ?? "127.0.0.1",
             ])

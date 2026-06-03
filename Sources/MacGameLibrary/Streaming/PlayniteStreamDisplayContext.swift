@@ -2,11 +2,11 @@ import AppKit
 import CoreGraphics
 import Foundation
 
-/// Display bounds used to map phone touch coordinates to Mac pointer events.
+/// Display bounds for Mac pointer events (`CGEvent` uses top-left global coordinates).
 enum PlayniteStreamDisplayContext {
     private static let lock = NSLock()
     private nonisolated(unsafe) static var pointerFrame: CGRect =
-        NSScreen.main?.frame ?? CGRect(x: 0, y: 0, width: 1920, height: 1080)
+        CGDisplayBounds(CGMainDisplayID())
 
     static var frameForPointerMapping: CGRect {
         lock.lock()
@@ -15,11 +15,12 @@ enum PlayniteStreamDisplayContext {
     }
 
     static func update(for displayID: CGDirectDisplayID) {
-        let frame = screen(for: displayID)?.frame ?? NSScreen.main?.frame ?? pointerFrame
+        let cgFrame = CGDisplayBounds(displayID)
         lock.lock()
-        pointerFrame = frame
+        pointerFrame = cgFrame
         lock.unlock()
-        print("[PlayniteStream] pointer mapping display frame=\(frame)")
+        let cocoaFrame = screen(for: displayID)?.frame ?? NSScreen.main?.frame ?? .zero
+        print("[PlayniteStream] pointer mapping CG(top-left)=\(cgFrame) cocoa=\(cocoaFrame)")
     }
 
     private static func screen(for displayID: CGDirectDisplayID) -> NSScreen? {

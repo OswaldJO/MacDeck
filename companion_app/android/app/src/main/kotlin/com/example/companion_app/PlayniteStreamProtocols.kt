@@ -10,7 +10,7 @@ object PlayniteStreamProtocols {
     const val INPUT_MAGIC = 0x31494E50 // PNI1
 
     const val VIDEO_HEADER_SIZE = 13
-    const val AUDIO_HEADER_SIZE = 9
+    const val AUDIO_HEADER_SIZE = 11
     const val INPUT_PACKET_SIZE = 13
 
     fun buildInputPacket(

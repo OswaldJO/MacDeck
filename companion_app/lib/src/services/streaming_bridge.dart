@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import '../models/host_info.dart';
 import 'playnite_host_client.dart';
 import 'stream_controller_settings.dart';
+import 'stream_touch_settings.dart';
 import 'streaming_host_settings.dart';
 
 /// Discovery, consent pairing, and native video via Playnite protocol.
@@ -65,6 +66,7 @@ class StreamingBridge {
     required int height,
     required int fps,
     StreamControllerSettings? controllerSettings,
+    StreamTouchSettings? touchSettings,
   }) async {
     final client = await _client();
     final outcome = await client.startStream(width: width, height: height, fps: fps);
@@ -73,13 +75,16 @@ class StreamingBridge {
     }
 
     try {
+      final touch = touchSettings ?? await StreamTouchSettings.load();
       final started = await _channel.invokeMethod<bool>('startStream', {
         'host': outcome.host,
         'videoPort': outcome.videoPort,
         'audioPort': outcome.audioPort ?? StreamingHostSettings.defaultAudioPort,
+        'audioTcpPort': outcome.audioTcpPort ?? StreamingHostSettings.defaultAudioTcpPort,
         'inputPort': outcome.inputPort ?? StreamingHostSettings.defaultInputPort,
         'width': outcome.width ?? width,
         'height': outcome.height ?? height,
+        ...touch.toMethodChannelMap(),
       });
       if (started == true) {
         return outcome;

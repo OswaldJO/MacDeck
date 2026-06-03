@@ -9,6 +9,7 @@ import '../data/moonlight_key_codes.dart';
 import '../models/host_info.dart';
 import '../services/stream_controller_mapping_store.dart';
 import '../services/stream_controller_settings.dart';
+import '../services/stream_touch_settings.dart';
 import '../services/stream_log_share.dart';
 import '../services/streaming_bridge.dart';
 import '../services/streaming_host_settings.dart';
@@ -31,6 +32,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   bool _pairingInProgress = false;
   bool _streamActive = false;
   StreamControllerSettings? _controllerSettings;
+  StreamTouchSettings? _touchSettings;
   List<StreamControllerBinding> _controllerBindings = const [];
   List<ConnectedControllerInfo> _connectedControllers = const [];
   String _controllerStatus = 'Connect a telescopic or Bluetooth gamepad to this phone.';
@@ -43,6 +45,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       unawaited(_loadSettings());
       unawaited(_loadControllerSettings());
+      unawaited(_loadTouchSettings());
     });
   }
 
@@ -73,6 +76,29 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       _controllerBindings = mappingStore.bindings;
     });
     await _refreshConnectedControllers();
+  }
+
+  Future<void> _loadTouchSettings() async {
+    final settings = await StreamTouchSettings.load();
+    if (!mounted) return;
+    setState(() => _touchSettings = settings);
+  }
+
+  Future<void> _saveTouchSettings({
+    double? cursorSpeed,
+    int? tapSlopPercent,
+    int? tapTimeoutMs,
+    int? tapPressurePercent,
+  }) async {
+    final current = _touchSettings ?? await StreamTouchSettings.load();
+    await current.save(
+      cursorSpeed: cursorSpeed,
+      tapSlopPercent: tapSlopPercent,
+      tapTimeoutMs: tapTimeoutMs,
+      tapPressurePercent: tapPressurePercent,
+    );
+    if (!mounted) return;
+    setState(() => _touchSettings = current);
   }
 
   Future<void> _refreshConnectedControllers() async {
@@ -596,6 +622,73 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
               ),
             ),
           ),
+        ],
+        if (isAndroid) ...[
+          const SizedBox(height: 24),
+          const Text(
+            'Touchpad (stream view)',
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'While streaming your Mac desktop, finger touches on the video surface move the Mac cursor. '
+            'Adjust speed and how taps are detected.',
+          ),
+          const SizedBox(height: 8),
+          if (_touchSettings == null)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 16),
+              child: Center(child: CircularProgressIndicator()),
+            )
+          else ...[
+            ListTile(
+              title: const Text('Cursor speed'),
+              subtitle: Slider(
+                value: _touchSettings!.cursorSpeed,
+                min: 0.25,
+                max: 3.0,
+                divisions: 11,
+                label: _touchSettings!.cursorSpeed.toStringAsFixed(2),
+                onChanged: (value) => _saveTouchSettings(cursorSpeed: value),
+              ),
+            ),
+            ListTile(
+              title: const Text('Tap movement allowance'),
+              subtitle: Slider(
+                value: _touchSettings!.tapSlopPercent.toDouble(),
+                min: 50,
+                max: 200,
+                divisions: 15,
+                label: '${_touchSettings!.tapSlopPercent}%',
+                onChanged: (value) =>
+                    _saveTouchSettings(tapSlopPercent: value.round()),
+              ),
+            ),
+            ListTile(
+              title: const Text('Tap time limit'),
+              subtitle: Slider(
+                value: _touchSettings!.tapTimeoutMs.toDouble(),
+                min: 150,
+                max: 800,
+                divisions: 13,
+                label: '${_touchSettings!.tapTimeoutMs} ms',
+                onChanged: (value) =>
+                    _saveTouchSettings(tapTimeoutMs: value.round()),
+              ),
+            ),
+            ListTile(
+              title: const Text('Tap pressure'),
+              subtitle: Slider(
+                value: _touchSettings!.tapPressurePercent.toDouble(),
+                min: 10,
+                max: 90,
+                divisions: 16,
+                label: '${_touchSettings!.tapPressurePercent}%',
+                onChanged: (value) =>
+                    _saveTouchSettings(tapPressurePercent: value.round()),
+              ),
+            ),
+          ],
         ],
         const SizedBox(height: 24),
         const Text(

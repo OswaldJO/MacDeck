@@ -297,11 +297,14 @@ struct StreamingView: View {
     private var capabilitiesSection: some View {
         Section("After pairing") {
             Label("Phone: Session → Start Desktop stream", systemImage: "play.circle")
-            Label("Video TCP \(PlayniteStreamPorts.videoTCP), audio UDP \(PlayniteStreamPorts.audioUDP)", systemImage: "film")
+            Label(
+                "Video TCP \(PlayniteStreamPorts.videoTCP), audio TCP \(PlayniteStreamPorts.audioTCP)",
+                systemImage: "film"
+            )
             Label("Touch on the phone moves the Mac pointer (UDP \(PlayniteStreamPorts.inputUDP))", systemImage: "hand.tap")
             Text(
-                "Audio is sent over the network to your phone — it does not appear in System Settings → Sound → Output. " +
-                    "Play something on the Mac while streaming; volume on the phone controls playback there."
+                "Desktop audio is sent to the phone while streaming; Mac speakers are muted for the stream duration. " +
+                    "Use the phone media volume buttons during a stream."
             )
             .font(.caption)
             .foregroundStyle(.secondary)
