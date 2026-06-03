@@ -46,6 +46,10 @@
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
 	<key>NSLocalNetworkUsageDescription</key>
-	<string>Find your Mac game library host on the local network for pairing and streaming.</string>
+	<string>Find your Mac game library host on the local network for pairing and streaming. Debug builds also use the local network for Flutter hot reload.</string>
+	<key>NSBonjourServices</key>
+	<array>
+		<string>_dartobservatory._tcp</string>
+	</array>
 </dict>
 </plist>

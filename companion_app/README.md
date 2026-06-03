@@ -15,6 +15,6 @@ Pick an iOS simulator, Android emulator, or physical device when prompted.
 ## Architecture
 
 - **Dart** (`lib/`): shared UI and `StreamingBridge` API.
-- **Native** (`ios/`, `android/`): `MethodChannel` stubs today; wire to your **moonlight-ios** and **moonlight-android** forks for decode/input.
+- **Native** (`ios/`, `android/`): `StreamingBridge` → Moonlight decode (`moonlight-stream` on Android, `PlayniteMoonlight` pod on iOS). Clone forks with `../Scripts/clone-streaming-forks.sh` before first native build.
 
 See [`../docs/companion-flutter.md`](../docs/companion-flutter.md) and [`../docs/streaming-setup.md`](../docs/streaming-setup.md).

@@ -1,0 +1,35 @@
+PODS:
+  - Flutter (1.0.0)
+  - OpenSSL-Universal (3.6.2000)
+  - PlayniteMoonlight (1.0.0):
+    - OpenSSL-Universal
+  - shared_preferences_foundation (0.0.1):
+    - Flutter
+    - FlutterMacOS
+
+DEPENDENCIES:
+  - Flutter (from `Flutter`)
+  - PlayniteMoonlight (from `MoonlightStream`)
+  - shared_preferences_foundation (from `.symlinks/plugins/shared_preferences_foundation/darwin`)
+
+SPEC REPOS:
+  trunk:
+    - OpenSSL-Universal
+
+EXTERNAL SOURCES:
+  Flutter:
+    :path: Flutter
+  PlayniteMoonlight:
+    :path: MoonlightStream
+  shared_preferences_foundation:
+    :path: ".symlinks/plugins/shared_preferences_foundation/darwin"
+
+SPEC CHECKSUMS:
+  Flutter: e0871f40cf51350855a761d2e70bf5af5b9b5de7
+  OpenSSL-Universal: ecee7b138fa75a74ecf00d7ffd248fb584739b9e
+  PlayniteMoonlight: 6e3d6c4e015318b17517750d8cfa94315c979611
+  shared_preferences_foundation: 9e1978ff2562383bd5676f64ec4e9aa8fa06a6f7
+
+PODFILE CHECKSUM: b0cf51e5f1f80ad55a6a5c73827013401171ca6d
+
+COCOAPODS: 1.16.2

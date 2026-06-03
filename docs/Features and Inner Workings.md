@@ -135,7 +135,7 @@ Flutter app (iOS + Android) for discovery, pairing, and LAN streaming to the Mac
 - **Settings** — Mac LAN IP (no port suffix); saved in `StreamingHostSettings` (SharedPreferences).
 - **Hosts** — `discoverHosts()` via HTTP `serverinfo` on configured IP; **Paired** when `PairingStateStore` + HTTPS `applist` probe succeed.
 - **Pairing** — **`SunshinePairingService.pair()`**; status is separate from host discovery (`home_page.dart`).
-- **Session** — **`MoonlightStreamService`** resolves Desktop app id from `applist`, then **`StreamingBridge.startStream`** → Android **`StreamLaunchHelper`** starts vendored Moonlight **`Game`** activity (`companion_app/android/moonlight-stream`). Client cert/key from Dart pairing are copied into Moonlight’s `filesDir` before launch. **Android:** full-screen decode (HEVC preferred, 1280×720@60 in current preset). **iOS:** `startStream` / `stopStream` still stub until `moonlight-ios` is integrated.
+- **Session** — **`MoonlightStreamService`** resolves Desktop app id from `applist`, then **`StreamingBridge.startStream`** with the same **`StreamLaunchConfig`** map on both platforms. Client cert/key from Dart pairing are synced into each native Moonlight identity store before launch. **Android:** **`StreamLaunchHelper`** → vendored **`Game`** activity (`moonlight-stream`). **iOS:** **`PlayniteStreamLaunchHelper`** → modal **`StreamFrameViewController`** (`PlayniteMoonlight` pod). **Android** E2E verified; **iOS** builds and launches native stream UI (device smoke test pending).
 
 ### Pairing (companion side)
 

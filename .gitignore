@@ -15,3 +15,7 @@ build/DerivedData/
 
 # Staged Sunshine executable (see Scripts/stage-sunshine-for-mac-app.sh)
 MacGameLibraryApp/Resources/Sunshine/sunshine
+
+# Generated Moonlight companion iOS pod artifacts
+companion_app/ios/MoonlightStream/Sources/
+companion_app/ios/MoonlightStream/Vendor/

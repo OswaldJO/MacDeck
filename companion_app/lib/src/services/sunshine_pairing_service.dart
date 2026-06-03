@@ -349,7 +349,7 @@ class SunshinePairingService {
         'https://$host:${_settings.httpsPort}/$path'
         '?uniqueid=$_uniqueId&uuid=$uuid',
       );
-      final response = await client.get(url);
+      final response = await client.get(url).timeout(const Duration(seconds: 8));
       if (response.statusCode != 200) {
         throw Exception('HTTP ${response.statusCode}: ${response.body}');
       }
