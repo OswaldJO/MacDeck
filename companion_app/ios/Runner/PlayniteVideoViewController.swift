@@ -120,6 +120,8 @@ final class PlayniteVideoViewController: UIViewController {
       allocator: kCFAllocatorDefault,
       dataBuffer: blockBuffer,
       dataReady: true,
+      makeDataReadyCallback: nil,
+      refcon: nil,
       formatDescription: formatDescription,
       sampleCount: 1,
       sampleTimingEntryCount: 1,
@@ -130,10 +132,15 @@ final class PlayniteVideoViewController: UIViewController {
     )
     guard let sampleBuffer else { return }
 
-    VTDecompressionSessionDecodeFrame(session, sampleBuffer: sampleBuffer) { _, _, imageBuffer, _, _ in
+    var decodeInfo = VTDecodeInfoFlags()
+    VTDecompressionSessionDecodeFrame(
+      session,
+      sampleBuffer: sampleBuffer,
+      flags: [],
+      infoFlagsOut: &decodeInfo
+    ) { _, _, imageBuffer, _, _ in
       guard let imageBuffer else { return }
       var timingInfo = CMSampleTimingInfo()
-      var videoInfo = CMSampleBufferGetFormatDescription(sampleBuffer).map { CMVideoFormatDescriptionGetDimensions($0) }
       var newSample: CMSampleBuffer?
       var formatDesc: CMVideoFormatDescription?
       CMVideoFormatDescriptionCreateForImageBuffer(allocator: kCFAllocatorDefault, imageBuffer: imageBuffer, formatDescriptionOut: &formatDesc)
@@ -142,6 +149,8 @@ final class PlayniteVideoViewController: UIViewController {
         allocator: kCFAllocatorDefault,
         imageBuffer: imageBuffer,
         dataReady: true,
+        makeDataReadyCallback: nil,
+        refcon: nil,
         formatDescription: formatDesc,
         sampleTiming: &timingInfo,
         sampleBufferOut: &newSample

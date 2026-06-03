@@ -17,15 +17,34 @@ object ConnectedControllerProbe {
                     sources and InputDevice.SOURCE_JOYSTICK == InputDevice.SOURCE_JOYSTICK
             if (!isGamepad) continue
 
+            val detectedButtons = probeButtons(device)
             controllers.add(
                 mapOf(
                     "id" to deviceId.toString(),
                     "name" to (device.name ?: "Game controller"),
                     "vendor" to device.vendorId.toString(),
+                    "detectedButtons" to detectedButtons,
                 ),
             )
         }
 
         return controllers
+    }
+
+    fun probeButtons(device: InputDevice): List<Map<String, Any>> {
+        val found = mutableListOf<Map<String, Any>>()
+        for (keyCode in GamepadKeyCodes.probeKeyCodes) {
+            val supported = device.hasKeys(keyCode)
+            if (supported.isEmpty() || !supported[0]) continue
+            val elementId = GamepadKeyCodes.elementIdForKeyCode(keyCode)
+            found.add(
+                mapOf(
+                    "keyCode" to keyCode,
+                    "label" to GamepadKeyCodes.labelForKeyCode(keyCode),
+                    "elementId" to (elementId ?: ""),
+                ),
+            )
+        }
+        return found
     }
 }

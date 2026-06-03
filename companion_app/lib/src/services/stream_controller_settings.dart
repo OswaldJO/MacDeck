@@ -71,22 +71,53 @@ class StreamControllerSettings {
   }
 }
 
+class DetectedGamepadButton {
+  const DetectedGamepadButton({
+    required this.keyCode,
+    required this.label,
+    this.elementId,
+  });
+
+  final int keyCode;
+  final String label;
+  final String? elementId;
+
+  factory DetectedGamepadButton.fromMap(Map<dynamic, dynamic> map) {
+    return DetectedGamepadButton(
+      keyCode: (map['keyCode'] as num?)?.toInt() ?? 0,
+      label: map['label']?.toString() ?? 'Button',
+      elementId: map['elementId']?.toString(),
+    );
+  }
+}
+
 class ConnectedControllerInfo {
   const ConnectedControllerInfo({
     required this.id,
     required this.name,
     this.vendor,
+    this.detectedButtons = const [],
   });
 
   final String id;
   final String name;
   final String? vendor;
+  final List<DetectedGamepadButton> detectedButtons;
 
   factory ConnectedControllerInfo.fromMap(Map<dynamic, dynamic> map) {
+    final rawButtons = map['detectedButtons'];
+    final buttons = rawButtons is List
+        ? rawButtons
+            .whereType<Map>()
+            .map((e) => DetectedGamepadButton.fromMap(e))
+            .where((b) => b.keyCode != 0)
+            .toList()
+        : const <DetectedGamepadButton>[];
     return ConnectedControllerInfo(
       id: map['id']?.toString() ?? '',
       name: map['name']?.toString() ?? 'Controller',
       vendor: map['vendor']?.toString(),
+      detectedButtons: buttons,
     );
   }
 }

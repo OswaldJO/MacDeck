@@ -2,17 +2,17 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
-import '../data/gamepad_elements.dart';
-import '../data/moonlight_key_codes.dart';
 import '../models/host_info.dart';
 import '../services/stream_controller_mapping_store.dart';
 import '../services/stream_controller_settings.dart';
 import '../services/stream_touch_settings.dart';
 import '../services/stream_log_share.dart';
+import '../services/playnite_stream_foreground.dart' show PlayniteStreamNotification;
 import '../services/streaming_bridge.dart';
 import '../services/streaming_host_settings.dart';
+import '../widgets/companion_insets.dart';
+import '../widgets/controller_mapping_section.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -31,9 +31,10 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   String _sessionStatus = 'Pair with your Mac first, then start a Desktop stream.';
   bool _pairingInProgress = false;
   bool _streamActive = false;
+  bool _streamViewerOpen = false;
   StreamControllerSettings? _controllerSettings;
   StreamTouchSettings? _touchSettings;
-  List<StreamControllerBinding> _controllerBindings = const [];
+  List<StreamControllerElementMapping> _controllerBindings = const [];
   List<ConnectedControllerInfo> _connectedControllers = const [];
   String _controllerStatus = 'Connect a telescopic or Bluetooth gamepad to this phone.';
   bool _controllersRefreshing = false;
@@ -46,11 +47,20 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       unawaited(_loadSettings());
       unawaited(_loadControllerSettings());
       unawaited(_loadTouchSettings());
+      if (Platform.isAndroid) {
+        unawaited(PlayniteStreamNotification.ensureNotificationPermission());
+      }
+      unawaited(_refreshStreamSessionState());
+      unawaited(_checkPendingMappingOverlay());
     });
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      unawaited(_refreshStreamSessionState());
+      unawaited(_checkPendingMappingOverlay());
+    }
     if (_pairingInProgress &&
         (state == AppLifecycleState.paused || state == AppLifecycleState.inactive)) {
       setState(() {
@@ -138,101 +148,32 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     setState(() => _controllerSettings = current);
   }
 
-  Future<void> _persistControllerBindings(List<StreamControllerBinding> bindings) async {
+  Future<void> _persistControllerBindings(List<StreamControllerElementMapping> bindings) async {
     final store = await StreamControllerMappingStore.load();
     await store.saveBindings(bindings);
     if (!mounted) return;
     setState(() => _controllerBindings = bindings);
   }
 
-  Future<void> _removeControllerBinding(StreamControllerBinding binding) async {
-    final updated = _controllerBindings
-        .where((entry) => entry.sourceElementId != binding.sourceElementId)
-        .toList();
-    await _persistControllerBindings(updated);
-  }
-
-  Future<void> _showAddControllerBindingDialog() async {
-    var selectedElement = kMappableGamepadElements.first;
-    var selectedKey = kMoonlightKeyboardKeys.first;
-
-    final saved = await showDialog<bool>(
-      context: context,
-      builder: (context) {
-        return StatefulBuilder(
-          builder: (context, setDialogState) {
-            return AlertDialog(
-              title: const Text('Map button to key'),
-              content: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    DropdownButtonFormField<GamepadElement>(
-                      value: selectedElement,
-                      decoration: const InputDecoration(labelText: 'Controller button'),
-                      items: kMappableGamepadElements
-                          .map(
-                            (element) => DropdownMenuItem(
-                              value: element,
-                              child: Text(element.label),
-                            ),
-                          )
-                          .toList(),
-                      onChanged: (value) {
-                        if (value == null) return;
-                        setDialogState(() => selectedElement = value);
-                      },
-                    ),
-                    const SizedBox(height: 12),
-                    DropdownButtonFormField<MoonlightKeyOption>(
-                      value: selectedKey,
-                      decoration: const InputDecoration(labelText: 'Keyboard key on Mac'),
-                      items: kMoonlightKeyboardKeys
-                          .map(
-                            (key) => DropdownMenuItem(
-                              value: key,
-                              child: Text(key.label),
-                            ),
-                          )
-                          .toList(),
-                      onChanged: (value) {
-                        if (value == null) return;
-                        setDialogState(() => selectedKey = value);
-                      },
-                    ),
-                  ],
-                ),
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(context, false),
-                  child: const Text('Cancel'),
-                ),
-                FilledButton(
-                  onPressed: () => Navigator.pop(context, true),
-                  child: const Text('Save'),
-                ),
-              ],
-            );
-          },
-        );
-      },
+  Future<void> _refreshStreamSessionState() async {
+    final session = await _bridge.getStreamSession();
+    if (!mounted) return;
+    final active = session['hostStreamActive'] == true;
+    final viewerOpen = session['viewerOpen'] == true;
+    final host = _hosts.where((h) => h.id == _selectedHostId).firstOrNull;
+    await PlayniteStreamNotification.syncSession(
+      active: active,
+      hostLabel: host?.name ?? (session['host'] as String?),
     );
-
-    if (saved != true || !mounted) return;
-
-    final binding = StreamControllerBinding(
-      sourceElementId: selectedElement.id,
-      sourceLabel: selectedElement.label,
-      moonlightKeyCode: selectedKey.moonlightKeyCode,
-      targetLabel: selectedKey.label,
-    );
-    final updated = [
-      ..._controllerBindings.where((entry) => entry.sourceElementId != binding.sourceElementId),
-      binding,
-    ];
-    await _persistControllerBindings(updated);
+    if (!mounted) return;
+    setState(() {
+      _streamActive = active;
+      _streamViewerOpen = viewerOpen;
+      if (active && !viewerOpen) {
+        _sessionStatus =
+            'Stream running — use Enter current stream, or notification Stop / Controller.';
+      }
+    });
   }
 
   @override
@@ -240,6 +181,45 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     WidgetsBinding.instance.removeObserver(this);
     _tabIndex.dispose();
     super.dispose();
+  }
+
+  Future<void> _checkPendingMappingOverlay() async {
+    if (!Platform.isAndroid || !mounted) return;
+    final pending = await PlayniteStreamNotification.consumePendingOpenMapping();
+    if (!pending || !mounted) return;
+    final shown = await PlayniteStreamNotification.showStreamMappingOverlay();
+    if (shown || !mounted) return;
+    await _showMappingOverlaySheet();
+  }
+
+  Future<void> _showMappingOverlaySheet() async {
+    if (!mounted) return;
+    _tabIndex.value = 2;
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      backgroundColor: Theme.of(context).colorScheme.surface,
+      builder: (sheetContext) {
+        return DraggableScrollableSheet(
+          expand: false,
+          initialChildSize: 0.88,
+          minChildSize: 0.45,
+          maxChildSize: 0.95,
+          builder: (context, scrollController) {
+            return SingleChildScrollView(
+              controller: scrollController,
+              child: ControllerMappingSection(
+                bridge: _bridge,
+                bindings: _controllerBindings,
+                connectedControllers: _connectedControllers,
+                onBindingsChanged: _persistControllerBindings,
+              ),
+            );
+          },
+        );
+      },
+    );
   }
 
   Future<void> _showAddHostIpDialog() async {
@@ -341,23 +321,48 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     }
 
     setState(() => _sessionStatus = 'Starting Desktop stream…');
+    if (Platform.isAndroid) {
+      await PlayniteStreamNotification.ensureNotificationPermission();
+    }
     try {
+      final mappingStore = await StreamControllerMappingStore.load();
       final outcome = await _bridge.startStream(
         hostId: hostId,
         width: 1920,
         height: 1080,
         fps: 60,
+        controllerBindingsJson: mappingStore.bindingsJson(),
       );
       setState(() {
         _streamActive = outcome.ok;
+        _streamViewerOpen = outcome.ok;
         _sessionStatus = outcome.message ?? (outcome.ok ? 'Streaming' : 'Failed');
       });
+      if (outcome.ok) {
+        await _refreshStreamSessionState();
+      } else {
+        await PlayniteStreamNotification.syncSession(active: false);
+      }
     } catch (e) {
       setState(() {
         _streamActive = false;
         _sessionStatus = 'Start stream error: $e';
       });
+      await PlayniteStreamNotification.syncSession(active: false);
     }
+  }
+
+  Future<void> _reenterStream() async {
+    setState(() => _sessionStatus = 'Opening stream view…');
+    final ok = await _bridge.resumeStream();
+    if (!mounted) return;
+    setState(() {
+      _streamViewerOpen = ok;
+      _sessionStatus = ok
+          ? 'Stream running — video view open.'
+          : 'Could not reopen stream. Tap Stop and start again.';
+    });
+    await _refreshStreamSessionState();
   }
 
   Future<void> _stopStream() async {
@@ -367,13 +372,16 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       if (!mounted) return;
       setState(() {
         _streamActive = false;
+        _streamViewerOpen = false;
         _sessionStatus = 'Stream stopped';
       });
       if (logPath != null) {
         await offerStreamLogShare(context, logPath);
       }
+      await PlayniteStreamNotification.syncSession(active: false);
     } catch (e) {
       setState(() => _sessionStatus = 'Stop stream error: $e');
+      await PlayniteStreamNotification.syncSession(active: false);
     }
   }
 
@@ -399,14 +407,16 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       bottomNavigationBar: ValueListenableBuilder<int>(
         valueListenable: _tabIndex,
         builder: (context, index, _) {
-          return NavigationBar(
-            selectedIndex: index,
-            onDestinationSelected: (i) => _tabIndex.value = i,
-            destinations: const [
-              NavigationDestination(icon: Icon(Icons.dns), label: 'Hosts'),
-              NavigationDestination(icon: Icon(Icons.videogame_asset), label: 'Session'),
-              NavigationDestination(icon: Icon(Icons.sports_esports), label: 'Controller'),
-            ],
+          return CompanionInsets.wrapNavigationBar(
+            child: NavigationBar(
+              selectedIndex: index,
+              onDestinationSelected: (i) => _tabIndex.value = i,
+              destinations: const [
+                NavigationDestination(icon: Icon(Icons.dns), label: 'Hosts'),
+                NavigationDestination(icon: Icon(Icons.videogame_asset), label: 'Session'),
+                NavigationDestination(icon: Icon(Icons.sports_esports), label: 'Controller'),
+              ],
+            ),
           );
         },
       ),
@@ -414,7 +424,9 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   }
 
   Widget _buildHostsTab() {
-    return Column(
+    return Padding(
+      padding: CompanionInsets.listPadding(context),
+      child: Column(
       children: [
         ListTile(
           title: Text(_hostStatus),
@@ -462,7 +474,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                         title: Text(host.name),
                         subtitle: Text('${host.address} • ${host.paired ? "Paired" : "Not paired"}'),
                         trailing: host.paired
-                            ? const Icon(Icons.check_circle, color: Colors.green)
+                            ? Icon(Icons.check_circle, color: Theme.of(context).colorScheme.primary)
                             : FilledButton(
                                 onPressed: _pairingInProgress ? null : () => _pairHost(host),
                                 child: const Text('Pair'),
@@ -473,15 +485,17 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                 ),
         ),
       ],
+      ),
     );
   }
 
   Widget _buildSessionTab() {
     final selected = _hosts.where((h) => h.id == _selectedHostId).firstOrNull;
-    final canStream = selected?.paired == true && !_streamActive;
+    final canStart = selected?.paired == true && !_streamActive;
+    final canReenter = _streamActive && !_streamViewerOpen;
 
     return Padding(
-      padding: const EdgeInsets.all(16),
+      padding: CompanionInsets.listPadding(context),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -492,7 +506,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
           const SizedBox(height: 8),
           const Text(
             'Streams your Mac desktop via Playnite H.264 (port ${StreamingHostSettings.defaultVideoPort}). '
-            'Connect a gamepad to this phone first (Controller tab), then start Desktop stream.',
+            'Connect a gamepad first (Controller tab), then start Desktop stream. '
+            'While streaming, use the notification Stop or Controller buttons.',
           ),
           if (_sessionStatus.isNotEmpty) ...[
             const SizedBox(height: 12),
@@ -514,12 +529,20 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
           const SizedBox(height: 16),
           Wrap(
             spacing: 10,
+            runSpacing: 10,
             children: [
-              FilledButton.icon(
-                onPressed: canStream ? _startStream : null,
-                icon: const Icon(Icons.play_arrow),
-                label: const Text('Start Desktop 1080p60'),
-              ),
+              if (canReenter)
+                FilledButton.icon(
+                  onPressed: _reenterStream,
+                  icon: const Icon(Icons.fullscreen),
+                  label: const Text('Enter current stream'),
+                )
+              else
+                FilledButton.icon(
+                  onPressed: canStart ? _startStream : null,
+                  icon: const Icon(Icons.play_arrow),
+                  label: const Text('Start Desktop 1080p60'),
+                ),
               OutlinedButton.icon(
                 onPressed: _streamActive ? _stopStream : null,
                 icon: const Icon(Icons.stop),
@@ -537,7 +560,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     final isAndroid = Platform.isAndroid;
 
     return ListView(
-      padding: const EdgeInsets.all(16),
+      padding: CompanionInsets.listPadding(context),
       children: [
         const Text(
           'Game controller',
@@ -588,41 +611,18 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
           style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
         ),
         const SizedBox(height: 8),
-        Text(
-          isAndroid
-              ? 'Mapped buttons send keyboard keys to your Mac during a stream. '
-                  'Unmapped buttons still work as a gamepad.'
-              : 'Button→keyboard mapping during streams is available on Android. '
-                  'iOS sends unmapped input as a gamepad.',
-          style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
-        ),
-        const SizedBox(height: 8),
         if (isAndroid)
-          FilledButton.icon(
-            onPressed: _showAddControllerBindingDialog,
-            icon: const Icon(Icons.add),
-            label: const Text('Add mapping'),
-          ),
-        if (_controllerBindings.isEmpty)
-          const Padding(
-            padding: EdgeInsets.only(top: 12),
-            child: Text('No custom mappings yet.'),
+          ControllerMappingSection(
+            bridge: _bridge,
+            bindings: _controllerBindings,
+            connectedControllers: _connectedControllers,
+            onBindingsChanged: _persistControllerBindings,
           )
-        else ...[
-          const SizedBox(height: 12),
-          ..._controllerBindings.map(
-            (binding) => Card(
-              child: ListTile(
-                leading: const Icon(Icons.keyboard),
-                title: Text('${binding.sourceLabel} → ${binding.targetLabel}'),
-                trailing: IconButton(
-                  icon: const Icon(Icons.delete_outline),
-                  onPressed: isAndroid ? () => _removeControllerBinding(binding) : null,
-                ),
-              ),
-            ),
+        else
+          Text(
+            'Button→keyboard mapping during streams is available on Android.',
+            style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
           ),
-        ],
         if (isAndroid) ...[
           const SizedBox(height: 24),
           const Text(

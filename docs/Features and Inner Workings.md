@@ -102,7 +102,7 @@ The Mac app embeds its own **Playnite stream host** (ScreenCaptureKit → H.264,
 - **`PlayniteVideoStreamServer`** — one TCP client; sends framed **`PNV1`** H.264 (Annex-B from `PlayniteH264Encoder`).
 - **`PlayniteDisplayCapture`** — SCK display + **system audio** (`capturesAudio`); PCM converted to s16le (packed or planar stereo interleave when ScreenCaptureKit returns multiple buffers).
 - **`PlayniteAudioStreamServer`** — phone sends **`PNAS`** on UDP **28767**; Mac streams **`PNA1`** PCM primarily over **TCP 28769** (4-byte little-endian length + frame); UDP downlink remains as fallback. Serial TCP send queue with subscribe ack (silent frames) on connect.
-- **`PlayniteStreamInputServer`** — receives **`PNI1`** touch packets; **`PlayniteRemoteInputPlayback`** posts `CGEvent` pointer events (relative move, tap, drag).
+- **`PlayniteStreamInputServer`** — receives **`PNI1`** touch packets; **`PlayniteRemoteInputPlayback`** posts `CGEvent` pointer events (relative move, tap, drag). **`PNK1`** keyboard packets from mapped gamepad chords; **`PlayniteKeyboardPlayback`** maps Moonlight short key codes (Windows VK + `0x80` prefix) to macOS virtual keys, including **Option** (`0xA4` / `0xA5`) and **Command** (`0x5B` / `0x5C`).
 - **`PlayniteLocalOutputMute`** — CoreAudio mute on default output device during an active stream; restores prior mute state afterward.
 - **`StreamingView`** — LAN IP, port summary, Screen Recording + **Accessibility** status, **Test cursor on streamed display**, pairing approve/deny; notes that playback is on the phone and Mac speakers are muted while streaming.
 
@@ -149,8 +149,23 @@ Flutter shell (iOS + Android) for discovery, HTTP pairing with the native Mac ho
 - **`PlayniteInputSender`** — relative cursor, tap/drag gestures on the video `SurfaceView` → UDP `PNI1` to Mac (background thread). Tunables in **Settings → Controllers → Touchpad (stream view)**. Primary pointer path during native stream (no Moonlight mouse-emulation toggle).
 - **`PlayniteRemoteInputPlayback`** (Mac) — maps normalized touch to the **captured display** frame; Y uses `minY + ny × height` so finger-up on the phone moves the cursor up on the Mac.
 - **`PlayniteStreamLog`** — writes `playnite_stream.log` under app files dir for export/debug.
+- **Controller mapping (Android)** — **Controller** tab: list of gamepad elements → keyboard **chords** (multi-select from `kMoonlightKeyboardKeys`, including Mac **Option** and **Command**), optional **Link gamepad** per element, four macro slots. Bindings JSON is passed into `PlayniteVideoActivity` and applied by **`PlayniteGamepadMapping`** + **`PlayniteKeyboardSender`** (`PNK1` on UDP **28768**). While a stream is active, the system notification **Controller** action opens a semi-transparent overlay on the video for quick gamepad linking; **Stop** ends the session without reopening the app.
+- **`PlayniteStreamNotificationHelper`** — ongoing notification channel `playnite_stream_session` (DEFAULT importance) for stream controls when the native host is active (including after Back leaves the video view).
 
-**Key types:** `streaming_bridge.dart`, `playnite_host_client.dart`, `PlayniteVideoActivity.kt`, `PlayniteAudioReceiver.kt`, `PlayniteInputSender.kt`, `PlayniteStreamProtocols.kt`.
+**Key types:** `streaming_bridge.dart`, `playnite_host_client.dart`, `moonlight_key_codes.dart`, `controller_mapping_section.dart`, `PlayniteVideoActivity.kt`, `PlayniteAudioReceiver.kt`, `PlayniteInputSender.kt`, `PlayniteKeyboardSender.kt`, `PlayniteGamepadMapping.kt`, `PlayniteStreamNotificationHelper.kt`, `PlayniteStreamProtocols.kt`, `PlayniteKeyboardPlayback.swift`.
+
+### Keyboard chord codes (companion → Mac)
+
+Companion labels use Moonlight’s Windows virtual-key codes (`moonlightKeyCode = (0x80 << 8) | vk`). Mac playback maps the low byte to `CGKeyCode`. Mac-specific modifiers:
+
+| UI label | Windows VK | Mac key |
+|----------|------------|---------|
+| Option | `0xA4` | Left Option |
+| Option (right) | `0xA5` | Right Option |
+| Command | `0x5B` | Left Command |
+| Command (right) | `0x5C` | Right Command |
+
+Legacy bindings that used **Alt** (`0x12`) still map to left Option on the Mac.
 
 ### Phone export log (what to look for)
 

@@ -1,35 +1,48 @@
 PODS:
   - Flutter (1.0.0)
-  - OpenSSL-Universal (3.6.2000)
-  - PlayniteMoonlight (1.0.0):
-    - OpenSSL-Universal
+  - flutter_foreground_task (0.0.1):
+    - Flutter
+  - path_provider_foundation (0.0.1):
+    - Flutter
+    - FlutterMacOS
+  - permission_handler_apple (9.4.8):
+    - Flutter
+  - share_plus (0.0.1):
+    - Flutter
   - shared_preferences_foundation (0.0.1):
     - Flutter
     - FlutterMacOS
 
 DEPENDENCIES:
   - Flutter (from `Flutter`)
-  - PlayniteMoonlight (from `MoonlightStream`)
+  - flutter_foreground_task (from `.symlinks/plugins/flutter_foreground_task/ios`)
+  - path_provider_foundation (from `.symlinks/plugins/path_provider_foundation/darwin`)
+  - permission_handler_apple (from `.symlinks/plugins/permission_handler_apple/ios`)
+  - share_plus (from `.symlinks/plugins/share_plus/ios`)
   - shared_preferences_foundation (from `.symlinks/plugins/shared_preferences_foundation/darwin`)
-
-SPEC REPOS:
-  trunk:
-    - OpenSSL-Universal
 
 EXTERNAL SOURCES:
   Flutter:
     :path: Flutter
-  PlayniteMoonlight:
-    :path: MoonlightStream
+  flutter_foreground_task:
+    :path: ".symlinks/plugins/flutter_foreground_task/ios"
+  path_provider_foundation:
+    :path: ".symlinks/plugins/path_provider_foundation/darwin"
+  permission_handler_apple:
+    :path: ".symlinks/plugins/permission_handler_apple/ios"
+  share_plus:
+    :path: ".symlinks/plugins/share_plus/ios"
   shared_preferences_foundation:
     :path: ".symlinks/plugins/shared_preferences_foundation/darwin"
 
 SPEC CHECKSUMS:
   Flutter: e0871f40cf51350855a761d2e70bf5af5b9b5de7
-  OpenSSL-Universal: ecee7b138fa75a74ecf00d7ffd248fb584739b9e
-  PlayniteMoonlight: 6e3d6c4e015318b17517750d8cfa94315c979611
+  flutter_foreground_task: a159d2c2173b33699ddb3e6c2a067045d7cebb89
+  path_provider_foundation: 080d55be775b7414fd5a5ef3ac137b97b097e564
+  permission_handler_apple: 92d754bbaa7361d436db2d6c3c1c2a0fdcec462e
+  share_plus: 50da8cb520a8f0f65671c6c6a99b3617ed10a58a
   shared_preferences_foundation: 9e1978ff2562383bd5676f64ec4e9aa8fa06a6f7
 
-PODFILE CHECKSUM: b0cf51e5f1f80ad55a6a5c73827013401171ca6d
+PODFILE CHECKSUM: 3b699761a5cb9432aca9a3b37488e7daba5f31a7
 
 COCOAPODS: 1.16.2

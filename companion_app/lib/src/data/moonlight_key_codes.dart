@@ -53,7 +53,10 @@ const List<MoonlightKeyOption> kMoonlightKeyboardKeys = [
   MoonlightKeyOption(label: 'Backspace', windowsVk: 0x08),
   MoonlightKeyOption(label: 'Shift', windowsVk: 0x10),
   MoonlightKeyOption(label: 'Ctrl', windowsVk: 0x11),
-  MoonlightKeyOption(label: 'Alt', windowsVk: 0x12),
+  MoonlightKeyOption(label: 'Option', windowsVk: 0xA4),
+  MoonlightKeyOption(label: 'Option (right)', windowsVk: 0xA5),
+  MoonlightKeyOption(label: 'Command', windowsVk: 0x5B),
+  MoonlightKeyOption(label: 'Command (right)', windowsVk: 0x5C),
   MoonlightKeyOption(label: 'Up arrow', windowsVk: 0x26),
   MoonlightKeyOption(label: 'Down arrow', windowsVk: 0x28),
   MoonlightKeyOption(label: 'Left arrow', windowsVk: 0x25),
@@ -72,9 +75,15 @@ const List<MoonlightKeyOption> kMoonlightKeyboardKeys = [
   MoonlightKeyOption(label: 'F12', windowsVk: 0x7B),
 ];
 
+/// Legacy chord entries saved before Option used `0xA4` instead of `0x12`.
+const int kLegacyOptionAltMoonlightKeyCode = (0x80 << 8) | 0x12;
+
 MoonlightKeyOption? moonlightKeyByCode(int moonlightKeyCode) {
   for (final key in kMoonlightKeyboardKeys) {
     if (key.moonlightKeyCode == moonlightKeyCode) return key;
+  }
+  if (moonlightKeyCode == kLegacyOptionAltMoonlightKeyCode) {
+    return const MoonlightKeyOption(label: 'Option', windowsVk: 0x12);
   }
   return null;
 }

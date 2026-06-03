@@ -73,11 +73,16 @@ import UIKit
     return GCController.controllers().map { controller in
       let name = controller.vendorName?.trimmingCharacters(in: .whitespacesAndNewlines)
       let displayName = (name?.isEmpty == false) ? name! : "Game Controller"
-      return [
+      var entry: [String: Any] = [
         "id": controller.playerIndex.rawValue.description,
         "name": displayName,
-        "vendor": controller.productCategory,
       ]
+      if #available(iOS 13.0, *) {
+        entry["vendor"] = controller.productCategory
+      } else {
+        entry["vendor"] = "gamepad"
+      }
+      return entry
     }
   }
 }

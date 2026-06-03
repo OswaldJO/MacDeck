@@ -9,13 +9,12 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.HandlerThread
 import android.os.SystemClock
-import android.view.Gravity
 import android.view.MotionEvent
 import android.view.Surface
 import android.view.SurfaceHolder
 import android.view.SurfaceView
+import android.view.KeyEvent
 import android.view.WindowManager
-import android.widget.Button
 import android.widget.FrameLayout
 import java.io.ByteArrayOutputStream
 import java.io.DataInputStream
@@ -70,6 +69,9 @@ class PlayniteVideoActivity : Activity(), SurfaceHolder.Callback {
     private var inputPort = 28768
     private var audioReceiver: PlayniteAudioReceiver? = null
     private var inputSender: PlayniteInputSender? = null
+    private var keyboardSender: PlayniteKeyboardSender? = null
+    private var gamepadMapping: PlayniteGamepadMapping? = null
+    private var mappingOverlay: PlayniteControllerMappingOverlay? = null
 
     private val frameQueue = LinkedBlockingQueue<IncomingFrame>(128)
 
@@ -140,6 +142,14 @@ class PlayniteVideoActivity : Activity(), SurfaceHolder.Callback {
             return
         }
 
+        PlayniteStreamSession.applyFromIntent(intent)
+        PlayniteStreamSession.hostStreamActive = true
+        PlayniteStreamSession.viewerOpen = true
+
+        val bindingsJson = intent.getStringExtra(EXTRA_CONTROLLER_BINDINGS_JSON).orEmpty()
+        gamepadMapping = PlayniteGamepadMapping(bindingsJson).takeIf { it.hasBindings() }
+        keyboardSender = PlayniteKeyboardSender(streamHost, inputPort)
+
         current = this
         logSessionEnded = false
         loggedDecoderStall = false
@@ -164,13 +174,6 @@ class PlayniteVideoActivity : Activity(), SurfaceHolder.Callback {
             inputSender?.handleTouch(event) == true
         }
 
-        val stopButton = Button(this).apply {
-            text = "Stop"
-            setTextColor(Color.WHITE)
-            setBackgroundColor(0x88000000.toInt())
-            setOnClickListener { stopStreamFromOverlay() }
-        }
-
         setContentView(
             FrameLayout(this).apply {
                 setBackgroundColor(Color.BLACK)
@@ -180,17 +183,6 @@ class PlayniteVideoActivity : Activity(), SurfaceHolder.Callback {
                         FrameLayout.LayoutParams.MATCH_PARENT,
                         FrameLayout.LayoutParams.MATCH_PARENT,
                     ),
-                )
-                addView(
-                    stopButton,
-                    FrameLayout.LayoutParams(
-                        FrameLayout.LayoutParams.WRAP_CONTENT,
-                        FrameLayout.LayoutParams.WRAP_CONTENT,
-                        Gravity.TOP or Gravity.END,
-                    ).apply {
-                        topMargin = 48
-                        rightMargin = 48
-                    },
                 )
             },
         )
@@ -247,11 +239,6 @@ class PlayniteVideoActivity : Activity(), SurfaceHolder.Callback {
         }.also { it.start() }
     }
 
-    private fun stopStreamFromOverlay() {
-        PlayniteStreamLog.i("Stop tapped on video overlay")
-        finishFromHost()
-    }
-
     private fun startCodecPump() {
         val handler = codecHandler ?: return
         handler.post(object : Runnable {
@@ -297,14 +284,47 @@ class PlayniteVideoActivity : Activity(), SurfaceHolder.Callback {
 
     @Deprecated("Deprecated in Java")
     override fun onBackPressed() {
-        PlayniteStreamLog.i("Back pressed — stopping stream")
-        finishFromHost()
+        PlayniteStreamLog.i("Back pressed — leaving stream view (host stream stays active)")
+        leaveViewerOnly()
+    }
+
+    /** Closes the video UI; Mac host keeps streaming until Stop in the companion app. */
+    private fun leaveViewerOnly() {
+        teardownStream(
+            "viewer closed (received=$framesReceived rendered=$framesRendered dropped=$framesDropped)",
+        )
+        PlayniteStreamSession.viewerOpen = false
+        mappingOverlay?.dismiss()
+        mappingOverlay = null
+        PlayniteStreamNotificationHelper.updateViewerHint(applicationContext, streamHost, false)
+    }
+
+    fun showControllerMappingOverlay() {
+        mappingOverlay?.dismiss()
+        mappingOverlay = PlayniteControllerMappingOverlay(this) { json ->
+            gamepadMapping = PlayniteGamepadMapping(json).takeIf { it.hasBindings() }
+        }
+        mappingOverlay?.show()
     }
 
     fun finishFromHost() {
+        mappingOverlay?.dismiss()
+        mappingOverlay = null
+        PlayniteStreamSession.hostStreamActive = false
+        PlayniteStreamSession.clear()
         teardownStream(
             "stopped from companion (received=$framesReceived rendered=$framesRendered dropped=$framesDropped)",
         )
+        PlayniteStreamNotificationHelper.dismiss(applicationContext)
+    }
+
+    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        val mapping = gamepadMapping
+        val keyboard = keyboardSender
+        if (mapping != null && keyboard != null && mapping.handleKeyEvent(event, keyboard)) {
+            return true
+        }
+        return super.dispatchKeyEvent(event)
     }
 
     private fun abortStreamAfterError() {
@@ -321,6 +341,8 @@ class PlayniteVideoActivity : Activity(), SurfaceHolder.Callback {
         audioReceiver = null
         inputSender?.close()
         inputSender = null
+        keyboardSender?.close()
+        keyboardSender = null
         streamThread?.interrupt()
         runCatching { socket?.close() }
         if (!isFinishing) {
@@ -329,11 +351,16 @@ class PlayniteVideoActivity : Activity(), SurfaceHolder.Callback {
     }
 
     override fun onDestroy() {
+        mappingOverlay?.dismiss()
+        mappingOverlay = null
         running.set(false)
+        PlayniteStreamSession.viewerOpen = false
         audioReceiver?.stop()
         audioReceiver = null
         inputSender?.close()
         inputSender = null
+        keyboardSender?.close()
+        keyboardSender = null
         streamThread?.interrupt()
         runCatching { socket?.close() }
         codecHandler?.post { releaseDecoder() }
@@ -741,6 +768,7 @@ class PlayniteVideoActivity : Activity(), SurfaceHolder.Callback {
         const val EXTRA_TAP_PRESSURE = "tapPressure"
         const val EXTRA_WIDTH = "width"
         const val EXTRA_HEIGHT = "height"
+        const val EXTRA_CONTROLLER_BINDINGS_JSON = "controllerBindingsJson"
 
         private const val MAX_SPS_BYTES = 512
         private const val MAX_PPS_BYTES = 512

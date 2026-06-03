@@ -23,6 +23,10 @@ const List<GamepadElement> kMappableGamepadElements = [
   GamepadElement(id: 'dpadRight', label: 'D-pad right'),
   GamepadElement(id: 'buttonMenu', label: 'Start / Menu'),
   GamepadElement(id: 'buttonOptions', label: 'Select / Options'),
+  GamepadElement(id: 'macro1', label: 'Macro 1'),
+  GamepadElement(id: 'macro2', label: 'Macro 2'),
+  GamepadElement(id: 'macro3', label: 'Macro 3'),
+  GamepadElement(id: 'macro4', label: 'Macro 4'),
 ];
 
 GamepadElement? gamepadElementById(String id) {

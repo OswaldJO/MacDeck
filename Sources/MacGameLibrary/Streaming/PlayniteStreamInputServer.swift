@@ -20,6 +20,10 @@ actor PlayniteStreamInputServer {
         if udp != nil { return }
         let socket = PlayniteUDPSocket()
         socket.onDatagram = { (data: Data, _: sockaddr_storage, _: socklen_t) in
+            if let keyboard = PlayniteKeyboardEventFormat.parse(data) {
+                PlayniteKeyboardPlayback.handle(keyboard)
+                return
+            }
             guard let event = PlayniteInputEventFormat.parse(data) else { return }
             PlayniteStreamInputServer.noteReceived(event)
             PlayniteRemoteInputPlayback.handle(event)

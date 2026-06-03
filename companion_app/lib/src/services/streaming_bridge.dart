@@ -60,6 +60,48 @@ class StreamingBridge {
     return client.requestPair(onProgress: onProgress);
   }
 
+  Future<Map<String, dynamic>> getStreamSession() async {
+    try {
+      final raw = await _channel.invokeMethod<Map<Object?, Object?>>('getStreamSession');
+      if (raw == null) return const {};
+      return Map<String, dynamic>.from(raw);
+    } catch (_) {
+      return const {};
+    }
+  }
+
+  Future<bool> resumeStream() async {
+    try {
+      final resumed = await _channel.invokeMethod<bool>('resumeStream');
+      return resumed == true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<GamepadButtonPress?> awaitGamepadButtonPress({int timeoutMs = 15000}) async {
+    try {
+      final raw = await _channel.invokeMethod<Map<Object?, Object?>>(
+        'awaitGamepadButtonPress',
+        {'timeoutMs': timeoutMs},
+      );
+      if (raw == null) return null;
+      return GamepadButtonPress(
+        keyCode: (raw['keyCode'] as num?)?.toInt() ?? 0,
+        label: raw['label']?.toString() ?? 'Button',
+        elementId: raw['elementId']?.toString(),
+      );
+    } on PlatformException {
+      return null;
+    }
+  }
+
+  Future<void> cancelGamepadButtonPress() async {
+    try {
+      await _channel.invokeMethod<void>('cancelGamepadButtonPress');
+    } catch (_) {}
+  }
+
   Future<StreamStartOutcome> startStream({
     required String hostId,
     required int width,
@@ -67,6 +109,7 @@ class StreamingBridge {
     required int fps,
     StreamControllerSettings? controllerSettings,
     StreamTouchSettings? touchSettings,
+    String? controllerBindingsJson,
   }) async {
     final client = await _client();
     final outcome = await client.startStream(width: width, height: height, fps: fps);
@@ -84,6 +127,7 @@ class StreamingBridge {
         'inputPort': outcome.inputPort ?? StreamingHostSettings.defaultInputPort,
         'width': outcome.width ?? width,
         'height': outcome.height ?? height,
+        'controllerBindingsJson': controllerBindingsJson ?? '',
         ...touch.toMethodChannelMap(),
       });
       if (started == true) {
@@ -110,4 +154,16 @@ class StreamingBridge {
     } catch (_) {}
     return null;
   }
+}
+
+class GamepadButtonPress {
+  const GamepadButtonPress({
+    required this.keyCode,
+    required this.label,
+    this.elementId,
+  });
+
+  final int keyCode;
+  final String label;
+  final String? elementId;
 }

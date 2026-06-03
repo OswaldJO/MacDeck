@@ -17,4 +17,5 @@ enum PlayniteStreamPorts {
     static let audioMagic: UInt32 = 0x3141_4E50 // "PNA1" little-endian
     static let audioSubscribeMagic: UInt32 = 0x5341_4E50 // "PNAS" little-endian
     static let inputMagic: UInt32 = 0x3149_4E50 // "PNI1" little-endian
+    static let keyboardMagic: UInt32 = 0x314B_4E50 // "PNK1" little-endian
 }
