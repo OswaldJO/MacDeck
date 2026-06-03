@@ -144,7 +144,8 @@ Flutter shell (iOS + Android) for discovery, HTTP pairing with the native Mac ho
 
 - **`PlayniteVideoActivity`** — TCP `PNV1` reader thread; codec pump on `HandlerThread`; decode profiles (Annex-B passthrough + `c2.android.avc.decoder` first).
 - **`PlayniteAudioReceiver`** — UDP subscribe `PNAS`, play `PNA1` via `AudioTrack` (background thread, subscribe retry on timeout).
-- **`PlayniteInputSender`** — touch on `SurfaceView` → UDP `PNI1` to Mac (**must** send on a background thread; main-thread `send()` causes `NetworkOnMainThreadException`, logged as `Input send failed: null`).
+- **`PlayniteInputSender`** — finger drag/tap on the video `SurfaceView` → UDP `PNI1` to Mac (background thread). This is the primary pointer path during a native stream; the old **Mouse emulation** settings toggle was removed.
+- **`PlayniteRemoteInputPlayback`** (Mac) — maps normalized touch to the **captured display** frame; Y uses `minY + ny × height` so finger-up on the phone moves the cursor up on the Mac.
 - **`PlayniteStreamLog`** — writes `playnite_stream.log` under app files dir for export/debug.
 
 **Key types:** `streaming_bridge.dart`, `playnite_host_client.dart`, `PlayniteVideoActivity.kt`, `PlayniteAudioReceiver.kt`, `PlayniteInputSender.kt`, `PlayniteStreamProtocols.kt`.
@@ -184,7 +185,7 @@ Flutter shell (iOS + Android) for discovery, HTTP pairing with the native Mac ho
 - **Full-library scrape** is synchronous per game with delays; large libraries take time and network.
 - **Native streaming video (Android)** is verified: Annex-B H.264 over TCP **28766**, typically **~99%** frames rendered vs. received in export logs.
 - **Audio** may stay silent while video works: phone retries `Audio subscribed` every ~3 s until Mac sends `PNA1`; check Mac console for `[PlayniteAudio] phone subscribed` and `sent packet #1`; allow UDP **28767** through the Mac firewall.
-- **Touch** requires Mac **Accessibility** for **Mac Game Library** and UDP **28768** open; phone must log `Input UDP #1` (not `Input send failed`). Pointer maps to the **captured display**, not necessarily `NSScreen.main`.
+- **Touch** requires Mac **Accessibility** for **Mac Game Library** and UDP **28768** open; phone must log `Input UDP #1` (not `Input send failed`). Verified on Android; rebuild Mac app after Y-mapping changes.
 - **Companion iOS** native video receiver is still limited; Android `PlayniteVideoActivity` is the reference client.
 - Use the Mac’s **LAN IP** (e.g. `192.168.1.x`), not `127.0.0.1`, on the phone.
 

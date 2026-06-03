@@ -98,7 +98,6 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     int? deadZonePercent,
     bool? usbDriver,
     bool? bindAllUsb,
-    bool? mouseEmulation,
   }) async {
     final current = _controllerSettings ?? await StreamControllerSettings.load();
     await current.save(
@@ -108,7 +107,6 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       deadZonePercent: deadZonePercent,
       usbDriver: usbDriver,
       bindAllUsb: bindAllUsb,
-      mouseEmulation: mouseEmulation,
     );
     if (!mounted) return;
     setState(() => _controllerSettings = current);
@@ -653,15 +651,6 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
               subtitle: const Text('Claim unrecognized USB gamepads (use if yours is not detected).'),
               value: settings.bindAllUsb,
               onChanged: (value) => _saveControllerSettings(bindAllUsb: value),
-            ),
-            SwitchListTile(
-              title: const Text('Mouse emulation'),
-              subtitle: const Text(
-                'Left stick moves the Mac mouse during a stream. '
-                'Right stick and unmapped buttons still control the gamepad.',
-              ),
-              value: settings.mouseEmulation,
-              onChanged: (value) => _saveControllerSettings(mouseEmulation: value),
             ),
           ],
         ],

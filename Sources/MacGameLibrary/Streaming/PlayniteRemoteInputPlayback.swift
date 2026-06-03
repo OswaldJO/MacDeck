@@ -22,9 +22,10 @@ enum PlayniteRemoteInputPlayback {
         let frame = PlayniteStreamDisplayContext.frameForPointerMapping
         let nx = CGFloat(event.x) / 65535.0
         let ny = CGFloat(event.y) / 65535.0
+        // Phone: y=0 top → yNorm=0. Match finger direction on the Mac display (not flipped).
         let loc = CGPoint(
             x: frame.minX + nx * frame.width,
-            y: frame.maxY - ny * frame.height
+            y: frame.minY + ny * frame.height
         )
 
         switch event.type {

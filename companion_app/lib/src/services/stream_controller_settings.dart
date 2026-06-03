@@ -8,7 +8,6 @@ class StreamControllerSettings {
   static const _deadZoneKey = 'stream.controller.deadZone';
   static const _usbDriverKey = 'stream.controller.usbDriver';
   static const _bindAllUsbKey = 'stream.controller.bindAllUsb';
-  static const _mouseEmulationKey = 'stream.controller.mouseEmulation';
 
   StreamControllerSettings(this._prefs);
 
@@ -32,9 +31,6 @@ class StreamControllerSettings {
   /// Android: claim USB devices Moonlight does not recognize by default.
   bool get bindAllUsb => _prefs.getBool(_bindAllUsbKey) ?? false;
 
-  /// Android: send some stick/trigger input as mouse movement (legacy titles).
-  bool get mouseEmulation => _prefs.getBool(_mouseEmulationKey) ?? true;
-
   Future<void> save({
     bool? multiController,
     bool? swapFaceButtons,
@@ -42,7 +38,6 @@ class StreamControllerSettings {
     int? deadZonePercent,
     bool? usbDriver,
     bool? bindAllUsb,
-    bool? mouseEmulation,
   }) async {
     if (multiController != null) {
       await _prefs.setBool(_multiControllerKey, multiController);
@@ -62,9 +57,6 @@ class StreamControllerSettings {
     if (bindAllUsb != null) {
       await _prefs.setBool(_bindAllUsbKey, bindAllUsb);
     }
-    if (mouseEmulation != null) {
-      await _prefs.setBool(_mouseEmulationKey, mouseEmulation);
-    }
   }
 
   Map<String, dynamic> toMethodChannelMap() {
@@ -75,7 +67,6 @@ class StreamControllerSettings {
       'deadZonePercent': deadZonePercent,
       'usbDriver': usbDriver,
       'bindAllUsb': bindAllUsb,
-      'mouseEmulation': mouseEmulation,
     };
   }
 }
