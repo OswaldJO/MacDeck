@@ -19,14 +19,19 @@ class MainActivity : FlutterActivity() {
                 }
 
                 "startStream" -> {
-                    val args = call.arguments as? Map<String, Any?>
-                    if (args == null) {
+                    val args = call.arguments as? Map<String, Any?> ?: run {
                         result.error("invalid_args", "Missing stream configuration", null)
                         return@setMethodCallHandler
                     }
                     try {
                         val started = StreamLaunchHelper.startStream(this, args)
                         result.success(started)
+                    } catch (e: IllegalStateException) {
+                        result.error(
+                            "identity_sync_failed",
+                            e.message ?: "Could not sync Moonlight client certificate",
+                            null,
+                        )
                     } catch (e: Exception) {
                         result.error("stream_start_failed", e.message, null)
                     }

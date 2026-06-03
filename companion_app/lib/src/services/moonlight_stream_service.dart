@@ -1,7 +1,6 @@
 import 'dart:convert';
 
-import 'package:basic_utils/basic_utils.dart';
-
+import 'certificate_codec.dart';
 import 'pairing_crypto_store.dart';
 import 'pairing_state_store.dart';
 import 'streaming_host_settings.dart';
@@ -40,17 +39,18 @@ class MoonlightStreamService {
     final sunshine = await _sunshineFuture;
     if (!await sunshine.verifyPairedWithHost()) return null;
 
-    final appId = await sunshine.resolveDesktopAppId() ?? defaultDesktopAppId;
-    final serverCertDer = CryptoUtils.getBytesFromPEMString(
-      serverCertPem.replaceAll('\r\n', '\n').replaceAll('\r', '\n'),
-    );
+    final desktopApp = await sunshine.resolveDesktopApp();
+    final appId = desktopApp?.appId ?? defaultDesktopAppId;
+    final appName = desktopApp?.appName ?? 'Desktop';
+    final httpsPort = await sunshine.fetchAdvertisedHttpsPort() ?? _settings.httpsPort;
+    final serverCertDer = CertificateCodec.pemToDer(serverCertPem);
 
     return StreamLaunchConfig(
       hostAddress: _settings.hostAddress,
       httpPort: _settings.httpPort,
-      httpsPort: _settings.httpsPort,
+      httpsPort: httpsPort,
       appId: appId,
-      appName: 'Desktop',
+      appName: appName,
       pcName: stateStore.savedHostname(_settings.hostAddress) ?? _settings.hostAddress,
       uniqueId: moonlightUniqueId,
       width: width,

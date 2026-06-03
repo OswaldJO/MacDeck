@@ -35,8 +35,30 @@ tasks.register("syncMoonlightVendor") {
         } else {
             assetsDest.deleteRecursively()
         }
+
+        patchAndroidCryptoProviderForModernAndroid(
+            moonlightCacheRoot.resolve("java/com/limelight/binding/crypto/AndroidCryptoProvider.java"),
+        )
+
         logger.lifecycle("Synced Moonlight sources to ${moonlightCacheRoot.path}")
     }
+}
+
+/** Android P+ removed RSA KeyFactory from the BC provider; use the platform default. */
+fun patchAndroidCryptoProviderForModernAndroid(cryptoProviderFile: File) {
+    if (!cryptoProviderFile.exists()) return
+    var text = cryptoProviderFile.readText()
+    val certLoad = "CertificateFactory certFactory = CertificateFactory.getInstance(\"X.509\", bcProvider);"
+    val certPatched = "CertificateFactory certFactory = CertificateFactory.getInstance(\"X.509\");"
+    val keyLoad = "KeyFactory keyFactory = KeyFactory.getInstance(\"RSA\", bcProvider);"
+    val keyPatched = "KeyFactory keyFactory = KeyFactory.getInstance(\"RSA\");"
+    if (text.contains(certLoad)) {
+        text = text.replace(certLoad, certPatched)
+    }
+    if (text.contains(keyLoad)) {
+        text = text.replace(keyLoad, keyPatched)
+    }
+    cryptoProviderFile.writeText(text)
 }
 
 tasks.named("preBuild").configure {

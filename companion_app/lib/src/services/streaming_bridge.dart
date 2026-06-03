@@ -62,15 +62,23 @@ class StreamingBridge {
     required int height,
     required int fps,
   }) async {
-    final streamService = await _streamService();
-    final config = await streamService.buildLaunchConfig(
-      width: width,
-      height: height,
-      fps: fps,
-    );
-    if (config == null) {
+    final StreamLaunchConfig config;
+    try {
+      final streamService = await _streamService();
+      final built = await streamService.buildLaunchConfig(
+        width: width,
+        height: height,
+        fps: fps,
+      );
+      if (built == null) {
+        return StreamStartOutcome.failed(
+          'Host not paired. Complete Pairing first, then refresh Hosts.',
+        );
+      }
+      config = built;
+    } catch (e) {
       return StreamStartOutcome.failed(
-        'Host not paired. Complete Pairing first, then refresh Hosts.',
+        e is FormatException ? e.message : e.toString(),
       );
     }
 

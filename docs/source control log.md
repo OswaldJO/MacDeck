@@ -9,8 +9,9 @@ For the **living product and architecture handbook**, see `Features and Inner Wo
 current release: 1  
 
 ## Updates
-- **Streaming (Sunshine host):** **Streaming** tab starts and monitors Sunshine via `SunshineHostManager`; shows LAN IP, binary path, and host reachability. Pairing uses `StreamingPairingSession` + `SunshineControlPlaneClient` — Mac submits a 4-digit PIN to Sunshine `/api/pin` (port **47990**) and polls `api/clients/list` until the companion appears as a new paired client. No Sunshine web UI required.
-- **Companion app (Flutter):** Moonlight-compatible pairing in `SunshinePairingService` — full HTTP handshake (`getservercert` → challenge exchange → `clientpairingsecret`) plus HTTPS **`pairchallenge`** with mTLS client cert. Client cert/key persist in `PairingCryptoStore`; paired host + pinned server cert in `PairingStateStore`. **Hosts** tab shows **Paired** after HTTPS `applist` probe. **Session** tab on **Android** launches vendored Moonlight `Game` activity (`moonlight-stream` module) with native H.264 decode; iOS stream start remains stub until `moonlight-ios` is wired.
+- **Streaming (verified end-to-end on Android):** Companion **Session → Start Desktop 1080p60** completes Moonlight `/launch` (HTTP **200**, RTSP session on **48010**), HEVC/H.264 decode on device, and live Mac desktop video. Requires Sunshine **Screen Recording** on the Homebrew binary (`/opt/homebrew/opt/sunshine/bin/sunshine`); control-plane ping alone is not enough — check `~/.config/sunshine/sunshine.log` for `Found H.264 encoder` vs. `No screen capture permission!`.
+- **Streaming (Sunshine host):** **Streaming** tab starts and monitors Sunshine via `SunshineHostManager`; shows LAN IP, binary path, and host reachability. Pairing uses `StreamingPairingSession` + `SunshineControlPlaneClient` — Mac submits a 4-digit PIN to Sunshine `/api/pin` (port **47990**) and polls `api/clients/list` until the companion appears as a new paired client. No Sunshine web UI required. Run **only one** Sunshine instance (avoid port **48010** “already in use”).
+- **Companion app (Flutter):** Moonlight-compatible pairing in `SunshinePairingService` — full HTTP handshake (`getservercert` → challenge exchange → `clientpairingsecret`) plus HTTPS **`pairchallenge`** with mTLS client cert. Client cert/key persist in `PairingCryptoStore`; paired host + pinned server cert in `PairingStateStore`. **Hosts** tab shows **Paired** after HTTPS `applist` probe. **Session** on **Android**: `MoonlightStreamService` + `StreamingBridge` → `StreamLaunchHelper` launches vendored Moonlight **`Game`** activity (`moonlight-stream`); syncs client cert/key to Moonlight `filesDir` before launch. **Android crypto:** vendored Moonlight patched to use platform RSA (no Bouncy Castle `KeyFactory` on API 28+). iOS stream start remains stub until `moonlight-ios` is wired.
 - **Streaming docs:** `streaming-quickstart.md`, `streaming-setup.md`, `companion-flutter.md`; vendor forks under `Vendor/streaming-repos/`; `Scripts/clone-streaming-forks.sh` and `stage-sunshine-for-mac-app.sh`.
 - **Metadata:** Replaced IGDB with **ScreenScraper** (`ScreenScraperClient`, `jeuRecherche.php`). Credentials in `MetadataCredentials` (dev + optional user). Settings: `ScreenScraperSettingsSheet`; Library toolbar **Metadata Settings**.
 - **Covers:** Local folder discovery still runs first; remote art is **appended** to each game’s `coverImageOptions` so the Info panel cover list shows scraped images. Primary cover respects **Paths → per-emulator** toggle: default favors local; optional “prioritize ScreenScraper over local.”
@@ -21,13 +22,14 @@ current release: 1
 - **Persistence:** `EmulatorProfile.preferScreenScraperCovers` added with **default `false`** so existing stores migrate without crashing.
 
 ## Focus for next release
-- **iOS Moonlight streaming** on companion **Session** tab; harden Android stream stop/lifecycle.
+- **iOS Moonlight streaming** on companion **Session** tab; harden Android stream stop/lifecycle and Mac host readiness (log-based capture/encoder check, not only port **47990** ping).
+- Document macOS Sunshine permission flow in setup docs (Screen Recording on `sunshine` binary; restart host after granting).
 - Harden ScreenScraper matching (system IDs, checksum-based `jeuInfos` where useful).
 - Optional progress UI for full-library scrape; rate-limit awareness vs. ScreenScraper quotas.
 
 ## Minimum for next release
 - Smoke test: Sunshine host running, companion **Pairing** end-to-end (phone Start pairing → Mac Submit PIN → both show Paired).
-- Smoke test: **Hosts** → **Paired**; **Session** → **Start Desktop 1080p60** on Android (desktop stream visible).
+- Smoke test: **Hosts** → **Paired**; **Session** → **Start Desktop 1080p60** on Android (desktop stream visible) — **passed** on LAN with Sunshine 2026.516 + Homebrew host.
 - Smoke test: fresh install, migrate from prior store, Paths toggle + scrape + grid/Info covers.
 
 ## Future plans

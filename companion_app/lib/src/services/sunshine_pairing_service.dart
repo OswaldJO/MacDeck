@@ -12,6 +12,7 @@ import 'package:pointycastle/export.dart';
 import 'package:xml/xml.dart';
 
 import '../models/host_info.dart';
+import 'certificate_codec.dart';
 import 'pairing_crypto_store.dart';
 import 'pairing_state_store.dart';
 import 'streaming_host_settings.dart';
@@ -76,7 +77,7 @@ class SunshinePairingService {
       final cryptoStore = await _cryptoStoreFuture;
       if (!cryptoStore.hasMaterial) return false;
       final material = await cryptoStore.loadOrCreate();
-      final pinnedServerDer = CryptoUtils.getBytesFromPEMString(_normalizePem(serverCertPem));
+      final pinnedServerDer = CertificateCodec.pemToDer(serverCertPem);
       final tlsContext = _createPairingSecurityContext(
         clientCertPem: material.clientCertPem,
         clientKeyPem: material.privateKeyPem,
@@ -364,18 +365,18 @@ class SunshinePairingService {
     if (bytes.isNotEmpty && bytes[0] == 0x2D) {
       return _normalizePem(utf8.decode(bytes));
     }
-    return _derToPem(bytes);
+    return CertificateCodec.derToPem(bytes);
   }
 
-  /// Fetch HTTPS applist and resolve the Desktop stream app id.
-  Future<int?> resolveDesktopAppId() async {
+  /// Fetch HTTPS applist and resolve the Desktop stream app id + title.
+  Future<StreamAppRef?> resolveDesktopApp() async {
     final stateStore = await _stateStoreFuture;
     final serverCertPem = stateStore.serverCertPem(_settings.hostAddress);
     if (serverCertPem == null || serverCertPem.isEmpty) return null;
 
     final cryptoStore = await _cryptoStoreFuture;
     final material = await cryptoStore.loadOrCreate();
-    final pinnedServerDer = CryptoUtils.getBytesFromPEMString(_normalizePem(serverCertPem));
+    final pinnedServerDer = CertificateCodec.pemToDer(serverCertPem);
     final tlsContext = _createPairingSecurityContext(
       clientCertPem: material.clientCertPem,
       clientKeyPem: material.privateKeyPem,
@@ -386,19 +387,45 @@ class SunshinePairingService {
       pinnedServerCertDer: pinnedServerDer,
     );
     final doc = XmlDocument.parse(body);
+    StreamAppRef? fallback;
+
     for (final app in doc.findAllElements('App')) {
-      final name = app.getAttribute('AppTitle') ??
-          app.getAttribute('Title') ??
-          app.findAllElements('AppTitle').map((e) => e.innerText).firstOrNull;
-      if (name != null && name.toLowerCase().contains('desktop')) {
-        final id = app.getAttribute('appid') ??
-            app.getAttribute('id') ??
-            app.findAllElements('ID').map((e) => e.innerText).firstOrNull;
-        if (id != null) return int.tryParse(id);
+      final name = app.findAllElements('AppTitle').map((e) => e.innerText.trim()).firstOrNull ??
+          app.getAttribute('AppTitle')?.trim();
+      final idText = app.findAllElements('ID').map((e) => e.innerText.trim()).firstOrNull ??
+          app.getAttribute('appid') ??
+          app.getAttribute('id');
+      final id = idText != null ? int.tryParse(idText) : null;
+      if (name == null || id == null) continue;
+
+      final ref = StreamAppRef(appId: id, appName: name);
+      fallback ??= ref;
+      if (name.toLowerCase() == 'desktop' || name.toLowerCase().contains('desktop')) {
+        return ref;
       }
     }
-    // GameStream / Sunshine default desktop id.
-    return 881448767;
+    return fallback;
+  }
+
+  /// Fetch HTTPS applist and resolve the Desktop stream app id.
+  Future<int?> resolveDesktopAppId() async {
+    final app = await resolveDesktopApp();
+    return app?.appId;
+  }
+
+  /// Reads Moonlight [serverinfo] for the host HTTPS port Sunshine advertises.
+  Future<int?> fetchAdvertisedHttpsPort() async {
+    if (!_settings.isConfigured) return null;
+    try {
+      final url = _httpUri('serverinfo');
+      final response = await http.get(url).timeout(const Duration(seconds: 4));
+      if (response.statusCode != 200) return null;
+      final doc = XmlDocument.parse(response.body);
+      final portText = doc.findAllElements('HttpsPort').map((e) => e.innerText.trim()).firstOrNull;
+      return portText != null ? int.tryParse(portText) : null;
+    } catch (_) {
+      return null;
+    }
   }
 
   Future<String> _pairGet(
@@ -466,7 +493,7 @@ class SunshinePairingService {
   }
 
   static String _normalizePem(String pem) {
-    return pem.replaceAll('\r\n', '\n').replaceAll('\r', '\n');
+    return CertificateCodec.normalizePem(pem);
   }
 
   static Uint8List _randomBytes(int n) {
@@ -576,7 +603,7 @@ class SunshinePairingService {
     if (bytes[0] == 0x2D) {
       return X509Utils.x509CertificateFromPem(_normalizePem(utf8.decode(bytes)));
     }
-    return X509Utils.x509CertificateFromPem(_derToPem(bytes));
+    return X509Utils.x509CertificateFromPem(CertificateCodec.derToPem(bytes));
   }
 
   static RSAPublicKey _rsaPublicKeyFromCert(X509CertificateData cert) {
@@ -608,15 +635,6 @@ class SunshinePairingService {
     return context;
   }
 
-  static String _derToPem(Uint8List der) {
-    final b64 = base64.encode(der);
-    final chunks = <String>[];
-    for (var i = 0; i < b64.length; i += 64) {
-      chunks.add(b64.substring(i, i + 64 > b64.length ? b64.length : i + 64));
-    }
-    return '-----BEGIN CERTIFICATE-----\n${chunks.join('\n')}\n-----END CERTIFICATE-----';
-  }
-
   static String _xmlValue(String xml, String tag) {
     final doc = XmlDocument.parse(xml);
     return doc.findAllElements(tag).map((e) => e.innerText).first;
@@ -637,6 +655,13 @@ class SunshinePairingService {
       },
     );
   }
+}
+
+class StreamAppRef {
+  const StreamAppRef({required this.appId, required this.appName});
+
+  final int appId;
+  final String appName;
 }
 
 class PairingOutcome {
