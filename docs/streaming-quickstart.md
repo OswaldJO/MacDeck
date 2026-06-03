@@ -29,6 +29,8 @@ flutter run   # iOS or Android on same Wi‑Fi
 2. **Hosts** → **Discover**.
 3. **Pairing** → **Start pairing** (note the 4-digit PIN).
 4. On Mac **Streaming** → **Start pairing** → same PIN → **Submit PIN to Sunshine**.
+5. **Hosts** → **Discover** — should show **Paired**.
+6. **Session** → **Start Desktop 1080p60** (Android: full-screen Moonlight stream).
 
 ## Ports
 
@@ -43,4 +45,6 @@ flutter run   # iOS or Android on same Wi‑Fi
 - **Host unavailable**: Run `stage-sunshine-for-mac-app.sh` or `brew install sunshine`, then **Restart streaming host**.
 - **Mac not reachable from phone**: Firewall, wrong IP, different Wi‑Fi.
 - **PIN submit fails**: Start pairing on the **phone first**, then submit on Mac within ~10 minutes.
-- **Video**: Session tab is still a stub; pairing is the supported test today.
+- **Hosts not Paired after upgrade**: Pair once more so the app saves the pinned server cert (`PairingStateStore`).
+- **Android build / NDK**: If the repo lives in a path with spaces (`Playnite Mac`), native Moonlight builds use `~/.cache/playnite-moonlight-ndk`. Run `Scripts/clone-streaming-forks.sh` first.
+- **Stream fails on Android**: Confirm **Paired** on Hosts; re-pair if you cleared app data (client cert must match Sunshine).

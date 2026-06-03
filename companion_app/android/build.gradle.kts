@@ -2,6 +2,7 @@ allprojects {
     repositories {
         google()
         mavenCentral()
+        maven(url = "https://jitpack.io")
     }
 }
 
@@ -9,8 +10,15 @@ val newBuildDir: Directory = rootProject.layout.buildDirectory.dir("../../build"
 rootProject.layout.buildDirectory.value(newBuildDir)
 
 subprojects {
-    val newSubprojectBuildDir: Directory = newBuildDir.dir(project.name)
-    project.layout.buildDirectory.value(newSubprojectBuildDir)
+    if (project.name == "moonlight-stream") {
+        project.layout.buildDirectory.set(
+            project.file(
+                "${System.getProperty("user.home")}/.cache/playnite-companion-native/moonlight-stream",
+            ),
+        )
+    } else {
+        project.layout.buildDirectory.value(newBuildDir.dir(project.name))
+    }
 }
 subprojects {
     project.evaluationDependsOn(":app")

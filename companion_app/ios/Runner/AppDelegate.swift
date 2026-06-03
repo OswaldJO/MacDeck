@@ -26,8 +26,15 @@ import UIKit
           } else {
             result(false)
           }
-        case "startStream":
-          result(true)
+            if let args = call.arguments as? [String: Any] {
+              result(FlutterError(
+                code: "ios_stream_unavailable",
+                message: "Native Moonlight streaming on iOS requires moonlight-ios integration. Use Android for Desktop stream today.",
+                details: nil
+              ))
+            } else {
+              result(FlutterError(code: "invalid_args", message: "Missing stream configuration", details: nil))
+            }
         case "stopStream":
           result(nil)
         default:

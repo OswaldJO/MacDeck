@@ -82,7 +82,8 @@ final class StreamingPairingSession {
                     break
                 }
                 await pollForNewClient()
-                try? await Task.sleep(for: .seconds(2))
+                let intervalNs: UInt64 = pinSubmitState == .accepted ? 1_000_000_000 : 2_000_000_000
+                try? await Task.sleep(nanoseconds: intervalNs)
             }
         }
     }
@@ -108,7 +109,7 @@ final class StreamingPairingSession {
                 try await controlPlane.submitPairingPIN(trimmed, deviceName: deviceName)
                 pinSubmitState = .accepted
                 statusMessage = "PIN accepted. Waiting for the phone to finish pairing…"
-                await pollForNewClient()
+                await pollForNewClient(fast: true)
             } catch {
                 pinSubmitState = .failed(error.localizedDescription)
                 statusMessage = "PIN submit failed."
@@ -135,16 +136,21 @@ final class StreamingPairingSession {
     }
 
     @MainActor
-    private func pollForNewClient() async {
+    private func pollForNewClient(fast: Bool = false) async {
         guard StreamingHostSettings.hasCredentials else { return }
         do {
             let names = try await controlPlane.fetchPairedClientNames()
-            if let newName = names.first(where: { !baselineClientNames.contains($0) }) {
+            if let newName = names.first(where: { name in
+                !baselineClientNames.contains(where: { $0.caseInsensitiveCompare(name) == .orderedSame })
+            }) {
                 phase = .paired(deviceName: newName)
                 pinSubmitState = .idle
                 statusMessage = "Paired with \(newName)."
                 pollTask?.cancel()
                 pollTask = nil
+            } else if fast {
+                // First poll right after PIN accept — keep status visible.
+                statusMessage = "PIN accepted. Waiting for the phone to finish pairing…"
             }
         } catch {
             // Keep polling; host may still be pairing.

@@ -14,39 +14,43 @@ Native **Moonlight** forks (`moonlight-ios`, `moonlight-android`) supply decode/
 
 ## What is included
 
-- Cross-platform Flutter UI with 3 tabs:
-  - **Hosts** — discovery (stub returns sample data)
-  - **Pairing** — PIN entry (same PIN the Mac **Streaming** tab shows)
-  - **Session** — start/stop stream actions
-- Method channel bridge in Dart:
-  - Channel: `com.playnite.companion/streaming_bridge`
-  - Methods: `discoverHosts`, `pairWithPin`, `startStream`, `stopStream`
-- Native method channel stubs (**both platforms**):
-  - Android: `companion_app/android/app/src/main/kotlin/com/example/companion_app/MainActivity.kt`
-  - iOS: `companion_app/ios/Runner/AppDelegate.swift`
-
-Stubs return placeholder responses so the UI flow works on **either** OS before Moonlight integration.
+- Cross-platform Flutter UI with 4 tabs:
+  - **Hosts** — discovers your Mac via Moonlight `serverinfo`; shows **Paired** when saved pairing + HTTPS `applist` probe succeed
+  - **Pairing** — full Sunshine/Moonlight PIN handshake in Dart (`SunshinePairingService`)
+  - **Session** — **Start Desktop 1080p60** launches Moonlight `Game` activity on Android (native decode)
+  - **Settings** — Mac LAN IP + Save & discover
+- Dart services:
+  - `streaming_bridge.dart` — MethodChannel for `startStream` / `stopStream` only (pairing stays in Dart)
+  - `sunshine_pairing_service.dart` — HTTP/HTTPS pairing + host discovery
+  - `pairing_state_store.dart` — per-host paired flag + pinned server cert
+  - `moonlight_stream_service.dart` — builds launch config for native stream
+- Native:
+  - **Android**: `moonlight-stream` Gradle module (vendored Moonlight sources + JNI). Syncs to `~/.cache/playnite-moonlight-ndk` because NDK cannot build in paths with spaces (e.g. `Playnite Mac`).
+  - **iOS**: `startStream` returns a stub error until `moonlight-ios` is integrated.
 
 ## Run
 
 ```bash
 cd companion_app
 flutter pub get
-flutter run          # pick a connected iOS or Android device/simulator
-flutter run -d ios
+# Android: clone Moonlight fork first (from repo root)
+../Scripts/clone-streaming-forks.sh
 flutter run -d android
 ```
 
+Pair once on **Pairing** tab, confirm **Hosts** shows **Paired**, then **Session** → **Start Desktop 1080p60**.
+
+## Android build notes
+
+- Requires `Vendor/streaming-repos/moonlight-android` (run `Scripts/clone-streaming-forks.sh`).
+- Native build output is redirected to `~/.cache/playnite-companion-native/` when the repo path contains spaces.
+- Before launch, `StreamLaunchHelper` copies the Dart pairing client cert/key into Moonlight’s `filesDir` (`client.crt`, `client.key`, `uniqueid`).
+
 ## Next integration tasks
 
-1. Replace native stub responses with real host discovery + pairing on **iOS and Android** (same Dart API; different native implementations).
-2. Hook `pairWithPin` to Apollo/Sunshine-compatible PIN endpoints (`https://<mac-ip>:47990` or your fork’s routes). PIN is **platform-agnostic**.
-3. Wire `startStream` / `stopStream` to Moonlight-derived native code:
-   - iOS → logic from `Vendor/streaming-repos/moonlight-ios`
-   - Android → logic from `Vendor/streaming-repos/moonlight-android`
-4. Keep Flutter as UX/business logic; keep low-latency media/input in native code on each OS.
-5. iOS: add `NSLocalNetworkUsageDescription` (and Bonjour services if you use mDNS) when implementing discovery.
-6. Android: document user steps if installing the APK outside Play Store; use network security config for pinned host TLS if needed.
+1. **iOS streaming** — wire `startStream` to `moonlight-ios` (same Dart `StreamLaunchConfig` map).
+2. **Stop stream** — track `Game` activity lifecycle for reliable `stopStream`.
+3. **Discovery** — optional mDNS beyond configured LAN IP.
 
 ## Related docs
 

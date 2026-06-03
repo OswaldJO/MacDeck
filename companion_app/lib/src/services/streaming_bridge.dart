@@ -1,6 +1,7 @@
 import 'package:flutter/services.dart';
 
 import '../models/host_info.dart';
+import 'moonlight_stream_service.dart';
 import 'streaming_host_settings.dart';
 import 'sunshine_pairing_service.dart';
 
@@ -11,16 +12,26 @@ class StreamingBridge {
   StreamingBridge({
     MethodChannel? channel,
     SunshinePairingService? sunshine,
+    MoonlightStreamService? streamService,
     StreamingHostSettings? settings,
   })  : _channel = channel ?? const MethodChannel(channelName),
         _settingsFuture = settings != null
             ? Future.value(settings)
             : StreamingHostSettings.load(),
-        _sunshineOverride = sunshine;
+        _sunshineOverride = sunshine,
+        _streamServiceOverride = streamService;
 
   final MethodChannel _channel;
   final Future<StreamingHostSettings> _settingsFuture;
   final SunshinePairingService? _sunshineOverride;
+  final MoonlightStreamService? _streamServiceOverride;
+
+  Future<MoonlightStreamService> _streamService() async {
+    final override = _streamServiceOverride;
+    if (override != null) return override;
+    final settings = await _settingsFuture;
+    return MoonlightStreamService(settings);
+  }
 
   Future<SunshinePairingService> _sunshine() async {
     final override = _sunshineOverride;
@@ -45,19 +56,38 @@ class StreamingBridge {
     return sunshine.pair(pin: pin, onProgress: onProgress);
   }
 
-  Future<bool> startStream({
+  Future<StreamStartOutcome> startStream({
     required String hostId,
     required int width,
     required int height,
     required int fps,
   }) async {
-    final started = await _channel.invokeMethod<bool>('startStream', {
-      'hostId': hostId,
-      'width': width,
-      'height': height,
-      'fps': fps,
-    });
-    return started ?? false;
+    final streamService = await _streamService();
+    final config = await streamService.buildLaunchConfig(
+      width: width,
+      height: height,
+      fps: fps,
+    );
+    if (config == null) {
+      return StreamStartOutcome.failed(
+        'Host not paired. Complete Pairing first, then refresh Hosts.',
+      );
+    }
+
+    try {
+      final started = await _channel.invokeMethod<bool>(
+        'startStream',
+        config.toMethodChannelMap(),
+      );
+      if (started != true) {
+        return StreamStartOutcome.failed('Native stream failed to start.');
+      }
+      return StreamStartOutcome.success('Streaming Desktop…');
+    } on PlatformException catch (e) {
+      return StreamStartOutcome.failed(e.message ?? e.code);
+    } catch (e) {
+      return StreamStartOutcome.failed(e.toString());
+    }
   }
 
   Future<void> stopStream() async {

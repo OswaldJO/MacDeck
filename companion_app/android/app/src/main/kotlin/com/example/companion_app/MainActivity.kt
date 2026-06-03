@@ -18,8 +18,25 @@ class MainActivity : FlutterActivity() {
                     result.success(pin.length >= 4)
                 }
 
-                "startStream" -> result.success(true)
-                "stopStream" -> result.success(null)
+                "startStream" -> {
+                    val args = call.arguments as? Map<String, Any?>
+                    if (args == null) {
+                        result.error("invalid_args", "Missing stream configuration", null)
+                        return@setMethodCallHandler
+                    }
+                    try {
+                        val started = StreamLaunchHelper.startStream(this, args)
+                        result.success(started)
+                    } catch (e: Exception) {
+                        result.error("stream_start_failed", e.message, null)
+                    }
+                }
+
+                "stopStream" -> {
+                    StreamLaunchHelper.stopStream()
+                    result.success(null)
+                }
+
                 else -> result.notImplemented()
             }
         }

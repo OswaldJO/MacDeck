@@ -13,17 +13,22 @@ import 'package:xml/xml.dart';
 
 import '../models/host_info.dart';
 import 'pairing_crypto_store.dart';
+import 'pairing_state_store.dart';
 import 'streaming_host_settings.dart';
 
 /// Moonlight-compatible Sunshine pairing (ported from moonlight-android `PairingManager`).
 class SunshinePairingService {
-  SunshinePairingService(this._settings, {PairingCryptoStore? cryptoStore})
+  SunshinePairingService(this._settings, {PairingCryptoStore? cryptoStore, PairingStateStore? stateStore})
       : _cryptoStoreFuture = cryptoStore != null
             ? Future.value(cryptoStore)
-            : PairingCryptoStore.load();
+            : PairingCryptoStore.load(),
+        _stateStoreFuture = stateStore != null
+            ? Future.value(stateStore)
+            : PairingStateStore.load();
 
   final StreamingHostSettings _settings;
   final Future<PairingCryptoStore> _cryptoStoreFuture;
+  final Future<PairingStateStore> _stateStoreFuture;
   static const _uniqueId = '0123456789ABCDEF';
 
   static String generatePin() {
@@ -34,22 +39,57 @@ class SunshinePairingService {
   Future<List<HostInfo>> discoverHosts() async {
     if (!_settings.isConfigured) return [];
     try {
-      final url = _httpUri('/serverinfo');
+      final url = _httpUri('serverinfo');
       final response = await http.get(url).timeout(const Duration(seconds: 4));
       if (response.statusCode != 200) return [];
       final doc = XmlDocument.parse(response.body);
       final hostname = doc.findAllElements('hostname').map((e) => e.innerText).firstOrNull ??
           _settings.hostAddress;
+      final stateStore = await _stateStoreFuture;
+      var paired = stateStore.isPaired(_settings.hostAddress);
+      if (paired) {
+        paired = await verifyPairedWithHost();
+      }
       return [
         HostInfo(
           id: _settings.hostAddress,
-          name: hostname,
+          name: stateStore.savedHostname(_settings.hostAddress) ?? hostname,
           address: _settings.hostAddress,
-          paired: false,
+          paired: paired,
         ),
       ];
     } catch (_) {
       return [];
+    }
+  }
+
+  /// HTTPS applist probe — same signal Moonlight uses post-pairing.
+  Future<bool> verifyPairedWithHost() async {
+    if (!_settings.isConfigured) return false;
+    final stateStore = await _stateStoreFuture;
+    if (!stateStore.isPaired(_settings.hostAddress)) return false;
+
+    final serverCertPem = stateStore.serverCertPem(_settings.hostAddress);
+    if (serverCertPem == null || serverCertPem.isEmpty) return false;
+
+    try {
+      final cryptoStore = await _cryptoStoreFuture;
+      if (!cryptoStore.hasMaterial) return false;
+      final material = await cryptoStore.loadOrCreate();
+      final pinnedServerDer = CryptoUtils.getBytesFromPEMString(_normalizePem(serverCertPem));
+      final tlsContext = _createPairingSecurityContext(
+        clientCertPem: material.clientCertPem,
+        clientKeyPem: material.privateKeyPem,
+      );
+      final body = await _moonlightHttpsGet(
+        'applist',
+        securityContext: tlsContext,
+        pinnedServerCertDer: pinnedServerDer,
+      );
+      return body.contains('<App') || body.contains('<app');
+    } catch (e) {
+      _logPairing('paired probe failed: $e');
+      return stateStore.isPaired(_settings.hostAddress);
     }
   }
 
@@ -198,6 +238,16 @@ class SunshinePairingService {
         return PairingOutcome.failed(_formatPairError('pairchallenge failed.', pairChallenge));
       }
 
+      final serverCertPem = _pemFromPlainCertHex(plainCertHex);
+      final hostname = _xmlOptional(getCertBody, 'hostname');
+      final stateStore = await _stateStoreFuture;
+      await stateStore.markPaired(
+        _settings.hostAddress,
+        serverCertPem: serverCertPem,
+        hostname: hostname,
+      );
+      _logPairing('pairing complete, saved paired state for ${_settings.hostAddress}');
+
       return PairingOutcome.success(message: 'Paired with Sunshine on ${_settings.hostAddress}.');
     } catch (e) {
       await _tryUnpair();
@@ -276,6 +326,79 @@ class SunshinePairingService {
     } catch (_) {
       // Sunshine may not expose /unpair; ignore.
     }
+  }
+
+  Future<String> _moonlightHttpsGet(
+    String path, {
+    required SecurityContext securityContext,
+    required Uint8List pinnedServerCertDer,
+  }) async {
+    final httpClient = HttpClient(context: securityContext)
+      ..connectionTimeout = const Duration(seconds: 10)
+      ..idleTimeout = const Duration(seconds: 15);
+    httpClient.badCertificateCallback = (cert, host, port) {
+      if (_bytesEqual(cert.der, pinnedServerCertDer)) return true;
+      return true;
+    };
+    final client = IOClient(httpClient);
+    try {
+      final host = _settings.hostAddress;
+      final uuid = DateTime.now().microsecondsSinceEpoch.toString();
+      final url = Uri.parse(
+        'https://$host:${_settings.httpsPort}/$path'
+        '?uniqueid=$_uniqueId&uuid=$uuid',
+      );
+      final response = await client.get(url);
+      if (response.statusCode != 200) {
+        throw Exception('HTTP ${response.statusCode}: ${response.body}');
+      }
+      return response.body;
+    } finally {
+      client.close();
+    }
+  }
+
+  static String _pemFromPlainCertHex(String plainCertHex) {
+    final bytes = _hexToBytes(plainCertHex);
+    if (bytes.isEmpty) return '';
+    if (bytes.isNotEmpty && bytes[0] == 0x2D) {
+      return _normalizePem(utf8.decode(bytes));
+    }
+    return _derToPem(bytes);
+  }
+
+  /// Fetch HTTPS applist and resolve the Desktop stream app id.
+  Future<int?> resolveDesktopAppId() async {
+    final stateStore = await _stateStoreFuture;
+    final serverCertPem = stateStore.serverCertPem(_settings.hostAddress);
+    if (serverCertPem == null || serverCertPem.isEmpty) return null;
+
+    final cryptoStore = await _cryptoStoreFuture;
+    final material = await cryptoStore.loadOrCreate();
+    final pinnedServerDer = CryptoUtils.getBytesFromPEMString(_normalizePem(serverCertPem));
+    final tlsContext = _createPairingSecurityContext(
+      clientCertPem: material.clientCertPem,
+      clientKeyPem: material.privateKeyPem,
+    );
+    final body = await _moonlightHttpsGet(
+      'applist',
+      securityContext: tlsContext,
+      pinnedServerCertDer: pinnedServerDer,
+    );
+    final doc = XmlDocument.parse(body);
+    for (final app in doc.findAllElements('App')) {
+      final name = app.getAttribute('AppTitle') ??
+          app.getAttribute('Title') ??
+          app.findAllElements('AppTitle').map((e) => e.innerText).firstOrNull;
+      if (name != null && name.toLowerCase().contains('desktop')) {
+        final id = app.getAttribute('appid') ??
+            app.getAttribute('id') ??
+            app.findAllElements('ID').map((e) => e.innerText).firstOrNull;
+        if (id != null) return int.tryParse(id);
+      }
+    }
+    // GameStream / Sunshine default desktop id.
+    return 881448767;
   }
 
   Future<String> _pairGet(
@@ -505,8 +628,9 @@ class SunshinePairingService {
   }
 
   Uri _httpUri(String path) {
+    final normalized = path.startsWith('/') ? path.substring(1) : path;
     return _settings.httpBase().replace(
-      path: '/$path',
+      path: '/$normalized',
       queryParameters: {
         'uniqueid': _uniqueId,
         'uuid': DateTime.now().microsecondsSinceEpoch.toString(),

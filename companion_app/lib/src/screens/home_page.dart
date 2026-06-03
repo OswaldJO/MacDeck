@@ -22,7 +22,9 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   String? _selectedHostId;
   String _hostStatus = 'Configure your Mac host IP in Settings.';
   String _pairingStatus = 'Tap Start pairing below, then submit the PIN on the Mac.';
+  String _sessionStatus = 'Pair with your Mac first, then start a Desktop stream.';
   bool _pairingInProgress = false;
+  bool _streamActive = false;
 
   @override
   void initState() {
@@ -189,30 +191,45 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   Future<void> _startStream() async {
     final hostId = _selectedHostId;
     if (hostId == null) {
-      setState(() => _hostStatus = 'Select a host first');
+      setState(() => _sessionStatus = 'Select a host on the Hosts tab first.');
       return;
     }
-    setState(() => _hostStatus = 'Starting stream…');
+    final host = _hosts.where((h) => h.id == hostId).firstOrNull;
+    if (host != null && !host.paired) {
+      setState(() => _sessionStatus = 'Host is not paired. Complete Pairing first.');
+      return;
+    }
+
+    setState(() => _sessionStatus = 'Starting Desktop stream…');
     try {
-      final ok = await _bridge.startStream(
+      final outcome = await _bridge.startStream(
         hostId: hostId,
         width: 1920,
         height: 1080,
         fps: 60,
       );
-      setState(() => _hostStatus = ok ? 'Stream started (stub)' : 'Failed to start stream');
+      setState(() {
+        _streamActive = outcome.ok;
+        _sessionStatus = outcome.message ?? (outcome.ok ? 'Streaming' : 'Failed');
+      });
     } catch (e) {
-      setState(() => _hostStatus = 'Start stream error: $e');
+      setState(() {
+        _streamActive = false;
+        _sessionStatus = 'Start stream error: $e';
+      });
     }
   }
 
   Future<void> _stopStream() async {
-    setState(() => _hostStatus = 'Stopping stream…');
+    setState(() => _sessionStatus = 'Stopping stream…');
     try {
       await _bridge.stopStream();
-      setState(() => _hostStatus = 'Stream stopped');
+      setState(() {
+        _streamActive = false;
+        _sessionStatus = 'Stream stopped';
+      });
     } catch (e) {
-      setState(() => _hostStatus = 'Stop stream error: $e');
+      setState(() => _sessionStatus = 'Stop stream error: $e');
     }
   }
 
@@ -371,6 +388,9 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   }
 
   Widget _buildSessionTab() {
+    final selected = _hosts.where((h) => h.id == _selectedHostId).firstOrNull;
+    final canStream = selected?.paired == true && !_streamActive;
+
     return Padding(
       padding: const EdgeInsets.all(16),
       child: Column(
@@ -381,18 +401,38 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
             style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
           ),
           const SizedBox(height: 8),
-          const Text('Video decode is still a stub; pairing is wired to Sunshine.'),
+          const Text(
+            'Streams your Mac desktop via Moonlight (Sunshine host). '
+            'Keep the phone on this app until the stream view opens.',
+          ),
+          if (_sessionStatus.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            Text(
+              _sessionStatus,
+              style: TextStyle(
+                color: Theme.of(context).colorScheme.primary,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
+          if (selected != null) ...[
+            const SizedBox(height: 8),
+            Text(
+              '${selected.name} (${selected.address}) • ${selected.paired ? "Paired" : "Not paired"}',
+              style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
+            ),
+          ],
           const SizedBox(height: 16),
           Wrap(
             spacing: 10,
             children: [
               FilledButton.icon(
-                onPressed: _startStream,
+                onPressed: canStream ? _startStream : null,
                 icon: const Icon(Icons.play_arrow),
-                label: const Text('Start 1080p60'),
+                label: const Text('Start Desktop 1080p60'),
               ),
               OutlinedButton.icon(
-                onPressed: _stopStream,
+                onPressed: _streamActive ? _stopStream : null,
                 icon: const Icon(Icons.stop),
                 label: const Text('Stop'),
               ),
