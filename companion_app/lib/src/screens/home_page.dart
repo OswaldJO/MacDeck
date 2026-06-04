@@ -13,6 +13,10 @@ import '../services/streaming_bridge.dart';
 import '../services/streaming_host_settings.dart';
 import '../widgets/companion_insets.dart';
 import '../widgets/controller_mapping_section.dart';
+import '../widgets/stream_shortcuts_picker_sheet.dart';
+import '../widgets/companion_appearance_section.dart';
+import '../widgets/stream_shortcuts_section.dart';
+import '../services/stream_shortcuts_store.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -50,8 +54,10 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       if (Platform.isAndroid) {
         unawaited(PlayniteStreamNotification.ensureNotificationPermission());
       }
+      unawaited(StreamShortcutsStore.migrateCloseAppDefaultIfNeeded());
       unawaited(_refreshStreamSessionState());
       unawaited(_checkPendingMappingOverlay());
+      unawaited(_checkPendingShortcutsOverlay());
     });
   }
 
@@ -60,6 +66,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     if (state == AppLifecycleState.resumed) {
       unawaited(_refreshStreamSessionState());
       unawaited(_checkPendingMappingOverlay());
+      unawaited(_checkPendingShortcutsOverlay());
     }
     if (_pairingInProgress &&
         (state == AppLifecycleState.paused || state == AppLifecycleState.inactive)) {
@@ -171,7 +178,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       _streamViewerOpen = viewerOpen;
       if (active && !viewerOpen) {
         _sessionStatus =
-            'Stream running — use Enter current stream, or notification Stop / Controller.';
+            'Stream running — Enter current stream, or notification Stop / Controller / Shortcuts.';
       }
     });
   }
@@ -190,6 +197,15 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     final shown = await PlayniteStreamNotification.showStreamMappingOverlay();
     if (shown || !mounted) return;
     await _showMappingOverlaySheet();
+  }
+
+  Future<void> _checkPendingShortcutsOverlay() async {
+    if (!Platform.isAndroid || !mounted) return;
+    final pending = await PlayniteStreamNotification.consumePendingOpenShortcuts();
+    if (!pending || !mounted) return;
+    final shown = await PlayniteStreamNotification.showStreamShortcutsOverlay();
+    if (shown || !mounted) return;
+    await showStreamShortcutsPickerSheet(context);
   }
 
   Future<void> _showMappingOverlaySheet() async {
@@ -399,6 +415,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
               return _buildSessionTab();
             case 2:
               return _buildControllersTab();
+            case 3:
+              return _buildSettingsTab();
             default:
               return const SizedBox.shrink();
           }
@@ -415,6 +433,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                 NavigationDestination(icon: Icon(Icons.dns), label: 'Hosts'),
                 NavigationDestination(icon: Icon(Icons.videogame_asset), label: 'Session'),
                 NavigationDestination(icon: Icon(Icons.sports_esports), label: 'Controller'),
+                NavigationDestination(icon: Icon(Icons.settings), label: 'Settings'),
               ],
             ),
           );
@@ -507,7 +526,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
           const Text(
             'Streams your Mac desktop via Playnite H.264 (port ${StreamingHostSettings.defaultVideoPort}). '
             'Connect a gamepad first (Controller tab), then start Desktop stream. '
-            'While streaming, use the notification Stop or Controller buttons.',
+            'While streaming, use the notification Stop, Controller, or Shortcuts buttons.',
           ),
           if (_sessionStatus.isNotEmpty) ...[
             const SizedBox(height: 12),
@@ -751,6 +770,16 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     );
   }
 
+  Widget _buildSettingsTab() {
+    return ListView(
+      padding: CompanionInsets.listPadding(context),
+      children: const [
+        CompanionAppearanceSection(),
+        SizedBox(height: 28),
+        StreamShortcutsSection(),
+      ],
+    );
+  }
 }
 
 /// Dialog for entering the Mac streaming host LAN IP (owns its [TextEditingController]).

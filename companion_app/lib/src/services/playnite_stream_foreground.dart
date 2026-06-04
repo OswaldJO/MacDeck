@@ -52,4 +52,36 @@ class PlayniteStreamNotification {
       return false;
     }
   }
+
+  static Future<bool> consumePendingOpenShortcuts() async {
+    if (!Platform.isAndroid) return false;
+    try {
+      final pending = await _channel.invokeMethod<bool>('consumePendingOpenShortcuts');
+      return pending == true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  static Future<bool> showStreamShortcutsOverlay() async {
+    if (!Platform.isAndroid) return false;
+    try {
+      final shown = await _channel.invokeMethod<bool>('showStreamShortcutsOverlay');
+      return shown == true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  static Future<bool> fireStreamShortcut(List<int> moonlightKeyCodes) async {
+    if (!Platform.isAndroid || moonlightKeyCodes.isEmpty) return false;
+    try {
+      final ok = await _channel.invokeMethod<bool>('fireStreamShortcut', {
+        'moonlightKeyCodes': moonlightKeyCodes,
+      });
+      return ok == true;
+    } catch (_) {
+      return false;
+    }
+  }
 }

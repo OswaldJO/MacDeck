@@ -22,6 +22,9 @@ class MainActivity : FlutterActivity() {
         @Volatile
         var pendingOpenMapping: Boolean = false
 
+        @Volatile
+        var pendingOpenShortcuts: Boolean = false
+
         private const val REQUEST_POST_NOTIFICATIONS = 9001
     }
 
@@ -107,6 +110,39 @@ class MainActivity : FlutterActivity() {
                     result.success(pending)
                 }
 
+                "showStreamShortcutsOverlay" -> {
+                    val video = PlayniteVideoActivity.current
+                    if (video != null) {
+                        video.runOnUiThread { video.showStreamShortcutsOverlay() }
+                        result.success(true)
+                    } else {
+                        result.success(false)
+                    }
+                }
+
+                "consumePendingOpenShortcuts" -> {
+                    val pending = pendingOpenShortcuts
+                    pendingOpenShortcuts = false
+                    result.success(pending)
+                }
+
+                "fireStreamShortcut" -> {
+                    val codes = call.argument<List<Int>>("moonlightKeyCodes")?.filter { it != 0 }.orEmpty()
+                    val host = PlayniteStreamSession.host
+                    val port = PlayniteStreamSession.inputPort
+                    if (!PlayniteStreamSession.hostStreamActive || host.isEmpty() || codes.isEmpty()) {
+                        result.success(false)
+                        return@setMethodCallHandler
+                    }
+                    val sender = PlayniteKeyboardSender(host, port)
+                    sender.sendChord(codes, down = true)
+                    mainHandler.postDelayed({
+                        sender.sendChord(codes, down = false)
+                        sender.close()
+                    }, 80L)
+                    result.success(true)
+                }
+
                 "syncStreamNotification" -> {
                     val active = call.argument<Boolean>("active") == true
                     val host = call.argument<String>("host").orEmpty()
@@ -165,6 +201,9 @@ class MainActivity : FlutterActivity() {
         super.onNewIntent(intent)
         if (intent.getBooleanExtra(PlayniteStreamMappingActions.EXTRA_OPEN_MAPPING, false)) {
             pendingOpenMapping = true
+        }
+        if (intent.getBooleanExtra(PlayniteStreamShortcutActions.EXTRA_OPEN_SHORTCUTS, false)) {
+            pendingOpenShortcuts = true
         }
     }
 

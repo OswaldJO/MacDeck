@@ -12,6 +12,9 @@ class PlayniteStreamNotificationReceiver : BroadcastReceiver() {
 
             PlayniteStreamNotificationHelper.ACTION_MAPPING ->
                 PlayniteStreamMappingActions.openMappingUi(context)
+
+            PlayniteStreamNotificationHelper.ACTION_SHORTCUTS ->
+                PlayniteStreamShortcutActions.openShortcutsUi(context)
         }
     }
 }

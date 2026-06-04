@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../services/companion_appearance_settings.dart';
+
 /// Dark-first Material 3 theme for Playnite Companion.
 abstract final class CompanionTheme {
   static const Color _background = Color(0xFF0E1014);
@@ -8,18 +10,36 @@ abstract final class CompanionTheme {
   static const Color _card = Color(0xFF1C2028);
   static const Color _seed = Color(0xFF6EB5FF);
 
-  static ThemeData dark() {
+  static ThemeData dark({Color primaryText = CompanionAppearanceSettings.defaultPrimaryText}) {
+    final onSurfaceVariant = Color.alphaBlend(
+      primaryText.withValues(alpha: 0.72),
+      _surface,
+    );
     final scheme = ColorScheme.fromSeed(
       seedColor: _seed,
       brightness: Brightness.dark,
       surface: _surface,
       surfaceContainerHighest: _surfaceHigh,
+    ).copyWith(
+      onSurface: primaryText,
+      onSurfaceVariant: onSurfaceVariant,
+      primary: _seed,
+      onPrimary: _background,
     );
+
+    final textTheme = Typography.material2021(platform: TargetPlatform.android)
+        .white
+        .apply(
+          bodyColor: primaryText,
+          displayColor: primaryText,
+        );
 
     return ThemeData(
       useMaterial3: true,
       brightness: Brightness.dark,
       colorScheme: scheme,
+      textTheme: textTheme,
+      primaryTextTheme: textTheme,
       scaffoldBackgroundColor: _background,
       appBarTheme: AppBarTheme(
         backgroundColor: _surface,
@@ -41,10 +61,20 @@ abstract final class CompanionTheme {
         indicatorColor: _seed.withValues(alpha: 0.22),
         labelTextStyle: WidgetStateProperty.resolveWith((states) {
           if (states.contains(WidgetState.selected)) {
-            return TextStyle(color: scheme.primary, fontSize: 12);
+            return TextStyle(color: _seed, fontSize: 12);
           }
-          return TextStyle(color: scheme.onSurfaceVariant, fontSize: 12);
+          return TextStyle(color: onSurfaceVariant, fontSize: 12);
         }),
+      ),
+      listTileTheme: ListTileThemeData(
+        titleTextStyle: textTheme.titleMedium,
+        subtitleTextStyle: textTheme.bodySmall?.copyWith(color: onSurfaceVariant),
+      ),
+      switchTheme: SwitchThemeData(
+        thumbColor: WidgetStateProperty.resolveWith((_) => _seed),
+      ),
+      filledButtonTheme: FilledButtonThemeData(
+        style: FilledButton.styleFrom(foregroundColor: _background),
       ),
       bottomSheetTheme: BottomSheetThemeData(
         backgroundColor: _surfaceHigh,

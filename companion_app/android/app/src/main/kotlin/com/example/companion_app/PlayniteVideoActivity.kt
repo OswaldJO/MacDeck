@@ -72,6 +72,7 @@ class PlayniteVideoActivity : Activity(), SurfaceHolder.Callback {
     private var keyboardSender: PlayniteKeyboardSender? = null
     private var gamepadMapping: PlayniteGamepadMapping? = null
     private var mappingOverlay: PlayniteControllerMappingOverlay? = null
+    private var shortcutsOverlay: PlayniteStreamShortcutsOverlay? = null
 
     private val frameQueue = LinkedBlockingQueue<IncomingFrame>(128)
 
@@ -296,10 +297,23 @@ class PlayniteVideoActivity : Activity(), SurfaceHolder.Callback {
         PlayniteStreamSession.viewerOpen = false
         mappingOverlay?.dismiss()
         mappingOverlay = null
+        shortcutsOverlay?.dismiss()
+        shortcutsOverlay = null
         PlayniteStreamNotificationHelper.updateViewerHint(applicationContext, streamHost, false)
     }
 
+    fun showStreamShortcutsOverlay() {
+        val keyboard = keyboardSender ?: return
+        shortcutsOverlay?.dismiss()
+        mappingOverlay?.dismiss()
+        mappingOverlay = null
+        shortcutsOverlay = PlayniteStreamShortcutsOverlay(this, keyboard)
+        shortcutsOverlay?.show()
+    }
+
     fun showControllerMappingOverlay() {
+        shortcutsOverlay?.dismiss()
+        shortcutsOverlay = null
         mappingOverlay?.dismiss()
         mappingOverlay = PlayniteControllerMappingOverlay(this) { json ->
             gamepadMapping = PlayniteGamepadMapping(json).takeIf { it.hasBindings() }
@@ -310,6 +324,8 @@ class PlayniteVideoActivity : Activity(), SurfaceHolder.Callback {
     fun finishFromHost() {
         mappingOverlay?.dismiss()
         mappingOverlay = null
+        shortcutsOverlay?.dismiss()
+        shortcutsOverlay = null
         PlayniteStreamSession.hostStreamActive = false
         PlayniteStreamSession.clear()
         teardownStream(
@@ -353,6 +369,8 @@ class PlayniteVideoActivity : Activity(), SurfaceHolder.Callback {
     override fun onDestroy() {
         mappingOverlay?.dismiss()
         mappingOverlay = null
+        shortcutsOverlay?.dismiss()
+        shortcutsOverlay = null
         running.set(false)
         PlayniteStreamSession.viewerOpen = false
         audioReceiver?.stop()

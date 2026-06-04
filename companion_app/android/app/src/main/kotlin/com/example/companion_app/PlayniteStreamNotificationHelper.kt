@@ -20,6 +20,7 @@ object PlayniteStreamNotificationHelper {
 
     const val ACTION_STOP = "com.playnite.companion.STREAM_STOP"
     const val ACTION_MAPPING = "com.playnite.companion.STREAM_MAPPING"
+    const val ACTION_SHORTCUTS = "com.playnite.companion.STREAM_SHORTCUTS"
 
     fun show(context: Context, hostLabel: String) {
         val text = if (hostLabel.isNotEmpty()) "Streaming from $hostLabel" else "Streaming Mac desktop"
@@ -37,11 +38,15 @@ object PlayniteStreamNotificationHelper {
         val mappingIntent = Intent(appContext, PlayniteStreamNotificationReceiver::class.java).apply {
             action = ACTION_MAPPING
         }
+        val shortcutsIntent = Intent(appContext, PlayniteStreamNotificationReceiver::class.java).apply {
+            action = ACTION_SHORTCUTS
+        }
         val flags = PendingIntent.FLAG_UPDATE_CURRENT or
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) PendingIntent.FLAG_IMMUTABLE else 0
 
         val stopPending = PendingIntent.getBroadcast(appContext, 1, stopIntent, flags)
         val mappingPending = PendingIntent.getBroadcast(appContext, 2, mappingIntent, flags)
+        val shortcutsPending = PendingIntent.getBroadcast(appContext, 4, shortcutsIntent, flags)
 
         val launchIntent = Intent(appContext, MainActivity::class.java).apply {
             this.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
@@ -61,6 +66,7 @@ object PlayniteStreamNotificationHelper {
             .setShowWhen(true)
             .addAction(android.R.drawable.ic_menu_close_clear_cancel, "Stop", stopPending)
             .addAction(android.R.drawable.ic_menu_manage, "Controller", mappingPending)
+            .addAction(android.R.drawable.ic_menu_edit, "Shortcuts", shortcutsPending)
             .build()
 
         NotificationManagerCompat.from(appContext).notify(NOTIFICATION_ID, notification)
@@ -76,7 +82,7 @@ object PlayniteStreamNotificationHelper {
             return
         }
         val base = if (hostLabel.isNotEmpty()) "Streaming from $hostLabel" else "Streaming Mac desktop"
-        val text = if (viewerOpen) base else "$base — tap Controller or open app"
+        val text = if (viewerOpen) base else "$base — tap Shortcuts, Controller, or open app"
         showWithText(context, text)
     }
 
