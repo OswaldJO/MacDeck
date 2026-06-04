@@ -34,6 +34,9 @@ object PlayniteStreamLog {
             i("=== Playnite stream log started ===")
             i("device=${Build.MANUFACTURER} ${Build.MODEL} api=${Build.VERSION.SDK_INT}")
             i("target=$host:$port ${width}x$height")
+            i(
+                "Logs include: video/audio, Swap on/off, Gamepad map … → PNK1, Keyboard PNK1 up/down, unmapped gamepad keys",
+            )
         }
     }
 

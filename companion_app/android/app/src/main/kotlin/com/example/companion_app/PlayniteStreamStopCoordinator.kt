@@ -25,12 +25,11 @@ object PlayniteStreamStopCoordinator {
             PlayniteStreamLog.endSession("stop requested from companion")
         }
         if (host.isNotEmpty()) {
-            val stopGeneration = PlayniteStreamSession.scheduleBackgroundMacStop()
-            Thread {
-                if (PlayniteStreamSession.shouldRunBackgroundMacStop(stopGeneration)) {
-                    PlayniteHostControlClient.stopStreamOnHost(host)
-                }
-            }.start()
+            val macStop = Thread {
+                PlayniteHostControlClient.stopStreamOnHost(host)
+            }
+            macStop.start()
+            macStop.join(8_000)
         }
         val logPath = PlayniteStreamLog.logFilePath(app)
         if (notifyFlutter) {

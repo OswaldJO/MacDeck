@@ -5,6 +5,10 @@ const Set<String> kSwapToggleExcludedElementIds = {
   'buttonA', // Cross — left click in Swap
   'buttonB', // Circle — right click in Swap
   'buttonX', // Square — drag in Swap
+  'leftStickUp',
+  'leftStickDown',
+  'leftStickLeft',
+  'leftStickRight',
 };
 
 const String kSwapToggleTargetAction = 'toggleSwap';

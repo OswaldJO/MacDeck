@@ -13,6 +13,13 @@ abstract final class CompanionInsets {
     return EdgeInsets.only(left: padding.left, right: padding.right);
   }
 
+  /// Horizontal insets for mapping tiles: safe area only (no extra gutter).
+  static EdgeInsets mappingTilesHorizontal(BuildContext context) {
+    if (!_android) return EdgeInsets.zero;
+    final padding = MediaQuery.paddingOf(context);
+    return EdgeInsets.only(left: padding.left, right: padding.right);
+  }
+
   /// Standard list/tab padding including Android bottom nav inset.
   static EdgeInsets listPadding(BuildContext context, {double base = 16}) {
     if (!_android) {

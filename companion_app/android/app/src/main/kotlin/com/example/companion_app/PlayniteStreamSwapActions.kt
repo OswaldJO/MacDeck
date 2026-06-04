@@ -6,11 +6,23 @@ import android.widget.Toast
 object PlayniteStreamSwapActions {
     fun toggle(context: Context) {
         if (!PlayniteStreamSession.hostStreamActive) return
-        PlayniteStreamSession.swapMouseModeActive = !PlayniteStreamSession.swapMouseModeActive
+        val wasActive = PlayniteStreamSession.swapMouseModeActive
+        // Release keys held from prior mappings so Enter/modifiers are not stuck on the Mac.
+        PlayniteStreamSession.keyboardSender()?.releaseAllKeys()
+        PlayniteStreamSession.swapMouseModeActive = !wasActive
         if (!PlayniteStreamSession.swapMouseModeActive) {
             PlayniteVideoActivity.current?.onSwapMouseModeDisabled()
+        } else {
+            PlayniteVideoActivity.current?.gamepadMouseSender()?.releaseAll()
         }
         PlayniteStreamNotificationHelper.refresh(context)
+        PlayniteStreamLog.i(
+            if (PlayniteStreamSession.swapMouseModeActive) {
+                "Swap on — stick moves cursor; A/B/X click and drag; other mappings still active"
+            } else {
+                "Swap off — controller mappings restored"
+            },
+        )
         val message = if (PlayniteStreamSession.swapMouseModeActive) {
             "Swap on — stick moves cursor, A/B/X click and drag"
         } else {

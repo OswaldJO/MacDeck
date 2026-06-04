@@ -167,8 +167,7 @@ class PlayniteHostClient {
     }
 
     // Ensure the Mac finished the previous session before opening a new one.
-    await stopStreamOnHost();
-    await _waitForMacStreamIdle();
+    await _ensureMacStreamFullyStopped();
     await _waitForMacCaptureReady();
     await _waitForControlHostReady();
     Object? lastError;
@@ -238,13 +237,26 @@ class PlayniteHostClient {
     return StreamStartOutcome.failed('Could not start stream: $lastError');
   }
 
+  /// Repeated stop + idle poll so a stale Mac session from a force-quit companion is cleared.
+  Future<void> _ensureMacStreamFullyStopped() async {
+    for (var attempt = 0; attempt < 3; attempt++) {
+      await stopStreamOnHost();
+      await waitForMacStreamIdle();
+      final status = await fetchStatus();
+      if (status == null || status['videoStreaming'] != true) {
+        return;
+      }
+      await Future<void>.delayed(Duration(milliseconds: 600 * (attempt + 1)));
+    }
+  }
+
   /// After [stopStreamOnHost], poll until the Mac reports it is not actively streaming.
-  Future<void> _waitForMacStreamIdle() async {
+  Future<void> waitForMacStreamIdle() async {
     const attempts = 45;
     for (var i = 0; i < attempts; i++) {
       final status = await fetchStatus();
       if (status != null && status['videoStreaming'] != true) {
-        await Future<void>.delayed(const Duration(milliseconds: 450));
+        await Future<void>.delayed(const Duration(milliseconds: 800));
         return;
       }
       await Future<void>.delayed(const Duration(milliseconds: 350));

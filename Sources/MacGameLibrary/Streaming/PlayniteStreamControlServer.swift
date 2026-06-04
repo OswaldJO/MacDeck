@@ -320,6 +320,8 @@ actor PlayniteStreamControlServer {
                 "host": LocalNetworkAddress.primaryIPv4() ?? "127.0.0.1",
             ])
         case ("POST", "/playnite/v1/stream/stop"):
+            // Report idle immediately so the companion can start a new session without polling a stale flag.
+            await setVideoStreaming(false)
             if let onStreamStopRequested {
                 await onStreamStopRequested()
             }

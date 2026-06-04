@@ -2,6 +2,7 @@ package com.example.companion_app
 
 import android.app.Activity
 import android.graphics.Color
+import android.media.AudioManager
 import android.media.MediaCodec
 import android.media.MediaFormat
 import android.os.Build
@@ -123,6 +124,7 @@ class PlayniteVideoActivity : Activity(), SurfaceHolder.Callback {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        volumeControlStream = AudioManager.STREAM_MUSIC
         window.addFlags(
             WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON or
                 WindowManager.LayoutParams.FLAG_FULLSCREEN,
@@ -358,6 +360,7 @@ class PlayniteVideoActivity : Activity(), SurfaceHolder.Callback {
 
     /** Closes the video UI; Mac host keeps streaming until Stop in the companion app. */
     private fun leaveViewerOnly() {
+        PlayniteStreamSession.leaveViewerWithoutMacStop = true
         teardownStream(
             "viewer closed (received=$framesReceived rendered=$framesRendered dropped=$framesDropped)",
             releaseKeyboard = false,
@@ -385,7 +388,10 @@ class PlayniteVideoActivity : Activity(), SurfaceHolder.Callback {
     /** Called when notification Swap is turned off while this activity is open. */
     fun onSwapMouseModeDisabled() {
         gamepadMouseSender?.releaseAll()
+        keyboardSender?.releaseAllKeys()
     }
+
+    fun gamepadMouseSender(): PlayniteGamepadMouseSender? = gamepadMouseSender
 
     fun updateSwapStickSensitivity(value: Float) {
         gamepadMouseSender?.updateStickSensitivity(value)
@@ -420,6 +426,9 @@ class PlayniteVideoActivity : Activity(), SurfaceHolder.Callback {
     }
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        if (GamepadInputFilter.isSystemVolumeOrNavigationKey(event.keyCode)) {
+            return super.dispatchKeyEvent(event)
+        }
         if (event.keyCode == KeyEvent.KEYCODE_BACK) {
             if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) {
                 handleStreamBackNavigation()
@@ -430,7 +439,7 @@ class PlayniteVideoActivity : Activity(), SurfaceHolder.Callback {
             return true
         }
         val mapping = gamepadMappingForEvent()
-        val keyboard = keyboardSender
+        val keyboard = keyboardSender ?: PlayniteStreamSession.keyboardSender().also { keyboardSender = it }
         val swapActive = PlayniteStreamSession.swapMouseModeActive
         if (mapping != null) {
             if (mapping.handleKeyEvent(
@@ -457,22 +466,28 @@ class PlayniteVideoActivity : Activity(), SurfaceHolder.Callback {
     }
 
     override fun dispatchGenericMotionEvent(event: MotionEvent): Boolean {
+        if (GamepadLinkCapture.tryConsumeMotion(event)) {
+            return true
+        }
         if (!GamepadInputFilter.isGamepadMotion(event)) {
             return super.dispatchGenericMotionEvent(event)
         }
         val mapping = gamepadMappingForEvent()
-        val keyboard = keyboardSender
+        val keyboard = keyboardSender ?: PlayniteStreamSession.keyboardSender().also { keyboardSender = it }
         val swapActive = PlayniteStreamSession.swapMouseModeActive
-        if (mapping != null) {
-            val lt = GamepadInputFilter.leftTriggerValue(event)
-            val rt = GamepadInputFilter.rightTriggerValue(event)
-            val toggle = { PlayniteStreamSwapActions.toggle(this) }
-            val leftConsumed = mapping.handleTrigger("leftTrigger", lt, keyboard, swapActive, toggle)
-            val rightConsumed = mapping.handleTrigger("rightTrigger", rt, keyboard, swapActive, toggle)
-            if (leftConsumed || rightConsumed) return true
-        }
         if (swapActive) {
             gamepadMouseSender?.handleMotionEvent(event)
+        }
+        if (mapping != null) {
+            val toggle = { PlayniteStreamSwapActions.toggle(this) }
+            val lt = GamepadInputFilter.leftTriggerValue(event)
+            val rt = GamepadInputFilter.rightTriggerValue(event)
+            mapping.handleTrigger("leftTrigger", lt, keyboard, swapActive, toggle)
+            mapping.handleTrigger("rightTrigger", rt, keyboard, swapActive, toggle)
+            mapping.handleHatDpad(event, keyboard, swapActive, toggle)
+            mapping.handleAnalogSticks(event, keyboard, swapActive, toggle)
+        }
+        if (swapActive) {
             return true
         }
         if (mapping != null && keyboard != null) {
@@ -536,6 +551,14 @@ class PlayniteVideoActivity : Activity(), SurfaceHolder.Callback {
     }
 
     override fun onDestroy() {
+        val hostToStop = streamHost.ifEmpty { PlayniteStreamSession.host }
+        val viewerExit = PlayniteStreamSession.leaveViewerWithoutMacStop
+        PlayniteStreamSession.leaveViewerWithoutMacStop = false
+        if (hostToStop.isNotEmpty() && !viewerExit) {
+            Thread {
+                PlayniteHostControlClient.stopStreamOnHost(hostToStop)
+            }.start()
+        }
         mappingOverlay?.dismiss()
         mappingOverlay = null
         shortcutsOverlay?.dismiss()

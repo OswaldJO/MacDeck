@@ -2,6 +2,8 @@ package com.example.companion_app
 
 import android.util.Log
 import android.view.KeyEvent
+import android.view.MotionEvent
+import kotlin.math.abs
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -24,7 +26,8 @@ class PlayniteGamepadMapping(bindingsJson: String) {
     private val bindingsByElement = mutableMapOf<String, ElementBinding>()
     private val physicalToElementManual = mutableMapOf<Int, String>()
     private val triggerDown = mutableMapOf<String, Boolean>()
-    private val swapToggleDown = mutableMapOf<String, Boolean>()
+    private val hatDpadDown = mutableMapOf<String, Boolean>()
+    private val stickDirectionDown = mutableMapOf<String, Boolean>()
 
     init {
         if (bindingsJson.isNotEmpty()) {
@@ -84,16 +87,16 @@ class PlayniteGamepadMapping(bindingsJson: String) {
         if (!down && !up) return true
 
         if (binding.isSwapToggle) {
-            if (down && event.repeatCount == 0 && swapToggleDown[elementId] != true) {
-                swapToggleDown[elementId] = true
+            if (down && event.repeatCount == 0) {
                 onToggleSwap()
-            } else if (up) {
-                swapToggleDown.remove(elementId)
             }
             return true
         }
 
-        if (swapModeActive) return false
+        // Swap mouse mode only takes A / B / X; other mappings (Start → Enter, etc.) keep working.
+        if (swapModeActive && elementUsesSwapMouse(elementId)) {
+            return false
+        }
 
         if (binding.moonlightKeyCodes.isEmpty()) return true
         keyboard ?: return true
@@ -104,6 +107,112 @@ class PlayniteGamepadMapping(bindingsJson: String) {
         }
         return true
     }
+
+    /** Many pads report D-pad as [MotionEvent.AXIS_HAT_X/Y] instead of [KeyEvent] DPAD key codes. */
+    fun handleHatDpad(
+        event: MotionEvent,
+        keyboard: PlayniteKeyboardSender?,
+        swapModeActive: Boolean,
+        onToggleSwap: () -> Unit,
+    ): Boolean {
+        if (bindingsByElement.isEmpty()) return false
+        val hatX = event.getAxisValue(MotionEvent.AXIS_HAT_X)
+        val hatY = event.getAxisValue(MotionEvent.AXIS_HAT_Y)
+        val threshold = 0.45f
+        val directions = listOf(
+            "dpadUp" to (hatY < -threshold),
+            "dpadDown" to (hatY > threshold),
+            "dpadLeft" to (hatX < -threshold),
+            "dpadRight" to (hatX > threshold),
+        )
+        var consumed = false
+        for ((elementId, pressed) in directions) {
+            val binding = bindingsByElement[elementId] ?: continue
+            val wasDown = hatDpadDown[elementId] == true
+            if (binding.isSwapToggle) {
+                if (pressed && !wasDown) {
+                    onToggleSwap()
+                    consumed = true
+                }
+                if (pressed) hatDpadDown[elementId] = true else hatDpadDown.remove(elementId)
+                continue
+            }
+            if (swapModeActive && elementUsesSwapMouse(elementId)) continue
+            if (binding.moonlightKeyCodes.isEmpty()) continue
+            keyboard ?: continue
+            if (wasDown != pressed) {
+                keyboard.sendChord(binding.moonlightKeyCodes, pressed)
+                if (pressed) {
+                    logMappingFire(elementId, binding.moonlightKeyCodes, syntheticHatKey(elementId))
+                }
+                consumed = true
+            }
+            if (pressed) hatDpadDown[elementId] = true else hatDpadDown.remove(elementId)
+        }
+        return consumed
+    }
+
+    /** Left / right analog stick cardinal directions (axis motion, not L3/R3). */
+    fun handleAnalogSticks(
+        event: MotionEvent,
+        keyboard: PlayniteKeyboardSender?,
+        swapModeActive: Boolean,
+        onToggleSwap: () -> Unit,
+    ): Boolean {
+        if (bindingsByElement.isEmpty()) return false
+        val threshold = 0.55f
+        val sticks = listOf(
+            StickAxes("leftStick", MotionEvent.AXIS_X, MotionEvent.AXIS_Y),
+            StickAxes("rightStick", MotionEvent.AXIS_Z, MotionEvent.AXIS_RZ),
+            StickAxes("rightStick", MotionEvent.AXIS_RX, MotionEvent.AXIS_RY),
+        )
+        var consumed = false
+        for (stick in sticks) {
+            if (stick.xAxis == MotionEvent.AXIS_RX) {
+                val z = abs(event.getAxisValue(MotionEvent.AXIS_Z))
+                val rz = abs(event.getAxisValue(MotionEvent.AXIS_RZ))
+                if (z > 0.2f || rz > 0.2f) continue
+            }
+            val x = event.getAxisValue(stick.xAxis)
+            val y = event.getAxisValue(stick.yAxis)
+            val directions = listOf(
+                "${stick.prefix}Up" to (y < -threshold && abs(y) >= abs(x)),
+                "${stick.prefix}Down" to (y > threshold && abs(y) >= abs(x)),
+                "${stick.prefix}Left" to (x < -threshold && abs(x) > abs(y)),
+                "${stick.prefix}Right" to (x > threshold && abs(x) > abs(y)),
+            )
+            for ((elementId, pressed) in directions) {
+                val binding = bindingsByElement[elementId] ?: continue
+                val wasDown = stickDirectionDown[elementId] == true
+                if (binding.isSwapToggle) {
+                    if (pressed && !wasDown) {
+                        onToggleSwap()
+                        consumed = true
+                    }
+                    if (pressed) stickDirectionDown[elementId] = true else stickDirectionDown.remove(elementId)
+                    continue
+                }
+                if (swapModeActive && elementUsesSwapMouse(elementId)) continue
+                if (binding.moonlightKeyCodes.isEmpty()) continue
+                keyboard ?: continue
+                if (wasDown != pressed) {
+                    keyboard.sendChord(binding.moonlightKeyCodes, pressed)
+                    if (pressed) {
+                        logMappingFire(
+                            elementId,
+                            binding.moonlightKeyCodes,
+                            GamepadKeyCodes.keyCodeForElementId(elementId) ?: 0,
+                        )
+                    }
+                    consumed = true
+                }
+                if (pressed) stickDirectionDown[elementId] = true else stickDirectionDown.remove(elementId)
+            }
+        }
+        return consumed
+    }
+
+    private data class StickAxes(val prefix: String, val xAxis: Int, val yAxis: Int)
 
     fun handleTrigger(
         elementId: String,
@@ -126,7 +235,7 @@ class PlayniteGamepadMapping(bindingsJson: String) {
             return true
         }
 
-        if (swapModeActive) return false
+        if (swapModeActive && elementUsesSwapMouse(elementId)) return false
         if (binding.moonlightKeyCodes.isEmpty()) return false
         if (prev != null && prev == down) return true
         triggerDown[elementId] = down
@@ -154,6 +263,12 @@ class PlayniteGamepadMapping(bindingsJson: String) {
     }
 
     /** Map Start / Menu / App to [buttonMenu] when that slot has any binding. */
+    private fun elementUsesSwapMouse(elementId: String): Boolean =
+        elementId == "buttonA" ||
+            elementId == "buttonB" ||
+            elementId == "buttonX" ||
+            elementId.startsWith("leftStick")
+
     private fun applyStartMenuAliases() {
         if (!bindingsByElement.containsKey("buttonMenu")) return
         for (code in GamepadKeyCodes.startMenuKeyCodes) {
@@ -181,6 +296,9 @@ class PlayniteGamepadMapping(bindingsJson: String) {
         )
     }
 
+    private fun syntheticHatKey(elementId: String): Int =
+        GamepadKeyCodes.keyCodeForElementId(elementId) ?: 0
+
     private fun logMappingFire(elementId: String, codes: List<Int>, physicalKey: Int) {
         if (mappingLogsEmitted >= MAX_MAPPING_LOGS) return
         mappingLogsEmitted += 1
@@ -204,7 +322,7 @@ class PlayniteGamepadMapping(bindingsJson: String) {
 
     companion object {
         private const val TAG = "PlayniteGamepadMap"
-        private const val MAX_MAPPING_LOGS = 24
+        private const val MAX_MAPPING_LOGS = 64
         @Volatile
         private var mappingLogsEmitted = 0
     }
@@ -214,6 +332,15 @@ class PlayniteGamepadMapping(bindingsJson: String) {
 object GamepadKeyCodes {
     /** [KeyEvent.KEYCODE_APP] (API 24+); some pads use this for Start/Guide. */
     const val KEYCODE_APP_COMPAT = 88
+
+    const val SYNTHETIC_LEFT_STICK_UP = 0x400001
+    const val SYNTHETIC_LEFT_STICK_DOWN = 0x400002
+    const val SYNTHETIC_LEFT_STICK_LEFT = 0x400003
+    const val SYNTHETIC_LEFT_STICK_RIGHT = 0x400004
+    const val SYNTHETIC_RIGHT_STICK_UP = 0x400005
+    const val SYNTHETIC_RIGHT_STICK_DOWN = 0x400006
+    const val SYNTHETIC_RIGHT_STICK_LEFT = 0x400007
+    const val SYNTHETIC_RIGHT_STICK_RIGHT = 0x400008
 
     fun elementIdForKeyCode(keyCode: Int): String? = when (keyCode) {
         KeyEvent.KEYCODE_BUTTON_A, KeyEvent.KEYCODE_DPAD_CENTER -> "buttonA"
@@ -239,6 +366,14 @@ object GamepadKeyCodes {
         KeyEvent.KEYCODE_BUTTON_2 -> "macro2"
         KeyEvent.KEYCODE_BUTTON_3 -> "macro3"
         KeyEvent.KEYCODE_BUTTON_4 -> "macro4"
+        SYNTHETIC_LEFT_STICK_UP -> "leftStickUp"
+        SYNTHETIC_LEFT_STICK_DOWN -> "leftStickDown"
+        SYNTHETIC_LEFT_STICK_LEFT -> "leftStickLeft"
+        SYNTHETIC_LEFT_STICK_RIGHT -> "leftStickRight"
+        SYNTHETIC_RIGHT_STICK_UP -> "rightStickUp"
+        SYNTHETIC_RIGHT_STICK_DOWN -> "rightStickDown"
+        SYNTHETIC_RIGHT_STICK_LEFT -> "rightStickLeft"
+        SYNTHETIC_RIGHT_STICK_RIGHT -> "rightStickRight"
         else -> null
     }
 
@@ -261,8 +396,21 @@ object GamepadKeyCodes {
         "macro2" -> KeyEvent.KEYCODE_BUTTON_2
         "macro3" -> KeyEvent.KEYCODE_BUTTON_3
         "macro4" -> KeyEvent.KEYCODE_BUTTON_4
+        "leftStickUp" -> SYNTHETIC_LEFT_STICK_UP
+        "leftStickDown" -> SYNTHETIC_LEFT_STICK_DOWN
+        "leftStickLeft" -> SYNTHETIC_LEFT_STICK_LEFT
+        "leftStickRight" -> SYNTHETIC_LEFT_STICK_RIGHT
+        "rightStickUp" -> SYNTHETIC_RIGHT_STICK_UP
+        "rightStickDown" -> SYNTHETIC_RIGHT_STICK_DOWN
+        "rightStickLeft" -> SYNTHETIC_RIGHT_STICK_LEFT
+        "rightStickRight" -> SYNTHETIC_RIGHT_STICK_RIGHT
         else -> null
     }
+
+    fun labelForElementId(elementId: String): String =
+        labelForKeyCode(keyCodeForElementId(elementId) ?: -1).let { label ->
+            if (label == "Key -1") elementId else label
+        }
 
     fun labelForKeyCode(keyCode: Int): String = when (keyCode) {
         KeyEvent.KEYCODE_BUTTON_A -> "A"
@@ -287,6 +435,14 @@ object GamepadKeyCodes {
         KeyEvent.KEYCODE_BUTTON_2 -> "Macro 2"
         KeyEvent.KEYCODE_BUTTON_3 -> "Macro 3"
         KeyEvent.KEYCODE_BUTTON_4 -> "Macro 4"
+        SYNTHETIC_LEFT_STICK_UP -> "Left stick up"
+        SYNTHETIC_LEFT_STICK_DOWN -> "Left stick down"
+        SYNTHETIC_LEFT_STICK_LEFT -> "Left stick left"
+        SYNTHETIC_LEFT_STICK_RIGHT -> "Left stick right"
+        SYNTHETIC_RIGHT_STICK_UP -> "Right stick up"
+        SYNTHETIC_RIGHT_STICK_DOWN -> "Right stick down"
+        SYNTHETIC_RIGHT_STICK_LEFT -> "Right stick left"
+        SYNTHETIC_RIGHT_STICK_RIGHT -> "Right stick right"
         else -> "Key $keyCode"
     }
 

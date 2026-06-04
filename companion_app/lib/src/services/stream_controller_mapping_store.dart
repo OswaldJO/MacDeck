@@ -21,6 +21,8 @@ class StreamControllerMappingStore {
 
   String? get activeProfileId => _profiles.activeProfileId;
 
+  StreamControllerProfile? get activeProfile => _profiles.activeProfile;
+
   List<StreamControllerElementMapping> get bindings => _profiles.activeBindings;
 
   StreamControllerElementMapping? mappingFor(String elementId) {

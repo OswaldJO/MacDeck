@@ -338,20 +338,27 @@ class PlayniteControllerMappingOverlay(
     }
 
     private fun startLink(element: MappableElement) {
-        Toast.makeText(activity, "Press the gamepad button for ${element.label}", Toast.LENGTH_SHORT).show()
-        if (!GamepadLinkCapture.beginListening { event ->
+        Toast.makeText(
+            activity,
+            "Press a button, D-pad direction, or push a stick for ${element.label}",
+            Toast.LENGTH_SHORT,
+        ).show()
+        if (!GamepadLinkCapture.beginListening(element.id) { captured ->
             activity.runOnUiThread {
-                val label = GamepadKeyCodes.labelForKeyCode(event.keyCode)
                 val json = PlayniteStreamMappingPrefs.upsertPhysicalLink(
                     activity,
                     element.id,
                     element.label,
-                    event.keyCode,
-                    label,
+                    captured.keyCode,
+                    captured.label,
                 )
                 applyBindings(json)
                 loadSelectedKeysFromPrefs()
-                Toast.makeText(activity, "${element.label} linked to $label", Toast.LENGTH_SHORT).show()
+                Toast.makeText(
+                    activity,
+                    "${element.label} linked to ${captured.label}",
+                    Toast.LENGTH_SHORT,
+                ).show()
                 rebuildDialog()
             }
         }) {
@@ -370,7 +377,15 @@ class PlayniteControllerMappingOverlay(
             MappableElement("leftTrigger", "Left trigger (L2)"),
             MappableElement("rightTrigger", "Right trigger (R2)"),
             MappableElement("leftThumbstickButton", "Left stick click (L3)"),
+            MappableElement("leftStickUp", "Left stick up"),
+            MappableElement("leftStickDown", "Left stick down"),
+            MappableElement("leftStickLeft", "Left stick left"),
+            MappableElement("leftStickRight", "Left stick right"),
             MappableElement("rightThumbstickButton", "Right stick click (R3)"),
+            MappableElement("rightStickUp", "Right stick up"),
+            MappableElement("rightStickDown", "Right stick down"),
+            MappableElement("rightStickLeft", "Right stick left"),
+            MappableElement("rightStickRight", "Right stick right"),
             MappableElement("dpadUp", "D-pad up"),
             MappableElement("dpadDown", "D-pad down"),
             MappableElement("dpadLeft", "D-pad left"),

@@ -18,12 +18,14 @@ class ControllerMappingSection extends StatefulWidget {
     required this.bindings,
     required this.connectedControllers,
     required this.onBindingsChanged,
+    this.showIntro = true,
   });
 
   final StreamingBridge bridge;
   final List<StreamControllerElementMapping> bindings;
   final List<ConnectedControllerInfo> connectedControllers;
   final ValueChanged<List<StreamControllerElementMapping>> onBindingsChanged;
+  final bool showIntro;
 
   @override
   State<ControllerMappingSection> createState() => _ControllerMappingSectionState();
@@ -52,15 +54,19 @@ class _ControllerMappingSectionState extends State<ControllerMappingSection> {
   Future<void> _assignSwapToggle(GamepadElement element) async {
     if (!canMapSwapToggleTo(element.id)) return;
     final existing = _mappingFor(element.id);
+    final base = existing ??
+        StreamControllerElementMapping(
+          sourceElementId: element.id,
+          sourceLabel: element.label,
+          moonlightKeyCodes: const [],
+          targetLabel: 'Unmapped',
+        );
     await _persist(
-      StreamControllerElementMapping(
-        sourceElementId: element.id,
-        sourceLabel: element.label,
+      base.copyWith(
         moonlightKeyCodes: const [],
         targetLabel: kSwapToggleTargetLabel,
         targetAction: kSwapToggleTargetAction,
-        physicalKeyCode: existing?.physicalKeyCode,
-        manualPhysicalLink: existing?.manualPhysicalLink ?? false,
+        clearTargetAction: false,
       ),
     );
     if (!mounted) return;
@@ -189,25 +195,32 @@ class _ControllerMappingSectionState extends State<ControllerMappingSection> {
 
   Future<void> _linkGamepadButton(GamepadElement element) async {
     setState(() => _listeningElementId = element.id);
-    final press = await widget.bridge.awaitGamepadButtonPress();
+    final press = await widget.bridge.awaitGamepadButtonPress(elementId: element.id);
     if (!mounted) return;
     setState(() => _listeningElementId = null);
     if (press == null || press.keyCode == 0) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('No gamepad button detected — try Refresh gamepads first.')),
+          const SnackBar(
+            content: Text(
+              'No gamepad input — press a button, D-pad, or push a stick while linking.',
+            ),
+          ),
         );
       }
       return;
     }
 
     final existing = _mappingFor(element.id);
+    final base = existing ??
+        StreamControllerElementMapping(
+          sourceElementId: element.id,
+          sourceLabel: element.label,
+          moonlightKeyCodes: const [],
+          targetLabel: press.label,
+        );
     await _persist(
-      StreamControllerElementMapping(
-        sourceElementId: element.id,
-        sourceLabel: element.label,
-        moonlightKeyCodes: existing?.moonlightKeyCodes ?? const [],
-        targetLabel: existing?.targetLabel ?? 'Unmapped',
+      base.copyWith(
         physicalKeyCode: press.keyCode,
         manualPhysicalLink: true,
       ),
@@ -226,21 +239,16 @@ class _ControllerMappingSectionState extends State<ControllerMappingSection> {
     return 'Gamepad: auto-detect';
   }
 
-  int _gridColumnCount(double width, double height) {
-    if (width <= height) return 1;
-    if (width >= 900) return 3;
-    if (width >= 520) return 2;
-    return 1;
-  }
-
   Widget _mappingCard(GamepadElement element) {
     final mapping = _mappingFor(element.id);
     final listening = _listeningElementId == element.id;
     return Card(
+      margin: EdgeInsets.zero,
+      clipBehavior: Clip.antiAlias,
       child: Padding(
         padding: const EdgeInsets.all(12),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Text(
               element.label,
@@ -270,7 +278,13 @@ class _ControllerMappingSectionState extends State<ControllerMappingSection> {
                 ),
                 OutlinedButton(
                   onPressed: listening ? null : () => _linkGamepadButton(element),
-                  child: Text(listening ? 'Press a button…' : 'Link gamepad'),
+                  child: Text(
+                    listening
+                        ? (element.id.contains('Stick')
+                            ? 'Push stick direction…'
+                            : 'Press button / D-pad…')
+                        : 'Link gamepad',
+                  ),
                 ),
                 if (canMapSwapToggleTo(element.id))
                   OutlinedButton(
@@ -291,33 +305,14 @@ class _ControllerMappingSectionState extends State<ControllerMappingSection> {
   }
 
   Widget _mappingGrid(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final columns = _gridColumnCount(constraints.maxWidth, constraints.maxHeight);
-        if (columns == 1) {
-          return Column(
-            children: [
-              for (final element in kMappableGamepadElements) ...[
-                _mappingCard(element),
-                const SizedBox(height: 8),
-              ],
-            ],
-          );
-        }
-
-        return GridView.builder(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: columns,
-            crossAxisSpacing: 10,
-            mainAxisSpacing: 10,
-            mainAxisExtent: 152,
-          ),
-          itemCount: kMappableGamepadElements.length,
-          itemBuilder: (context, index) => _mappingCard(kMappableGamepadElements[index]),
-        );
-      },
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        for (final element in kMappableGamepadElements) ...[
+          _mappingCard(element),
+          const SizedBox(height: 8),
+        ],
+      ],
     );
   }
 
@@ -331,13 +326,16 @@ class _ControllerMappingSectionState extends State<ControllerMappingSection> {
     }
 
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text(
-          'Mapped buttons send keyboard chords or toggle Swap mouse mode (except A, B, and X — '
-          'those are used by Swap for click and drag). Unmapped buttons are ignored by the phone UI.',
-          style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
-        ),
+        if (widget.showIntro)
+          Text(
+            'Mapped buttons send keyboard chords or toggle Swap mouse mode (except A, B, and X — '
+            'those are used by Swap for click and drag). Unmapped buttons are ignored by the phone UI.',
+            style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
+          ),
+        if (widget.showIntro && widget.connectedControllers.isNotEmpty)
+          const SizedBox(height: 12),
         if (widget.connectedControllers.isNotEmpty) ...[
           const SizedBox(height: 12),
           for (final controller in widget.connectedControllers)

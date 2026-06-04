@@ -199,6 +199,14 @@ class StreamControllerProfileStore {
     await _writeLegacyBindings(profile.bindings);
   }
 
+  /// Replaces bindings on an existing profile (import).
+  Future<void> importBindings(
+    String profileId,
+    List<StreamControllerElementMapping> bindings,
+  ) async {
+    await _updateProfileBindings(profileId, List<StreamControllerElementMapping>.from(bindings));
+  }
+
   String activeBindingsJson() =>
       jsonEncode(activeBindings.map((b) => b.toJson()).toList());
 

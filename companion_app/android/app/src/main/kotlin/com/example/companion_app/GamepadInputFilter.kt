@@ -9,9 +9,18 @@ import android.view.MotionEvent
  * uses them for focus navigation (D-pad, A = activate, stick = scroll).
  */
 object GamepadInputFilter {
+    fun isSystemVolumeOrNavigationKey(keyCode: Int): Boolean = when (keyCode) {
+        KeyEvent.KEYCODE_VOLUME_UP,
+        KeyEvent.KEYCODE_VOLUME_DOWN,
+        KeyEvent.KEYCODE_VOLUME_MUTE,
+        -> true
+        else -> false
+    }
+
     fun isGamepadKey(event: KeyEvent): Boolean {
         // System / gesture Back must reach the activity so the user can leave the stream view.
         if (event.keyCode == KeyEvent.KEYCODE_BACK) return false
+        if (isSystemVolumeOrNavigationKey(event.keyCode)) return false
         if (KeyEvent.isGamepadButton(event.keyCode)) return true
         return when (event.keyCode) {
             KeyEvent.KEYCODE_DPAD_UP,

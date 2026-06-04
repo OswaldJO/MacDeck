@@ -9,6 +9,7 @@ For the **living product and architecture handbook**, see `Features and Inner Wo
 current release: 1  
 
 ## Updates
+- **Companion + Mac — controller stick mapping, Swap, resume (Jun 3 2026, verified):** **Controller** tab and in-stream overlay list **left/right stick up/down/left/right** (eight slots) plus existing L3/R3; runtime via **`PlayniteGamepadMapping.handleAnalogSticks`** (axis thresholds; synthetic link key codes). **Link gamepad** passes **`elementId`** into **`GamepadLinkCapture`** (hat **`AXIS_HAT_X/Y`**, stick deflection matched to the slot being linked). **Swap** left stick: motion runs **before** mapping; **`handleHatDpad`** no longer blocks stick when D-pad slots are mapped but neutral; **`PlayniteGamepadMouseSender`** reads left stick with dead-zone fallback. **Assign Swap** no longer uses a press latch (repeat toggles). **Resume stream view** after **Back**: **`leaveViewerWithoutMacStop`** so **`PlayniteVideoActivity.onDestroy`** does not POST Mac **`stream/stop`**; **`resumeStream`** relaunches viewer while host keeps streaming. Phone **volume** during app/stream: **`STREAM_MUSIC`**, volume keys not swallowed by **`GamepadInputFilter`**; stream notification category **service** (not transport). **Second session** hardening: Mac **`beginVideoStream`** always **`endVideoStream`** first; listener cancel wait **3s**; Flutter **`_ensureMacStreamFullyStopped`**; Session **Stop** joins Mac stop + idle poll; Mac **Stop active stream** button when **`isVideoStreaming`**.
 - **Companion — build + stream lifecycle (Jun 3 2026):** Fixed Flutter compile (`StreamControllerElementMapping`: use `targetAction: null` when saving a chord, not `clearTargetAction` on the constructor). Fixed Kotlin compile in **`PlayniteVideoActivity.dispatchKeyEvent`** (trailing lambda for Swap toggle). **`playnite_host_client.startStream`**: calls Mac **`stream/stop`**, polls **`GET /playnite/v1/status`** until **`videoStreaming`** is false, then retries start (503 backoff). **`PlayniteStreamStopCoordinator`**: one teardown for Session **Stop** and notification **Stop** (deactivate session, dismiss notification, finish video or clear log, background Mac **`stream/stop`**); notification path notifies Flutter via **`ensureHostStreamStopped`**. Session shows **Resume stream view** when the host is still streaming after **Back**.
 - **Companion — Swap mouse mode + controller mapping (Jun 3 2026):** Notification **Swap** toggles gamepad-as-mouse (left stick = cursor, **A/Cross** left click, **B/Circle** right click, **X/Square** hold + stick to drag). **Settings → Notification Swap button** documents behavior and **Swap stick cursor speed** slider (separate from touchpad speed). **Controller** tab: **Assign Swap** on eligible buttons (not A/B/X); same toggle as notification via `targetAction: toggleSwap`. **`PlayniteGamepadMapping`** handles toggle before Swap-mouse and keyboard chords. **`PlayniteGamepadMouseSender`** for stick/button mouse while Swap is on. **`GamepadInputFilter`** on **`MainActivity`** and stream view so the pad does not move Android focus; **Back** is never swallowed. Mac **Controllers** tab removed (mapping lives on the phone). Mac **`PlayniteStreamHostManager`** serializes stream start/stop and drives **`videoStreaming`** on the control server.
 - **Companion + Mac — stream shortcuts verified (Jun 3 2026):** **Command + Q** (and other chords) work on the Mac. Android logs show `PNK1` sends; fix was **`PlayniteKeyboardPlayback`**: US ANSI **Windows VK → `CGKeyCode`** table (e.g. `Q` = 12, not `vk - 0x41`), modifiers update **`CGEvent.flags`** only (Command/Option not posted as separate key events). Session-scoped **`PlayniteStreamSession.keyboardSender`** survives leaving the video view so notification/home shortcuts still work.
@@ -34,7 +35,7 @@ current release: 1
 
 ## Focus for next release
 - **iOS:** Native video/audio receiver still stub; Android is reference path.
-- Smoke test: notification **Swap** + mapped **Assign Swap** on L1/Macro; stick sensitivity slider; **Stop** then second **Start** (Mac **`videoStreaming`** idle + Flutter preflight).
+- Smoke test: **Stop** then second **Start** (Mac **`videoStreaming`** idle + TCP reconnect) — regression after force-quit / swipe-away.
 - Harden ScreenScraper matching (system IDs, checksum-based `jeuInfos` where useful).
 - Optional progress UI for full-library scrape; rate-limit awareness vs. ScreenScraper quotas.
 - Regression: video + touch + audio on Android after Mac/Xcode rebuild; confirm Mac mute restores after stream stop or host stop.
@@ -48,7 +49,10 @@ current release: 1
 - Smoke test: **Pair** → **Cancel** clears Mac pending request; re-pair when ready (**passed** Jun 3).
 - Smoke test: notification **Shortcuts** does not crash app; stream stays active (**passed** Jun 3).
 - Smoke test: **Stop** (Session or notification) then **Start Desktop stream** again without stale Mac session (**pending**).
-- Smoke test: **Swap** + **Assign Swap** mapping; stick speed in Settings (**pending**).
+- Smoke test: **Resume stream view** after **Back** with Mac still streaming (**passed** Jun 3).
+- Smoke test: map **right stick** directions + **Link gamepad** on D-pad hat (**passed** Jun 3).
+- Smoke test: **Swap** on — left stick moves cursor; **Assign Swap** toggles repeatedly (**passed** Jun 3).
+- Smoke test: phone **media** volume while companion open / during stream (**passed** Jun 3).
 - Smoke test: fresh install, migrate from prior store, Paths toggle + scrape + grid/Info covers.
 
 ## Future plans

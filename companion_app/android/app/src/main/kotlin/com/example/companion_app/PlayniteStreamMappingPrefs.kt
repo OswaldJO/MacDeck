@@ -40,9 +40,13 @@ object PlayniteStreamMappingPrefs {
             item.put("sourceLabel", elementLabel)
             item.put("physicalKeyCode", keyCode)
             item.put("manualPhysicalLink", true)
-            val keys = item.optJSONArray("moonlightKeyCodes")
-            if (keys == null || keys.length() == 0) {
-                item.put("targetLabel", keyLabel)
+            val isSwap =
+                item.optString("targetAction") == PlayniteSwapToggleMapping.TARGET_ACTION_TOGGLE_SWAP
+            if (!isSwap) {
+                val keys = item.optJSONArray("moonlightKeyCodes")
+                if (keys == null || keys.length() == 0) {
+                    item.put("targetLabel", keyLabel)
+                }
             }
             found = true
             break

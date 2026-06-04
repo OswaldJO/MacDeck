@@ -92,6 +92,11 @@ final class PlayniteStreamHostManager {
         }
     }
 
+    /// Ends an active companion stream (e.g. after the phone force-quit without Stop).
+    func stopActiveVideoStream() async {
+        await endVideoStream()
+    }
+
     func restartHost() async {
         stopPendingPoll()
         await endVideoStream()
@@ -181,16 +186,15 @@ final class PlayniteStreamHostManager {
 
     @discardableResult
     private func beginVideoStreamUnlocked(width: Int, height: Int, fps: Int) async -> Bool {
-        let hasActiveListener = await video.hasActiveListener
-        if isVideoStreaming || hasActiveListener {
-            await endVideoStreamUnlocked()
-        }
+        // Always tear down prior transport/capture so a second session works after app kill or failed connect.
+        await endVideoStreamUnlocked()
         if !capture.isReady {
             guard await capture.requestSystemPrompt() else { return false }
             await server.setCaptureReady(capture.isReady)
             guard capture.isReady else { return false }
         }
         do {
+            PlayniteKeyboardPlayback.resetModifierState()
             try await startStreamTransport()
             isVideoStreaming = true
             await server.setVideoStreaming(true)
@@ -233,6 +237,7 @@ final class PlayniteStreamHostManager {
         captureTask = nil
         isVideoStreaming = false
         await server.setVideoStreaming(false)
+        PlayniteKeyboardPlayback.resetModifierState()
         PlayniteLocalOutputMute.setStreamingMuted(false)
         await video.stopStream()
         await stopListeners()

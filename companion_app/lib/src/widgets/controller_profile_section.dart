@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../services/stream_controller_mapping_store.dart';
+import '../services/stream_controller_profile_share.dart';
 import '../services/stream_controller_profile_store.dart';
 
 /// Profile picker and CRUD for controller mapping presets.
@@ -191,6 +192,88 @@ class ControllerProfileSection extends StatelessWidget {
     }
   }
 
+  Future<void> _exportProfile(BuildContext context) async {
+    final profile = _active;
+    if (profile == null) return;
+    await StreamControllerProfileShare.exportActiveProfile(context, profile: profile);
+  }
+
+  Future<void> _importProfile(BuildContext context) async {
+    final parsed = await StreamControllerProfileShare.pickAndParse(context);
+    if (parsed == null || !context.mounted) return;
+
+    final imported = parsed.profile;
+    final mappedCount = imported.bindings.where((b) => b.hasMapping).length;
+    final activeName = _active?.name ?? 'current profile';
+    final nameController = TextEditingController(text: imported.name);
+
+    final choice = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('Import profile'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  '$mappedCount mapped button${mappedCount == 1 ? '' : 's'} from '
+                  '"${imported.name}".',
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: nameController,
+                  decoration: const InputDecoration(
+                    labelText: 'Name for new profile',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Or replace mappings in the loaded profile (“$activeName”) without changing its name.',
+                  style: Theme.of(dialogContext).textTheme.bodySmall,
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, 'replace'),
+              child: const Text('Replace loaded'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(dialogContext, 'new'),
+              child: const Text('Import as new'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (!context.mounted || choice == null) return;
+
+    if (choice == 'replace') {
+      await StreamControllerProfileShare.replaceActiveProfile(
+        context,
+        imported: imported,
+      );
+    } else {
+      await StreamControllerProfileShare.importAsNewProfile(
+        context,
+        imported: imported,
+        nameOverride: nameController.text,
+      );
+    }
+    if (context.mounted) {
+      await onProfilesChanged();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final active = _active;
@@ -216,7 +299,8 @@ class ControllerProfileSection extends StatelessWidget {
         ),
         const SizedBox(height: 4),
         Text(
-          'Save different button layouts. Edits auto-save to the loaded profile.',
+          'Save different button layouts. Export or import JSON to move profiles between phones. '
+          'Edits auto-save to the loaded profile.',
           style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
         ),
         const SizedBox(height: 12),
@@ -252,6 +336,16 @@ class ControllerProfileSection extends StatelessWidget {
           spacing: 8,
           runSpacing: 8,
           children: [
+            OutlinedButton.icon(
+              onPressed: active == null ? null : () => _exportProfile(context),
+              icon: const Icon(Icons.upload_outlined, size: 18),
+              label: const Text('Export'),
+            ),
+            OutlinedButton.icon(
+              onPressed: () => _importProfile(context),
+              icon: const Icon(Icons.download_outlined, size: 18),
+              label: const Text('Import'),
+            ),
             OutlinedButton.icon(
               onPressed: active == null ? null : () => _renameProfile(context, active),
               icon: const Icon(Icons.drive_file_rename_outline, size: 18),

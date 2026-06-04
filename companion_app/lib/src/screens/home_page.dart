@@ -295,6 +295,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
           builder: (context, scrollController) {
             return SingleChildScrollView(
               controller: scrollController,
+              padding: CompanionInsets.mappingTilesHorizontal(sheetContext),
               child: ControllerMappingSection(
                 bridge: _bridge,
                 bindings: _controllerBindings,
@@ -690,7 +691,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
           const Text(
             'Streams your Mac desktop via Playnite H.264 (port ${StreamingHostSettings.defaultVideoPort}). '
             'Connect a gamepad first (Controller tab), then start Desktop stream. '
-            'While streaming, use the notification Stop, Swap, Controller, or Shortcuts buttons (Stop matches the Session tab).',
+            'While streaming, use the notification Stop, Swap, Controller, or Shortcuts buttons (Stop matches the Session tab). '
+            'To start a fresh stream after leaving the video with Back, tap Stop here first, then Start.',
           ),
           if (_sessionStatus.isNotEmpty) ...[
             const SizedBox(height: 12),
@@ -736,10 +738,18 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   Widget _buildControllersTab() {
     final settings = _controllerSettings;
     final isAndroid = Platform.isAndroid;
+    final listPad = CompanionInsets.listPadding(context);
+    final contentPad = EdgeInsets.fromLTRB(listPad.left, 0, listPad.right, 0);
+    final tilePad = CompanionInsets.mappingTilesHorizontal(context);
 
     return ListView(
-      padding: CompanionInsets.listPadding(context),
+      padding: EdgeInsets.only(top: listPad.top, bottom: listPad.bottom),
       children: [
+        Padding(
+          padding: contentPad,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
         const Text(
           'Game controller',
           style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
@@ -790,25 +800,45 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
             activeProfileId: _activeControllerProfileId,
             onProfilesChanged: _reloadControllerMappingState,
           ),
-        ],
-        const Text(
-          'Button → keyboard mapping',
-          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-        ),
-        const SizedBox(height: 8),
-        if (isAndroid)
-          ControllerMappingSection(
-            bridge: _bridge,
-            bindings: _controllerBindings,
-            connectedControllers: _connectedControllers,
-            onBindingsChanged: _persistControllerBindings,
-          )
-        else
+          const Text(
+            'Button → keyboard mapping',
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(height: 8),
           Text(
-            'Button→keyboard mapping during streams is available on Android.',
+            'Mapped buttons send keyboard chords or toggle Swap mouse mode (except A, B, and X — '
+            'those are used by Swap for click and drag). Unmapped buttons are ignored by the phone UI.',
             style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
           ),
+        ],
+            ],
+          ),
+        ),
+        if (isAndroid)
+          Padding(
+            padding: tilePad,
+            child: ControllerMappingSection(
+              bridge: _bridge,
+              bindings: _controllerBindings,
+              connectedControllers: _connectedControllers,
+              onBindingsChanged: _persistControllerBindings,
+              showIntro: false,
+            ),
+          )
+        else
+          Padding(
+            padding: contentPad,
+            child: Text(
+              'Button→keyboard mapping during streams is available on Android.',
+              style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
+            ),
+          ),
         if (isAndroid) ...[
+          Padding(
+            padding: contentPad,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
           const SizedBox(height: 24),
           const Text(
             'Touchpad (stream view)',
@@ -874,63 +904,66 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
               ),
             ),
           ],
-        ],
-        const SizedBox(height: 24),
-        const Text(
-          'Stream input options',
+          const SizedBox(height: 24),
+          const Text(
+            'Stream input options',
           style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
         ),
-        const SizedBox(height: 8),
-        if (settings == null)
-          const Padding(
-            padding: EdgeInsets.symmetric(vertical: 16),
-            child: Center(child: CircularProgressIndicator()),
-          )
-        else ...[
-          SwitchListTile(
-            title: const Text('Multi-controller'),
-            subtitle: const Text('Keep slots open when a pad disconnects mid-game.'),
-            value: settings.multiController,
-            onChanged: (value) => _saveControllerSettings(multiController: value),
-          ),
-          SwitchListTile(
-            title: const Text('Swap A/B and X/Y'),
-            subtitle: const Text('Nintendo-style face buttons → Xbox layout on the Mac.'),
-            value: settings.swapFaceButtons,
-            onChanged: (value) => _saveControllerSettings(swapFaceButtons: value),
-          ),
-          SwitchListTile(
-            title: const Text('On-screen controls'),
-            subtitle: const Text('Touch overlay gamepad when no physical controller is connected.'),
-            value: settings.onScreenControls,
-            onChanged: (value) => _saveControllerSettings(onScreenControls: value),
-          ),
-          ListTile(
-            title: const Text('Stick dead zone'),
-            subtitle: Slider(
-              value: settings.deadZonePercent.toDouble(),
-              min: 0,
-              max: 20,
-              divisions: 20,
-              label: '${settings.deadZonePercent}%',
-              onChanged: (value) =>
-                  _saveControllerSettings(deadZonePercent: value.round()),
-            ),
-          ),
-          if (isAndroid) ...[
+          const SizedBox(height: 8),
+          if (settings == null)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 16),
+              child: Center(child: CircularProgressIndicator()),
+            )
+          else ...[
             SwitchListTile(
-              title: const Text('USB driver'),
-              subtitle: const Text('Support USB-C telescopic controllers via Moonlight USB driver.'),
-              value: settings.usbDriver,
-              onChanged: (value) => _saveControllerSettings(usbDriver: value),
+              title: const Text('Multi-controller'),
+              subtitle: const Text('Keep slots open when a pad disconnects mid-game.'),
+              value: settings.multiController,
+              onChanged: (value) => _saveControllerSettings(multiController: value),
             ),
             SwitchListTile(
-              title: const Text('Bind all USB devices'),
-              subtitle: const Text('Claim unrecognized USB gamepads (use if yours is not detected).'),
-              value: settings.bindAllUsb,
-              onChanged: (value) => _saveControllerSettings(bindAllUsb: value),
+              title: const Text('Swap A/B and X/Y'),
+              subtitle: const Text('Nintendo-style face buttons → Xbox layout on the Mac.'),
+              value: settings.swapFaceButtons,
+              onChanged: (value) => _saveControllerSettings(swapFaceButtons: value),
             ),
+            SwitchListTile(
+              title: const Text('On-screen controls'),
+              subtitle: const Text('Touch overlay gamepad when no physical controller is connected.'),
+              value: settings.onScreenControls,
+              onChanged: (value) => _saveControllerSettings(onScreenControls: value),
+            ),
+            ListTile(
+              title: const Text('Stick dead zone'),
+              subtitle: Slider(
+                value: settings.deadZonePercent.toDouble(),
+                min: 0,
+                max: 20,
+                divisions: 20,
+                label: '${settings.deadZonePercent}%',
+                onChanged: (value) =>
+                    _saveControllerSettings(deadZonePercent: value.round()),
+              ),
+            ),
+            if (isAndroid) ...[
+              SwitchListTile(
+                title: const Text('USB driver'),
+                subtitle: const Text('Support USB-C telescopic controllers via Moonlight USB driver.'),
+                value: settings.usbDriver,
+                onChanged: (value) => _saveControllerSettings(usbDriver: value),
+              ),
+              SwitchListTile(
+                title: const Text('Bind all USB devices'),
+                subtitle: const Text('Claim unrecognized USB gamepads (use if yours is not detected).'),
+                value: settings.bindAllUsb,
+                onChanged: (value) => _saveControllerSettings(bindAllUsb: value),
+              ),
+            ],
           ],
+              ],
+            ),
+          ),
         ],
       ],
     );

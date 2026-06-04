@@ -12,6 +12,12 @@ object PlayniteStreamSession {
     @Volatile var swapMouseModeActive: Boolean = false
 
     /**
+     * Set while [PlayniteVideoActivity] closes via Back (viewer only). Suppresses Mac `stream/stop` in
+     * [PlayniteVideoActivity.onDestroy] so **Resume stream view** can reconnect to the same host session.
+     */
+    @Volatile var leaveViewerWithoutMacStop: Boolean = false
+
+    /**
      * Bumped on each Session Stop and each new [startStream]. Background Mac stops only run when
      * their captured generation still matches (avoids a late stop killing the next stream).
      */

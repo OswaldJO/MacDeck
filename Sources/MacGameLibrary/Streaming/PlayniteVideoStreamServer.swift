@@ -70,7 +70,7 @@ actor PlayniteVideoStreamServer {
     func stopListener() async {
         guard let listener else { return }
         listener.cancel()
-        await PlayniteNWListenerAwait.waitUntilCancelled(listener)
+        await PlayniteNWListenerAwait.waitUntilCancelled(listener, timeoutSeconds: 3)
         self.listener = nil
     }
 

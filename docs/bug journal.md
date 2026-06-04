@@ -224,6 +224,60 @@ For release notes style summaries, see `source control log.md`. For architecture
 | **Fix** | `handleConnectFailure()` → `PlayniteStreamStopper.stopAll`; `launchStreamActivity` returns `false` to Flutter when connect fails (no immediate `result.success(true)`). |
 | **Commit** | *In progress (with BJ-063)* |
 
+### BJ-071 — **Resume stream view** failed after Back from video
+| | |
+|---|---|
+| **When** | Jun 3, 2026 (regression after Mac-stop-on-destroy work; **fixed**, verified) |
+| **Symptom** | **Resume stream view** did not reopen video; Mac had stopped even though user only pressed **Back**. |
+| **Cause** | `PlayniteVideoActivity.onDestroy` posted **`stream/stop`** whenever `hostStreamActive` was true, including viewer-only exit via **Back** (`leaveViewerOnly`). |
+| **Fix** | **`PlayniteStreamSession.leaveViewerWithoutMacStop`**: set on Back path, cleared in `onDestroy`; Mac stop only when the activity ends for other reasons (force-quit, connect failure teardown, Session **Stop**). **`resumeStream`** clears the flag and relaunches **`PlayniteVideoActivity`**. |
+| **Commit** | *Not committed yet* |
+
+### BJ-072 — Swap on but left stick did not move cursor
+| | |
+|---|---|
+| **When** | Jun 3, 2026 (**fixed**, verified) |
+| **Symptom** | Notification **Swap** enabled; face buttons worked; left stick had no effect on Mac cursor. |
+| **Cause** | **`handleHatDpad`** returned “consumed” whenever any D-pad slot had a binding, even with hat centered—so **`PlayniteGamepadMouseSender`** never ran. Motion order ran mapping before Swap mouse. |
+| **Fix** | Hat handler only consumes when a direction actually presses/releases a chord; generic motion runs **Swap mouse first**, then triggers/hat/sticks. Left-stick read includes dead-zone fallback axes on some pads. |
+| **Commit** | *Not committed yet* |
+
+### BJ-073 — **Assign Swap** / mapped Swap toggled only once
+| | |
+|---|---|
+| **When** | Jun 3, 2026 (**fixed**, verified) |
+| **Symptom** | First Swap toggle worked; later presses did nothing until user relinked the button. |
+| **Cause** | **`swapToggleDown`** latch in **`PlayniteGamepadMapping`**; missed **KEY_UP** left latch set so further **ACTION_DOWN** was ignored. |
+| **Fix** | Toggle Swap on each **ACTION_DOWN** (`repeatCount == 0`) without latch; **`releaseAllKeys`** on Swap off unchanged. |
+| **Commit** | *Not committed yet* |
+
+### BJ-074 — **Link gamepad** ignored D-pad and stick (L3/R3 only)
+| | |
+|---|---|
+| **When** | Jun 3, 2026 (**fixed**, verified for D-pad; stick directions added) |
+| **Symptom** | **Link gamepad** only detected face buttons and L3/R3; D-pad and stick pushes did nothing. |
+| **Cause** | Capture listened only to **`KeyEvent`**; Samsung and many pads emit D-pad as **`AXIS_HAT_X/Y`** and sticks as **`MotionEvent`**, not **`KEYCODE_DPAD_*`**. |
+| **Fix** | **`GamepadLinkCapture.tryConsumeMotion`** (hat + stick deflection); **`dispatchGenericMotionEvent`** on **`MainActivity`** and **`PlayniteVideoActivity`**. Link passes target **`elementId`** so the correct stick direction is learned. Eight stick-direction mapping slots + **`handleAnalogSticks`** at stream time. |
+| **Commit** | *Not committed yet* |
+
+### BJ-075 — Phone volume buttons had no effect in companion
+| | |
+|---|---|
+| **When** | Jun 3, 2026 (**fixed**, verified) |
+| **Symptom** | Hardware volume keys did not change loudness while the app was open (including during stream). |
+| **Cause** | Gamepad filter could interfere; stream notification **`CATEGORY_TRANSPORT`** on some OEMs tied volume to the wrong stream; no explicit **`volumeControlStream`**. |
+| **Fix** | **`GamepadInputFilter`**: never treat volume keys as gamepad; **`volumeControlStream = STREAM_MUSIC`** on **`MainActivity`** / **`PlayniteVideoActivity`**; notification category **service**. |
+| **Commit** | *Not committed yet* |
+
+### BJ-076 — Second **Start** / force-quit left Mac session stuck
+| | |
+|---|---|
+| **When** | Jun 3, 2026 (partial fix; **Stop → Start** still under test) |
+| **Symptom** | After **Stop**, swipe-kill, or failed reconnect, next **Start Desktop** failed (TCP **28766** / timeout) until Mac app restart. |
+| **Cause** | Phone kill skipped **`stream/stop`**; Mac listeners/capture still bound; companion thought idle from stale **`videoStreaming`** poll timing; background stop races. |
+| **Fix** | Mac: always **`endVideoStream`** before new start; **3s** listener cancel wait; **Stop active stream** on Streaming tab. Android: **`onDestroy`** Mac stop when not viewer-only exit; **`_ensureMacStreamFullyStopped`**; Session **Stop** blocks on Mac stop (8s) + idle poll. |
+| **Commit** | *In progress (with BJ-063)* |
+
 ---
 
 ## Open / known issues
@@ -233,6 +287,8 @@ For release notes style summaries, see `source control log.md`. For architecture
 | — | Some OEMs still collapse custom notification layout | `addAction` fallback present; may need in-app stream control panel. |
 | — | iOS native video/audio receiver stub | Android is reference client. |
 | — | `stream/start` can take >8s if Mac capture is slow | Mitigated by transport-first HTTP + 30s Dart timeout (**in progress**). |
+| — | **Stop** then fresh **Start** after long sessions | Retest after BJ-076; use Mac **Stop active stream** if phone was force-quit. |
+| — | Right stick on some pads uses **AXIS_RX/RY** vs **Z/RZ** | Mapping tries both; link capture matches target element only. |
 
 ---
 

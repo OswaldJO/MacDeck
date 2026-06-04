@@ -61,8 +61,9 @@ class PlayniteGamepadMouseSender(
     }
 
     fun handleMotionEvent(event: MotionEvent): Boolean {
-        val stickX = applyStickDeadzone(event.getAxisValue(MotionEvent.AXIS_X))
-        val stickY = applyStickDeadzone(event.getAxisValue(MotionEvent.AXIS_Y))
+        val (rawX, rawY) = readLeftStickAxes(event)
+        val stickX = applyStickDeadzone(rawX)
+        val stickY = applyStickDeadzone(rawY)
         if (stickX == 0f && stickY == 0f) return true
         // AXIS_Y is negative when the stick is pushed up; Mac dy uses screen coords (down = +y).
         sendStickMove(stickX, stickY)
@@ -75,6 +76,20 @@ class PlayniteGamepadMouseSender(
             sendButton(type = 2, button = 0)
             highlightDragHeld = false
         }
+    }
+
+    private fun readLeftStickAxes(event: MotionEvent): Pair<Float, Float> {
+        var x = event.getAxisValue(MotionEvent.AXIS_X)
+        var y = event.getAxisValue(MotionEvent.AXIS_Y)
+        if (abs(x) < 0.08f && abs(y) < 0.08f) {
+            val zx = event.getAxisValue(MotionEvent.AXIS_Z)
+            val zy = event.getAxisValue(MotionEvent.AXIS_RZ)
+            if (abs(zx) > 0.12f || abs(zy) > 0.12f) {
+                x = zx
+                y = zy
+            }
+        }
+        return x to y
     }
 
     private fun applyStickDeadzone(value: Float): Float {

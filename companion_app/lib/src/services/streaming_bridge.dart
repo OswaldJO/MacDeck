@@ -96,11 +96,14 @@ class StreamingBridge {
     }
   }
 
-  Future<GamepadButtonPress?> awaitGamepadButtonPress({int timeoutMs = 15000}) async {
+  Future<GamepadButtonPress?> awaitGamepadButtonPress({
+    required String elementId,
+    int timeoutMs = 15000,
+  }) async {
     try {
       final raw = await _channel.invokeMethod<Map<Object?, Object?>>(
         'awaitGamepadButtonPress',
-        {'timeoutMs': timeoutMs},
+        {'timeoutMs': timeoutMs, 'elementId': elementId},
       );
       if (raw == null) return null;
       return GamepadButtonPress(
@@ -177,6 +180,13 @@ class StreamingBridge {
   Future<void> ensureHostStreamStopped() async {
     final client = await _client();
     await client.stopStreamOnHost();
+    await client.waitForMacStreamIdle();
+  }
+
+  /// Wait until the Mac control API reports streaming has ended (use after Stop).
+  Future<void> waitForHostStreamIdle() async {
+    final client = await _client();
+    await client.waitForMacStreamIdle();
   }
 
   /// Android: notification Stop and other native paths invoke [onStreamStoppedExternally].

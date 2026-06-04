@@ -3,6 +3,7 @@ package com.example.companion_app
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.media.AudioManager
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
@@ -78,6 +79,19 @@ class MainActivity : FlutterActivity() {
         }
     }
 
+    override fun onCreate(savedInstanceState: android.os.Bundle?) {
+        super.onCreate(savedInstanceState)
+        volumeControlStream = AudioManager.STREAM_MUSIC
+    }
+
+    override fun onDestroy() {
+        val host = PlayniteStreamSession.host
+        if (host.isNotEmpty() && PlayniteStreamSession.hostStreamActive) {
+            Thread { PlayniteHostControlClient.stopStreamOnHost(host) }.start()
+        }
+        super.onDestroy()
+    }
+
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
         appContext = applicationContext
@@ -145,11 +159,15 @@ class MainActivity : FlutterActivity() {
                         return@setMethodCallHandler
                     }
                     PlayniteStreamSession.cancelPendingMacStop()
+                    PlayniteStreamSession.leaveViewerWithoutMacStop = false
+                    PlayniteStreamSession.hostStreamActive = true
                     launchStreamActivity(result)
                 }
 
                 "prepareForNewStream" -> {
                     PlayniteStreamSession.cancelPendingMacStop()
+                    PlayniteStreamSession.swapMouseModeActive = false
+                    PlayniteStreamSession.keyboardSender()?.releaseAllKeys()
                     val video = PlayniteVideoActivity.current
                     if (video != null) {
                         video.runOnUiThread { video.finishFromHost() }
@@ -241,15 +259,16 @@ class MainActivity : FlutterActivity() {
 
                 "awaitGamepadButtonPress" -> {
                     val timeoutMs = call.argument<Int>("timeoutMs") ?: 15_000
+                    val targetElementId = call.argument<String>("elementId").orEmpty()
                     val completed = AtomicBoolean(false)
-                    if (!GamepadLinkCapture.beginListening { event ->
+                    if (!GamepadLinkCapture.beginListening(targetElementId) { captured ->
                         if (!completed.compareAndSet(false, true)) return@beginListening
                         mainHandler.post {
                             result.success(
                                 hashMapOf(
-                                    "keyCode" to event.keyCode,
-                                    "label" to GamepadKeyCodes.labelForKeyCode(event.keyCode),
-                                    "elementId" to (GamepadKeyCodes.elementIdForKeyCode(event.keyCode) ?: ""),
+                                    "keyCode" to captured.keyCode,
+                                    "label" to captured.label,
+                                    "elementId" to captured.elementId,
                                 ),
                             )
                         }
@@ -260,7 +279,11 @@ class MainActivity : FlutterActivity() {
                     mainHandler.postDelayed({
                         if (!completed.compareAndSet(false, true)) return@postDelayed
                         GamepadLinkCapture.cancel()
-                        result.error("timeout", "No gamepad button pressed", null)
+                        result.error(
+                            "timeout",
+                            "No gamepad input detected — press a button, D-pad, or push a stick",
+                            null,
+                        )
                     }, timeoutMs.toLong())
                 }
 
@@ -348,6 +371,9 @@ class MainActivity : FlutterActivity() {
     }
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        if (GamepadInputFilter.isSystemVolumeOrNavigationKey(event.keyCode)) {
+            return super.dispatchKeyEvent(event)
+        }
         if (GamepadLinkCapture.tryConsume(event)) {
             return true
         }
@@ -358,6 +384,9 @@ class MainActivity : FlutterActivity() {
     }
 
     override fun dispatchGenericMotionEvent(event: MotionEvent): Boolean {
+        if (GamepadLinkCapture.tryConsumeMotion(event)) {
+            return true
+        }
         if (GamepadInputFilter.isGamepadMotion(event)) {
             return true
         }

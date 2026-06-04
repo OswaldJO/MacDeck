@@ -113,6 +113,12 @@ struct StreamingView: View {
                 Label("Streaming video to phone", systemImage: "dot.radiowaves.left.and.right")
                     .font(.caption)
                     .foregroundStyle(.green)
+                Button("Stop active stream", role: .destructive) {
+                    Task {
+                        await hostManager.stopActiveVideoStream()
+                        session.refreshHostStatus()
+                    }
+                }
             }
             screenRecordingPermissionBlock
             if let guidance = hostManager.captureGuidance {
