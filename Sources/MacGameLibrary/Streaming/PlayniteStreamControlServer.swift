@@ -23,11 +23,9 @@ actor PlayniteStreamControlServer {
     private var pairedDevices: [PairedDevice] = []
     private var captureReady = false
     private var videoStreaming = false
-    /// True when video/audio/input listeners are torn down and a new `stream/start` can bind ports.
-    private var transportReady = true
     private let storeURL: URL
 
-    var onStreamStartRequested: (@Sendable (String, Int, Int, Int) async -> Bool)?
+    var onStreamStartRequested: (@Sendable (String, Int, Int, Int) async -> Void)?
     var onStreamStopRequested: (@Sendable () async -> Void)?
     var onPairingQueueChanged: (@Sendable () async -> Void)?
 
@@ -48,10 +46,6 @@ actor PlayniteStreamControlServer {
 
     func setVideoStreaming(_ active: Bool) {
         videoStreaming = active
-    }
-
-    func setTransportReady(_ ready: Bool) {
-        transportReady = ready
     }
 
     func start(port: UInt16 = PlayniteStreamPorts.controlHTTP) async throws {
@@ -135,7 +129,7 @@ actor PlayniteStreamControlServer {
     }
 
     func setStreamHandlers(
-        onStart: @escaping @Sendable (String, Int, Int, Int) async -> Bool,
+        onStart: @escaping @Sendable (String, Int, Int, Int) async -> Void,
         onStop: @escaping @Sendable () async -> Void
     ) {
         onStreamStartRequested = onStart
@@ -245,7 +239,6 @@ actor PlayniteStreamControlServer {
                 "hostname": ProcessInfo.processInfo.hostName,
                 "captureReady": captureReady,
                 "videoStreaming": videoStreaming,
-                "transportReady": transportReady,
                 "pairedCount": pairedDevices.count,
                 "pendingCount": pendingByDeviceID.count,
                 "videoPort": PlayniteStreamPorts.videoTCP,
@@ -308,15 +301,8 @@ actor PlayniteStreamControlServer {
             let width = json?["width"] as? Int ?? 1920
             let height = json?["height"] as? Int ?? 1080
             let fps = json?["fps"] as? Int ?? 60
-            var started = true
             if let onStreamStartRequested {
-                started = await onStreamStartRequested(deviceID, width, height, fps)
-            }
-            guard started else {
-                return httpResponse(status: 503, body: [
-                    "ok": false,
-                    "error": "stream transport not ready (screen capture or encoder failed)",
-                ])
+                Task { await onStreamStartRequested(deviceID, width, height, fps) }
             }
             return httpResponse(status: 200, body: [
                 "ok": true,
@@ -327,12 +313,10 @@ actor PlayniteStreamControlServer {
                 "host": LocalNetworkAddress.primaryIPv4() ?? "127.0.0.1",
             ])
         case ("POST", "/playnite/v1/stream/stop"):
-            // Tear down listeners/capture before reporting idle (companion polls transportReady).
             if let onStreamStopRequested {
-                await onStreamStopRequested()
+                Task { await onStreamStopRequested() }
             } else {
                 setVideoStreaming(false)
-                setTransportReady(true)
             }
             return httpResponse(status: 200, body: ["ok": true])
         default:

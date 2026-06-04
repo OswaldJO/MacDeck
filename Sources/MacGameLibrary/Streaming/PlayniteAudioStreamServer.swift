@@ -32,11 +32,7 @@ actor PlayniteAudioStreamServer {
     }
 
     func startTCPListener(port: UInt16 = PlayniteStreamPorts.audioTCP) async throws {
-        if let existing = tcpListener {
-            existing.cancel()
-            await PlayniteNWListenerAwait.waitUntilCancelled(existing)
-            tcpListener = nil
-        }
+        if tcpListener != nil { return }
         let nwPort = NWEndpoint.Port(rawValue: port)!
         let parameters = NWParameters.tcp
         parameters.allowLocalEndpointReuse = true

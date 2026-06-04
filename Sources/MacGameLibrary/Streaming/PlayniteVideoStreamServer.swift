@@ -12,9 +12,7 @@ actor PlayniteVideoStreamServer {
     var hasActiveListener: Bool { listener != nil }
 
     func startListener(port: UInt16 = PlayniteStreamPorts.videoTCP) async throws {
-        if listener != nil {
-            await stopListener()
-        }
+        if listener != nil { return }
         let nwPort = NWEndpoint.Port(rawValue: port)!
         let parameters = NWParameters.tcp
         parameters.allowLocalEndpointReuse = true

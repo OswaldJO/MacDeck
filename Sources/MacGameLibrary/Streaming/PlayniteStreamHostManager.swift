@@ -25,7 +25,6 @@ final class PlayniteStreamHostManager {
     private var pendingPollTask: Task<Void, Never>?
     private var captureTask: Task<Void, Never>?
     private var streamOperationChain: Task<Void, Never>?
-    private var lastStreamStartSucceeded = false
 
     private init() {
         PlayniteLocalOutputMute.setStreamingMuted(false)
@@ -73,7 +72,7 @@ final class PlayniteStreamHostManager {
         await server.setCaptureReady(capture.isReady)
     }
 
-    /// Starts HTTP control (pairing/discovery) only. Video/audio/input transport and capture begin on companion `stream/start`.
+    /// Starts HTTP control and keeps video/audio/input listeners bound until [stop] / [restartHost].
     func ensureReady() async {
         state = .preparing
         PlayniteLocalOutputMute.setStreamingMuted(false)
@@ -83,6 +82,7 @@ final class PlayniteStreamHostManager {
 
         do {
             try await server.start()
+            try await startTransportListeners()
             AccessibilityPermission.promptIfNeeded()
             state = .running
             await refreshPendingPairRequests()
@@ -100,6 +100,7 @@ final class PlayniteStreamHostManager {
     func restartHost() async {
         stopPendingPoll()
         await endVideoStream()
+        await stopTransportListeners()
         await server.stop()
         state = .idle
         await ensureReady()
@@ -108,6 +109,7 @@ final class PlayniteStreamHostManager {
     func stop() async {
         stopPendingPoll()
         await endVideoStream()
+        await stopTransportListeners()
         await server.stop()
         PlayniteLocalOutputMute.setStreamingMuted(false)
         state = .idle
@@ -141,7 +143,11 @@ final class PlayniteStreamHostManager {
     private func wireStreamCallbacks() async {
         await server.setStreamHandlers(
             onStart: { _, width, height, fps in
-                await PlayniteStreamHostManager.shared.beginVideoStream(width: width, height: height, fps: fps)
+                await PlayniteStreamHostManager.shared.beginVideoStream(
+                    width: width,
+                    height: height,
+                    fps: fps
+                )
             },
             onStop: {
                 await PlayniteStreamHostManager.shared.endVideoStream()
@@ -159,19 +165,13 @@ final class PlayniteStreamHostManager {
         pendingPairRequests = await server.pendingRequests()
     }
 
-    @discardableResult
-    func beginVideoStream(width: Int, height: Int, fps: Int) async -> Bool {
+    func beginVideoStream(width: Int, height: Int, fps: Int) async {
         await enqueueStreamOperation {
-            self.lastStreamStartSucceeded = await self.beginVideoStreamUnlocked(
-                width: width,
-                height: height,
-                fps: fps
-            )
+            await self.beginVideoStreamUnlocked(width: width, height: height, fps: fps)
         }
-        return lastStreamStartSucceeded
     }
 
-    /// Runs [body] after any prior start/stop work finishes (@MainActor class — no Sendable generic needed).
+    /// Runs [body] after any prior start/stop work finishes.
     private func enqueueStreamOperation(_ body: @escaping @MainActor () async -> Void) async {
         let previous = streamOperationChain
         let task = Task { @MainActor in
@@ -184,48 +184,31 @@ final class PlayniteStreamHostManager {
         await task.value
     }
 
-    @discardableResult
-    private func beginVideoStreamUnlocked(width: Int, height: Int, fps: Int) async -> Bool {
-        // Always tear down prior transport/capture so a second session works after app kill or failed connect.
-        await server.setTransportReady(false)
-        await endVideoStreamUnlocked(releaseTransport: false)
-        try? await Task.sleep(nanoseconds: 500_000_000)
+    private func beginVideoStreamUnlocked(width: Int, height: Int, fps: Int) async {
+        await endVideoStreamUnlocked()
         if !capture.isReady {
-            guard await capture.requestSystemPrompt() else { return false }
+            guard await capture.requestSystemPrompt() else { return }
             await server.setCaptureReady(capture.isReady)
-            guard capture.isReady else { return false }
+            guard capture.isReady else { return }
         }
-        do {
-            PlayniteKeyboardPlayback.resetModifierState()
-            try await startStreamTransport()
-            isVideoStreaming = true
-            await server.setVideoStreaming(true)
-            PlayniteLocalOutputMute.setStreamingMuted(true)
-            print("[PlayniteStream] transport ready for companion (starting capture…)")
-            let audioServer = audio
-            captureTask?.cancel()
-            captureTask = Task { @MainActor in
-                do {
-                    try await video.startCapture(width: width, height: height, fps: fps) { pcm, sampleRate, channels in
-                        Task { await audioServer.sendPCM(pcm, sampleRate: sampleRate, channels: channels) }
-                    }
-                    print("[PlayniteStream] companion stream \(width)x\(height) @ \(fps)fps")
-                } catch {
-                    if !Task.isCancelled {
-                        print("[PlayniteStream] capture start failed: \(error.localizedDescription)")
-                        await self.endVideoStreamUnlocked()
-                    }
+        PlayniteKeyboardPlayback.resetModifierState()
+        isVideoStreaming = true
+        await server.setVideoStreaming(true)
+        PlayniteLocalOutputMute.setStreamingMuted(true)
+        let audioServer = audio
+        captureTask?.cancel()
+        captureTask = Task { @MainActor in
+            do {
+                try await video.startCapture(width: width, height: height, fps: fps) { pcm, sampleRate, channels in
+                    Task { await audioServer.sendPCM(pcm, sampleRate: sampleRate, channels: channels) }
+                }
+                print("[PlayniteStream] companion stream \(width)x\(height) @ \(fps)fps")
+            } catch {
+                if !Task.isCancelled {
+                    print("[PlayniteStream] capture start failed: \(error.localizedDescription)")
+                    await self.endVideoStreamUnlocked()
                 }
             }
-            return true
-        } catch {
-            await stopStreamTransport()
-            PlayniteLocalOutputMute.setStreamingMuted(false)
-            isVideoStreaming = false
-            await server.setVideoStreaming(false)
-            await server.setTransportReady(true)
-            print("[PlayniteStream] stream start failed: \(error.localizedDescription)")
-            return false
         }
     }
 
@@ -235,37 +218,28 @@ final class PlayniteStreamHostManager {
         }
     }
 
-    private func endVideoStreamUnlocked(releaseTransport: Bool = true) async {
+    private func endVideoStreamUnlocked() async {
         captureTask?.cancel()
         captureTask = nil
+        await video.stopStream()
         isVideoStreaming = false
         await server.setVideoStreaming(false)
         PlayniteKeyboardPlayback.resetModifierState()
         PlayniteLocalOutputMute.setStreamingMuted(false)
-        await video.stopStream()
-        await stopListeners()
-        if releaseTransport {
-            await server.setTransportReady(true)
-        }
         print("[PlayniteStream] stream ended")
     }
 
-    private func startStreamTransport() async throws {
+    private func startTransportListeners() async throws {
         try await video.startListener()
         try await audio.startListener()
         try await audio.startTCPListener()
         try await input.startListener()
     }
 
-    private func stopListeners() async {
-        await video.stopListener()
+    private func stopTransportListeners() async {
+        await video.stop()
         await audio.stop()
         await input.stop()
-    }
-
-    private func stopStreamTransport() async {
-        await video.stopStream()
-        await stopListeners()
     }
 
     private func startPendingPoll() {

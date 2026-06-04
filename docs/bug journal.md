@@ -272,11 +272,11 @@ For release notes style summaries, see `source control log.md`. For architecture
 ### BJ-076 — Second **Start** / force-quit left Mac session stuck
 | | |
 |---|---|
-| **When** | Jun 3, 2026 (partial fix; **Stop → Start** still under test) |
+| **When** | Jun 3–4, 2026 (**fixed**, verified **Stop → Start**) |
 | **Symptom** | After **Stop**, swipe-kill, or failed reconnect, next **Start Desktop** failed (TCP **28766** / timeout) until Mac app restart. |
-| **Cause** | Phone kill skipped **`stream/stop`**; Mac listeners/capture still bound; companion thought idle from stale **`videoStreaming`** poll timing; background stop races. |
-| **Fix** | Mac: always **`endVideoStream`** before new start; **3s** listener cancel wait; **Stop active stream** on Streaming tab. Android: **`onDestroy`** Mac stop when not viewer-only exit; **`_ensureMacStreamFullyStopped`**; Session **Stop** blocks on Mac stop (8s) + idle poll. |
-| **Commit** | *In progress (with BJ-063)* |
+| **Cause** | Refactor bound/unbound **NWListener** per session (port races on second connect). **`stream/stop`** reported idle before teardown; companion **`transportReady`** / heavy pre-start polling fought async stop. Working commit **41487e8** kept listeners up and only toggled capture. |
+| **Fix** | Restored persistent listeners in **`ensureReady()`**; capture-only **`beginVideoStream`** / **`endVideoStream`**; fire-and-forget **`stream/start`** + **`stream/stop`**; idempotent **`startListener`**; removed **`transportReady`**. Companion: single **`stream/start`**; preflight stop only when **`videoStreaming`** true. Retained **Back** resume, **Stop** coordinator, and **Stop active stream** on Mac. |
+| **Commit** | *Not committed yet* |
 
 ---
 
@@ -286,8 +286,8 @@ For release notes style summaries, see `source control log.md`. For architecture
 |----|--------|--------|
 | — | Some OEMs still collapse custom notification layout | `addAction` fallback present; may need in-app stream control panel. |
 | — | iOS native video/audio receiver stub | Android is reference client. |
-| — | `stream/start` can take >8s if Mac capture is slow | Mitigated by transport-first HTTP + 30s Dart timeout (**in progress**). |
-| — | **Stop** then fresh **Start** after long sessions | Retest after BJ-076; use Mac **Stop active stream** if phone was force-quit. |
+| — | `stream/start` returns before capture is running | Phone connects to TCP **28766** immediately; first frames may lag until SCK starts (expected). |
+| — | Force-quit without **Stop** | Use Session **Stop** or Mac **Stop active stream**; next **Start** sends preflight **`stream/stop`** when **`videoStreaming`** is still true. |
 | — | Right stick on some pads uses **AXIS_RX/RY** vs **Z/RZ** | Mapping tries both; link capture matches target element only. |
 
 ---

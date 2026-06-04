@@ -8,8 +8,8 @@ class CompanionAppearanceSettings {
   /// Increment to rebuild [MaterialApp] theme after a color change.
   static final ValueNotifier<int> themeRevision = ValueNotifier<int>(0);
 
-  /// Default near-white body text on dark backgrounds.
-  static const Color defaultPrimaryText = Color(0xFFE8EAED);
+  /// Default primary text (Mint preset) on dark backgrounds.
+  static const Color defaultPrimaryText = Color(0xFF80CBC4);
 
   static const List<({String label, Color color})> presetTextColors = [
     (label: 'White', color: Color(0xFFE8EAED)),
