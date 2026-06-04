@@ -223,15 +223,18 @@ struct StreamingView: View {
     @ViewBuilder
     private var hostStateRow: some View {
         switch hostManager.state {
+        case .running where hostManager.isVideoStreaming:
+            Label("Streaming to companion", systemImage: "dot.radiowaves.left.and.right")
+                .foregroundStyle(.green)
         case .running where session.hostReachable && hostManager.isCaptureReady:
-            Label("Ready to pair and stream", systemImage: "checkmark.circle.fill")
+            Label("Ready — pairing OK; stream starts from the phone", systemImage: "checkmark.circle.fill")
                 .foregroundStyle(.green)
         case .running where session.hostReachable:
-            Label("Host up — grant Screen Recording", systemImage: "exclamationmark.triangle.fill")
+            Label("Host up — grant Screen Recording before streaming", systemImage: "exclamationmark.triangle.fill")
                 .foregroundStyle(.orange)
         case .running:
-            Label("Running", systemImage: "checkmark.circle")
-                .foregroundStyle(.green)
+            Label("Pairing host listening", systemImage: "checkmark.circle")
+                .foregroundStyle(.secondary)
         case .preparing:
             Label(hostManager.statusLine, systemImage: "arrow.trianglehead.2.clockwise")
                 .foregroundStyle(.secondary)
@@ -303,8 +306,8 @@ struct StreamingView: View {
             )
             Label("Touch on the phone moves the Mac pointer (UDP \(PlayniteStreamPorts.inputUDP))", systemImage: "hand.tap")
             Text(
-                "Desktop audio is sent to the phone while streaming; Mac speakers are muted for the stream duration. " +
-                    "Use the phone media volume buttons during a stream."
+                "Capture, audio routing, and Mac speaker mute apply only while a companion stream is active " +
+                    "(Session → Start Desktop stream). Use phone media volume during a stream."
             )
             .font(.caption)
             .foregroundStyle(.secondary)

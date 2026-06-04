@@ -71,6 +71,7 @@ class PlayniteVideoActivity : Activity(), SurfaceHolder.Callback {
     private var inputSender: PlayniteInputSender? = null
     private var keyboardSender: PlayniteKeyboardSender? = null
     private var gamepadMapping: PlayniteGamepadMapping? = null
+    private var gamepadMouseSender: PlayniteGamepadMouseSender? = null
     private var mappingOverlay: PlayniteControllerMappingOverlay? = null
     private var shortcutsOverlay: PlayniteStreamShortcutsOverlay? = null
 
@@ -132,6 +133,8 @@ class PlayniteVideoActivity : Activity(), SurfaceHolder.Callback {
         audioTcpPort = intent.getIntExtra(EXTRA_AUDIO_TCP_PORT, 28769)
         inputPort = intent.getIntExtra(EXTRA_INPUT_PORT, 28768)
         val cursorSpeed = intent.getFloatExtra(EXTRA_CURSOR_SPEED, 1f)
+        val swapStickSensitivity =
+            intent.getFloatExtra(EXTRA_SWAP_STICK_SENSITIVITY, 0.28f).coerceIn(0.05f, 1f)
         val tapSlopPercent = intent.getIntExtra(EXTRA_TAP_SLOP_PERCENT, 100)
         val tapTimeoutMs = intent.getLongExtra(EXTRA_TAP_TIMEOUT_MS, PlayniteInputSender.TAP_TIMEOUT_MS)
         val tapPressure = intent.getFloatExtra(EXTRA_TAP_PRESSURE, 0.35f)
@@ -161,15 +164,21 @@ class PlayniteVideoActivity : Activity(), SurfaceHolder.Callback {
         surfaceView.holder.addCallback(this)
         val touchSlop = android.view.ViewConfiguration.get(this).scaledTouchSlop.toFloat() *
             (tapSlopPercent.coerceIn(50, 200) / 100f)
+        val sensitivity = cursorSpeed.coerceIn(0.25f, 3f)
         inputSender = PlayniteInputSender(
             host = streamHost,
             port = inputPort,
             viewWidth = { surfaceView.width.coerceAtLeast(1) },
             viewHeight = { surfaceView.height.coerceAtLeast(1) },
             touchSlopPx = touchSlop,
-            cursorSensitivity = cursorSpeed.coerceIn(0.25f, 3f),
+            cursorSensitivity = sensitivity,
             tapTimeoutMs = tapTimeoutMs.coerceIn(150L, 800L),
             minTapPressure = tapPressure.coerceIn(0.1f, 0.9f),
+        )
+        gamepadMouseSender = PlayniteGamepadMouseSender(
+            host = streamHost,
+            port = inputPort,
+            stickSensitivity = swapStickSensitivity,
         )
         surfaceView.setOnTouchListener { _, event ->
             inputSender?.handleTouch(event) == true
@@ -201,14 +210,12 @@ class PlayniteVideoActivity : Activity(), SurfaceHolder.Callback {
             try {
                 if (!surfaceReady.await(8, TimeUnit.SECONDS)) {
                     PlayniteStreamLog.w("Surface not ready before connect")
+                    runOnUiThread { handleConnectFailure() }
                     return@Thread
                 }
-                val sock = Socket()
-                PlayniteStreamLog.i("Connecting to $streamHost:$port …")
-                sock.connect(InetSocketAddress(streamHost, port), 8_000)
+                val sock = connectVideoSocket(streamHost, port)
                 socket = sock
                 streamConnectedAt = SystemClock.elapsedRealtime()
-                PlayniteStreamLog.i("TCP connected, waiting for PNV1 frames")
                 val audio = PlayniteAudioReceiver(streamHost, audioPort, audioTcpPort)
                 audioReceiver = audio
                 audio.start()
@@ -220,6 +227,16 @@ class PlayniteVideoActivity : Activity(), SurfaceHolder.Callback {
                             "Stream read ended after $framesReceived frames " +
                                 "(${e.javaClass.simpleName}: ${e.message})",
                         )
+                    } else if (!PlayniteStreamSession.hostStreamActive) {
+                        PlayniteStreamLog.i(
+                            "Stream read ended after host stop ($framesReceived frames, " +
+                                "${e.javaClass.simpleName})",
+                        )
+                        runOnUiThread {
+                            if (!logSessionEnded) {
+                                finishFromHost()
+                            }
+                        }
                     } else {
                         PlayniteStreamLog.e("Stream failed after $framesReceived frames received", e)
                         runOnUiThread { abortStreamAfterError() }
@@ -235,9 +252,41 @@ class PlayniteVideoActivity : Activity(), SurfaceHolder.Callback {
                 }
             } catch (e: Exception) {
                 PlayniteStreamLog.e("Connect failed", e)
-                runOnUiThread { finish() }
+                runOnUiThread { handleConnectFailure() }
             }
         }.also { it.start() }
+    }
+
+    private fun connectVideoSocket(host: String, port: Int): Socket {
+        val maxAttempts = 12
+        var lastError: Exception? = null
+        Thread.sleep(150)
+        repeat(maxAttempts) { attempt ->
+            val sock = Socket()
+            try {
+                PlayniteStreamLog.i("Connecting to $host:$port (attempt ${attempt + 1}/$maxAttempts) …")
+                sock.connect(InetSocketAddress(host, port), 4_000)
+                PlayniteStreamLog.i("TCP connected, waiting for PNV1 frames")
+                runOnUiThread { PlayniteStreamSession.reportVideoConnectResult(true) }
+                return sock
+            } catch (e: Exception) {
+                lastError = e
+                runCatching { sock.close() }
+                if (attempt < maxAttempts - 1) {
+                    Thread.sleep(350)
+                }
+            }
+        }
+        throw lastError ?: java.io.IOException("video connect failed")
+    }
+
+    private fun handleConnectFailure() {
+        PlayniteStreamSession.reportVideoConnectResult(false)
+        PlayniteStreamStopper.stopAll(
+            this,
+            "video connect failed",
+            recordPendingLogForResume = true,
+        )
     }
 
     private fun startCodecPump() {
@@ -285,6 +334,22 @@ class PlayniteVideoActivity : Activity(), SurfaceHolder.Callback {
 
     @Deprecated("Deprecated in Java")
     override fun onBackPressed() {
+        handleStreamBackNavigation()
+    }
+
+    private fun handleStreamBackNavigation() {
+        if (GamepadLinkCapture.isListening()) {
+            GamepadLinkCapture.cancel()
+            return
+        }
+        if (mappingOverlay?.isShowing == true) {
+            mappingOverlay?.dismiss()
+            return
+        }
+        if (shortcutsOverlay?.isShowing == true) {
+            shortcutsOverlay?.dismiss()
+            return
+        }
         PlayniteStreamLog.i("Back pressed — leaving stream view (host stream stays active)")
         leaveViewerOnly()
     }
@@ -315,6 +380,15 @@ class PlayniteVideoActivity : Activity(), SurfaceHolder.Callback {
         shortcutsOverlay?.show()
     }
 
+    /** Called when notification Swap is turned off while this activity is open. */
+    fun onSwapMouseModeDisabled() {
+        gamepadMouseSender?.releaseAll()
+    }
+
+    fun updateSwapStickSensitivity(value: Float) {
+        gamepadMouseSender?.updateStickSensitivity(value)
+    }
+
     fun showControllerMappingOverlay() {
         shortcutsOverlay?.dismiss()
         shortcutsOverlay = null
@@ -326,11 +400,16 @@ class PlayniteVideoActivity : Activity(), SurfaceHolder.Callback {
     }
 
     fun finishFromHost() {
+        if (logSessionEnded) {
+            if (!isFinishing) {
+                finish()
+            }
+            return
+        }
         mappingOverlay?.dismiss()
         mappingOverlay = null
         shortcutsOverlay?.dismiss()
         shortcutsOverlay = null
-        PlayniteStreamSession.hostStreamActive = false
         PlayniteStreamSession.clear()
         teardownStream(
             "stopped from companion (received=$framesReceived rendered=$framesRendered dropped=$framesDropped)",
@@ -339,12 +418,76 @@ class PlayniteVideoActivity : Activity(), SurfaceHolder.Callback {
     }
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        if (event.keyCode == KeyEvent.KEYCODE_BACK) {
+            if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) {
+                handleStreamBackNavigation()
+            }
+            return true
+        }
+        if (GamepadLinkCapture.tryConsume(event)) {
+            return true
+        }
         val mapping = gamepadMapping
         val keyboard = keyboardSender
-        if (mapping != null && keyboard != null && mapping.handleKeyEvent(event, keyboard)) {
+        val swapActive = PlayniteStreamSession.swapMouseModeActive
+        if (mapping != null) {
+            if (mapping.handleKeyEvent(
+                    event,
+                    keyboard,
+                    swapActive,
+                ) { PlayniteStreamSwapActions.toggle(this) }) {
+                return true
+            }
+        }
+        if (swapActive) {
+            val mouse = gamepadMouseSender
+            if (mouse != null && mouse.handleKeyEvent(event)) {
+                return true
+            }
+            if (GamepadInputFilter.isGamepadKey(event)) {
+                return true
+            }
+        }
+        if (GamepadInputFilter.isGamepadKey(event)) {
             return true
         }
         return super.dispatchKeyEvent(event)
+    }
+
+    override fun dispatchGenericMotionEvent(event: MotionEvent): Boolean {
+        if (!GamepadInputFilter.isGamepadMotion(event)) {
+            return super.dispatchGenericMotionEvent(event)
+        }
+        val mapping = gamepadMapping
+        val keyboard = keyboardSender
+        val swapActive = PlayniteStreamSession.swapMouseModeActive
+        if (mapping != null) {
+            val lt = GamepadInputFilter.leftTriggerValue(event)
+            val rt = GamepadInputFilter.rightTriggerValue(event)
+            val toggle = { PlayniteStreamSwapActions.toggle(this) }
+            val leftConsumed = mapping.handleTrigger("leftTrigger", lt, keyboard, swapActive, toggle)
+            val rightConsumed = mapping.handleTrigger("rightTrigger", rt, keyboard, swapActive, toggle)
+            if (leftConsumed || rightConsumed) return true
+        }
+        if (swapActive) {
+            gamepadMouseSender?.handleMotionEvent(event)
+            return true
+        }
+        if (mapping != null && keyboard != null) {
+            mapping.handleTrigger(
+                "leftTrigger",
+                GamepadInputFilter.leftTriggerValue(event),
+                keyboard,
+                false,
+            ) {}
+            mapping.handleTrigger(
+                "rightTrigger",
+                GamepadInputFilter.rightTriggerValue(event),
+                keyboard,
+                false,
+            ) {}
+        }
+        return true
     }
 
     private fun abortStreamAfterError() {
@@ -361,6 +504,8 @@ class PlayniteVideoActivity : Activity(), SurfaceHolder.Callback {
         audioReceiver = null
         inputSender?.close()
         inputSender = null
+        gamepadMouseSender?.close()
+        gamepadMouseSender = null
         if (releaseKeyboard) {
             PlayniteStreamSession.releaseKeyboardSender()
         }
@@ -383,6 +528,8 @@ class PlayniteVideoActivity : Activity(), SurfaceHolder.Callback {
         audioReceiver = null
         inputSender?.close()
         inputSender = null
+        gamepadMouseSender?.close()
+        gamepadMouseSender = null
         if (!PlayniteStreamSession.hostStreamActive) {
             PlayniteStreamSession.releaseKeyboardSender()
         }
@@ -789,6 +936,7 @@ class PlayniteVideoActivity : Activity(), SurfaceHolder.Callback {
         const val EXTRA_AUDIO_TCP_PORT = "audioTcpPort"
         const val EXTRA_INPUT_PORT = "inputPort"
         const val EXTRA_CURSOR_SPEED = "cursorSpeed"
+        const val EXTRA_SWAP_STICK_SENSITIVITY = "swapStickSensitivity"
         const val EXTRA_TAP_SLOP_PERCENT = "tapSlopPercent"
         const val EXTRA_TAP_TIMEOUT_MS = "tapTimeoutMs"
         const val EXTRA_TAP_PRESSURE = "tapPressure"

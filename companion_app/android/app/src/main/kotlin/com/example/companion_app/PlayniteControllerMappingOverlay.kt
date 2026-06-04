@@ -4,15 +4,17 @@ import android.app.Activity
 import android.app.AlertDialog
 import android.graphics.Color
 import android.view.Gravity
+import android.view.View
 import android.view.ViewGroup
+import android.widget.ArrayAdapter
 import android.widget.LinearLayout
 import android.widget.ScrollView
+import android.widget.Spinner
 import android.widget.TextView
 import android.widget.Toast
 
 /**
- * Semi-transparent mapping overlay shown on top of the live stream.
- * Supports quick gamepad button linking; full chord editing stays in the Flutter Controller tab.
+ * Stream overlay for per-button keyboard chords and optional manual gamepad linking.
  */
 class PlayniteControllerMappingOverlay(
     private val activity: Activity,
@@ -21,9 +23,40 @@ class PlayniteControllerMappingOverlay(
     data class MappableElement(val id: String, val label: String)
 
     private var dialog: AlertDialog? = null
+    private var selectedElementId: String? = null
+    private val selectedKeyCodes = mutableListOf<Int>()
+    private var detailPanel: LinearLayout? = null
+    private var listContainer: LinearLayout? = null
+    private var chordChipsRow: LinearLayout? = null
+
+    val isShowing: Boolean
+        get() = dialog?.isShowing == true
 
     fun show() {
-        if (dialog?.isShowing == true) return
+        if (isShowing) return
+        if (selectedElementId == null) {
+            selectedElementId = mappableElements().firstOrNull()?.id
+        }
+        loadSelectedKeysFromPrefs()
+        rebuildDialog()
+    }
+
+    fun dismiss() {
+        GamepadLinkCapture.cancel()
+        dialog?.dismiss()
+        dialog = null
+        detailPanel = null
+        listContainer = null
+        chordChipsRow = null
+    }
+
+    private fun loadSelectedKeysFromPrefs() {
+        selectedKeyCodes.clear()
+        val id = selectedElementId ?: return
+        selectedKeyCodes.addAll(PlayniteStreamMappingPrefs.moonlightKeyCodesForElement(activity, id))
+    }
+
+    private fun rebuildDialog() {
         val elements = mappableElements()
         val scroll = ScrollView(activity).apply {
             setBackgroundColor(Color.parseColor("#E6000000"))
@@ -32,74 +65,280 @@ class PlayniteControllerMappingOverlay(
                 ViewGroup.LayoutParams.WRAP_CONTENT,
             )
         }
-        val list = LinearLayout(activity).apply {
+        val root = LinearLayout(activity).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(32, 24, 32, 24)
         }
-        val title = TextView(activity).apply {
-            text = "Controller mapping"
-            setTextColor(Color.WHITE)
-            textSize = 20f
-            setPadding(0, 0, 0, 16)
-        }
-        list.addView(title)
-        val hint = TextView(activity).apply {
-            text = "Tap Link, then press a gamepad button. Keyboard chords: Controller tab in the app."
-            setTextColor(Color.parseColor("#B3FFFFFF"))
-            textSize = 13f
-            setPadding(0, 0, 0, 20)
-        }
-        list.addView(hint)
-
-        for (element in elements) {
-            val row = LinearLayout(activity).apply {
-                orientation = LinearLayout.VERTICAL
-                setPadding(0, 12, 0, 12)
-            }
-            val name = TextView(activity).apply {
-                text = element.label
+        root.addView(
+            TextView(activity).apply {
+                text = "Controller mapping"
                 setTextColor(Color.WHITE)
-                textSize = 16f
-            }
-            val mapped = TextView(activity).apply {
-                text = PlayniteStreamMappingPrefs.targetLabelForElement(activity, element.id)
-                setTextColor(Color.parseColor("#99FFFFFF"))
+                textSize = 20f
+                setPadding(0, 0, 0, 8)
+            },
+        )
+        root.addView(
+            TextView(activity).apply {
+                text = "Tap a button below, then assign keyboard keys or link your gamepad."
+                setTextColor(Color.parseColor("#B3FFFFFF"))
                 textSize = 13f
-            }
-            val link = TextView(activity).apply {
-                text = "Link gamepad button"
-                setTextColor(Color.parseColor("#FF8AB4FF"))
-                textSize = 14f
-                setPadding(0, 8, 0, 0)
-                setOnClickListener { startLink(element) }
-            }
-            row.addView(name)
-            row.addView(mapped)
-            row.addView(link)
-            list.addView(row)
-        }
-        scroll.addView(list)
+                setPadding(0, 0, 0, 16)
+            },
+        )
 
+        detailPanel = buildDetailPanel(elements)
+        root.addView(detailPanel)
+
+        listContainer = LinearLayout(activity).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(0, 16, 0, 0)
+        }
+        for (element in elements) {
+            listContainer?.addView(buildElementRow(element))
+        }
+        root.addView(listContainer)
+        scroll.addView(root)
+
+        dialog?.dismiss()
         dialog = AlertDialog.Builder(activity, android.R.style.Theme_DeviceDefault_Dialog_NoActionBar)
             .setView(scroll)
             .setNegativeButton("Close") { d, _ -> d.dismiss() }
             .create()
         dialog?.window?.setLayout(
             ViewGroup.LayoutParams.MATCH_PARENT,
-            (activity.resources.displayMetrics.heightPixels * 0.82f).toInt(),
+            (activity.resources.displayMetrics.heightPixels * 0.88f).toInt(),
         )
         dialog?.window?.setGravity(Gravity.CENTER)
-        dialog?.setOnDismissListener { GamepadLinkCapture.cancel() }
+        dialog?.setOnDismissListener {
+            GamepadLinkCapture.cancel()
+            dialog = null
+        }
         dialog?.show()
     }
 
-    fun dismiss() {
-        GamepadLinkCapture.cancel()
-        dialog?.dismiss()
-        dialog = null
+    private fun buildDetailPanel(elements: List<MappableElement>): LinearLayout {
+        val panel = LinearLayout(activity).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(20, 16, 20, 16)
+            setBackgroundColor(Color.parseColor("#33000000"))
+        }
+        val selected = elements.firstOrNull { it.id == selectedElementId }
+        if (selected == null) {
+            panel.addView(
+                TextView(activity).apply {
+                    text = "Select a controller button"
+                    setTextColor(Color.parseColor("#99FFFFFF"))
+                    textSize = 14f
+                },
+            )
+            return panel
+        }
+
+        panel.addView(
+            TextView(activity).apply {
+                text = "Editing: ${selected.label}"
+                setTextColor(Color.WHITE)
+                textSize = 17f
+                setPadding(0, 0, 0, 8)
+            },
+        )
+        panel.addView(
+            TextView(activity).apply {
+                text = "Mapped to: ${PlayniteStreamMappingPrefs.targetLabelForElement(activity, selected.id)}"
+                setTextColor(Color.parseColor("#99FFFFFF"))
+                textSize = 13f
+                setPadding(0, 0, 0, 12)
+            },
+        )
+
+        chordChipsRow = LinearLayout(activity).apply {
+            orientation = LinearLayout.VERTICAL
+        }
+        refreshChordChips(selected)
+        panel.addView(chordChipsRow)
+
+        val addRow = LinearLayout(activity).apply {
+            orientation = LinearLayout.HORIZONTAL
+            setPadding(0, 12, 0, 8)
+        }
+        val spinner = Spinner(activity)
+        val labels = MoonlightKeyboardKeys.common.map { it.label }
+        spinner.adapter = ArrayAdapter(activity, android.R.layout.simple_spinner_dropdown_item, labels)
+        addRow.addView(
+            spinner,
+            LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f),
+        )
+        addRow.addView(
+            TextView(activity).apply {
+                text = "Add key"
+                setTextColor(Color.parseColor("#FF8AB4FF"))
+                textSize = 14f
+                setPadding(24, 16, 0, 16)
+                setOnClickListener {
+                    val pick = MoonlightKeyboardKeys.common.getOrNull(spinner.selectedItemPosition) ?: return@setOnClickListener
+                    if (pick.moonlightKeyCode in selectedKeyCodes) {
+                        Toast.makeText(activity, "${pick.label} already in chord", Toast.LENGTH_SHORT).show()
+                        return@setOnClickListener
+                    }
+                    selectedKeyCodes.add(pick.moonlightKeyCode)
+                    refreshChordChips(selected)
+                }
+            },
+        )
+        panel.addView(addRow)
+
+        val actions = LinearLayout(activity).apply {
+            orientation = LinearLayout.HORIZONTAL
+            setPadding(0, 8, 0, 0)
+        }
+        actions.addView(actionButton("Save keys") { saveKeyboardChord(selected) })
+        actions.addView(actionButton("Clear") { clearMapping(selected) })
+        panel.addView(actions)
+
+        if (PlayniteSwapToggleMapping.canMapSwapToggleTo(selected.id)) {
+            panel.addView(
+                TextView(activity).apply {
+                    text = "Assign Swap mode (toggle)"
+                    setTextColor(Color.parseColor("#FF8AB4FF"))
+                    textSize = 14f
+                    setPadding(0, 16, 0, 0)
+                    setOnClickListener { assignSwapToggle(selected) }
+                },
+            )
+        }
+
+        panel.addView(
+            TextView(activity).apply {
+                text = "Link physical gamepad button"
+                setTextColor(Color.parseColor("#FF8AB4FF"))
+                textSize = 14f
+                setPadding(0, 16, 0, 0)
+                setOnClickListener { startLink(selected) }
+            },
+        )
+        return panel
+    }
+
+    private fun refreshChordChips(selected: MappableElement) {
+        val row = chordChipsRow ?: return
+        row.removeAllViews()
+        if (selectedKeyCodes.isEmpty()) {
+            row.addView(
+                TextView(activity).apply {
+                    text = "No keys in chord — add keys above"
+                    setTextColor(Color.parseColor("#88FFFFFF"))
+                    textSize = 13f
+                },
+            )
+            return
+        }
+        val chips = LinearLayout(activity).apply {
+            orientation = LinearLayout.HORIZONTAL
+        }
+        for (code in selectedKeyCodes.toList()) {
+            chips.addView(
+                TextView(activity).apply {
+                    text = "${MoonlightKeyboardKeys.labelForCode(code)}  ✕"
+                    setTextColor(Color.WHITE)
+                    textSize = 13f
+                    setPadding(16, 8, 16, 8)
+                    setBackgroundColor(Color.parseColor("#44FFFFFF"))
+                    setOnClickListener {
+                        selectedKeyCodes.remove(code)
+                        refreshChordChips(selected)
+                    }
+                },
+            )
+            chips.addView(View(activity), LinearLayout.LayoutParams(8, 1))
+        }
+        row.addView(chips)
+    }
+
+    private fun buildElementRow(element: MappableElement): View {
+        val selected = element.id == selectedElementId
+        return LinearLayout(activity).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(16, 14, 16, 14)
+            setBackgroundColor(if (selected) Color.parseColor("#44FFFFFF") else Color.TRANSPARENT)
+            isClickable = true
+            isFocusable = true
+            setOnClickListener {
+                selectedElementId = element.id
+                loadSelectedKeysFromPrefs()
+                rebuildDialog()
+            }
+            addView(
+                TextView(activity).apply {
+                    text = element.label
+                    setTextColor(Color.WHITE)
+                    textSize = 16f
+                },
+            )
+            addView(
+                TextView(activity).apply {
+                    text = PlayniteStreamMappingPrefs.targetLabelForElement(activity, element.id)
+                    setTextColor(Color.parseColor("#99FFFFFF"))
+                    textSize = 13f
+                    setPadding(0, 4, 0, 0)
+                },
+            )
+        }
+    }
+
+    private fun actionButton(label: String, onClick: () -> Unit): TextView =
+        TextView(activity).apply {
+            text = label
+            setTextColor(Color.parseColor("#FF8AB4FF"))
+            textSize = 14f
+            setPadding(0, 8, 24, 8)
+            setOnClickListener { onClick() }
+        }
+
+    private fun assignSwapToggle(element: MappableElement) {
+        val json = PlayniteStreamMappingPrefs.upsertSwapToggleMapping(
+            activity,
+            element.id,
+            element.label,
+        )
+        applyBindings(json)
+        selectedKeyCodes.clear()
+        Toast.makeText(activity, "${element.label} → ${PlayniteSwapToggleMapping.TARGET_LABEL}", Toast.LENGTH_SHORT).show()
+        rebuildDialog()
+    }
+
+    private fun saveKeyboardChord(element: MappableElement) {
+        val label = if (selectedKeyCodes.isEmpty()) {
+            "Unmapped"
+        } else {
+            selectedKeyCodes.joinToString(" + ") { MoonlightKeyboardKeys.labelForCode(it) }
+        }
+        val json = PlayniteStreamMappingPrefs.upsertKeyboardMapping(
+            activity,
+            element.id,
+            element.label,
+            selectedKeyCodes.toList(),
+            label,
+        )
+        applyBindings(json)
+        Toast.makeText(activity, "Saved ${element.label} → $label", Toast.LENGTH_SHORT).show()
+        rebuildDialog()
+    }
+
+    private fun clearMapping(element: MappableElement) {
+        selectedKeyCodes.clear()
+        val json = PlayniteStreamMappingPrefs.clearElementMapping(activity, element.id)
+        applyBindings(json)
+        Toast.makeText(activity, "Cleared ${element.label}", Toast.LENGTH_SHORT).show()
+        rebuildDialog()
+    }
+
+    private fun applyBindings(json: String) {
+        PlayniteStreamSession.controllerBindingsJson = json
+        onBindingsJsonChanged(json)
     }
 
     private fun startLink(element: MappableElement) {
+        Toast.makeText(activity, "Press the gamepad button for ${element.label}", Toast.LENGTH_SHORT).show()
         if (!GamepadLinkCapture.beginListening { event ->
             activity.runOnUiThread {
                 val label = GamepadKeyCodes.labelForKeyCode(event.keyCode)
@@ -110,11 +349,10 @@ class PlayniteControllerMappingOverlay(
                     event.keyCode,
                     label,
                 )
-                PlayniteStreamSession.controllerBindingsJson = json
-                onBindingsJsonChanged(json)
-                Toast.makeText(activity, "${element.label} → $label", Toast.LENGTH_SHORT).show()
-                dismiss()
-                show()
+                applyBindings(json)
+                loadSelectedKeysFromPrefs()
+                Toast.makeText(activity, "${element.label} linked to $label", Toast.LENGTH_SHORT).show()
+                rebuildDialog()
             }
         }) {
             Toast.makeText(activity, "Already waiting for a button press", Toast.LENGTH_SHORT).show()

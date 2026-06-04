@@ -6,20 +6,25 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 /**
- * Controller element → keyboard chord mappings for native Playnite streaming.
+ * Controller element → keyboard chord or Swap-toggle mappings for native Playnite streaming.
  * Manual physical key links override automatic Android keyCode → element detection.
  */
 class PlayniteGamepadMapping(bindingsJson: String) {
     data class ElementBinding(
         val elementId: String,
         val moonlightKeyCodes: List<Int>,
+        val targetAction: String?,
         val physicalKeyCode: Int?,
         val manualPhysicalLink: Boolean,
-    )
+    ) {
+        val isSwapToggle: Boolean =
+            targetAction == PlayniteSwapToggleMapping.TARGET_ACTION_TOGGLE_SWAP
+    }
 
     private val bindingsByElement = mutableMapOf<String, ElementBinding>()
     private val physicalToElementManual = mutableMapOf<Int, String>()
     private val triggerDown = mutableMapOf<String, Boolean>()
+    private val swapToggleDown = mutableMapOf<String, Boolean>()
 
     init {
         if (bindingsJson.isNotEmpty()) {
@@ -29,13 +34,17 @@ class PlayniteGamepadMapping(bindingsJson: String) {
                     val item = array.getJSONObject(i)
                     val elementId = item.optString("sourceElementId", "")
                     if (elementId.isEmpty()) continue
+                    val action = item.optString("targetAction", "").ifEmpty { null }
                     val keys = parseKeyCodes(item)
-                    if (keys.isEmpty()) continue
+                    if (keys.isEmpty() && action != PlayniteSwapToggleMapping.TARGET_ACTION_TOGGLE_SWAP) {
+                        continue
+                    }
                     val physical = if (item.has("physicalKeyCode")) item.optInt("physicalKeyCode", -1) else -1
                     val manual = item.optBoolean("manualPhysicalLink", false)
                     val binding = ElementBinding(
                         elementId = elementId,
                         moonlightKeyCodes = keys,
+                        targetAction = action,
                         physicalKeyCode = physical.takeIf { it >= 0 },
                         manualPhysicalLink = manual,
                     )
@@ -50,27 +59,74 @@ class PlayniteGamepadMapping(bindingsJson: String) {
         }
     }
 
-
     fun hasBindings(): Boolean = bindingsByElement.isNotEmpty()
 
-    fun handleKeyEvent(event: KeyEvent, keyboard: PlayniteKeyboardSender): Boolean {
+    /**
+     * @return true if the event was consumed; false to allow Swap mouse mode for face buttons.
+     */
+    fun handleKeyEvent(
+        event: KeyEvent,
+        keyboard: PlayniteKeyboardSender?,
+        swapModeActive: Boolean,
+        onToggleSwap: () -> Unit,
+    ): Boolean {
         if (bindingsByElement.isEmpty()) return false
         val elementId = resolveElementId(event) ?: return false
-        val binding = bindingsByElement[elementId] ?: return false
+        val binding = bindingsByElement[elementId] ?: return handleUnmapped(event, swapModeActive)
         val down = event.action == KeyEvent.ACTION_DOWN
-        if (!down && event.action != KeyEvent.ACTION_UP) return true
+        val up = event.action == KeyEvent.ACTION_UP
+        if (!down && !up) return true
+
+        if (binding.isSwapToggle) {
+            if (down && event.repeatCount == 0 && swapToggleDown[elementId] != true) {
+                swapToggleDown[elementId] = true
+                onToggleSwap()
+            } else if (up) {
+                swapToggleDown.remove(elementId)
+            }
+            return true
+        }
+
+        if (swapModeActive) return false
+
+        if (binding.moonlightKeyCodes.isEmpty()) return true
+        keyboard ?: return true
         keyboard.sendChord(binding.moonlightKeyCodes, down)
         return true
     }
 
-    fun handleTrigger(elementId: String, axisValue: Float, keyboard: PlayniteKeyboardSender): Boolean {
+    fun handleTrigger(
+        elementId: String,
+        axisValue: Float,
+        keyboard: PlayniteKeyboardSender?,
+        swapModeActive: Boolean,
+        onToggleSwap: () -> Unit,
+    ): Boolean {
         val binding = bindingsByElement[elementId] ?: return false
         val down = axisValue > 0.65f
         val prev = triggerDown[elementId]
+
+        if (binding.isSwapToggle) {
+            if (down && prev != true) {
+                triggerDown[elementId] = true
+                onToggleSwap()
+            } else if (!down) {
+                triggerDown.remove(elementId)
+            }
+            return true
+        }
+
+        if (swapModeActive) return false
+        if (binding.moonlightKeyCodes.isEmpty()) return false
         if (prev != null && prev == down) return true
         triggerDown[elementId] = down
-        keyboard.sendChord(binding.moonlightKeyCodes, down)
+        keyboard?.sendChord(binding.moonlightKeyCodes, down)
         return true
+    }
+
+    private fun handleUnmapped(event: KeyEvent, swapModeActive: Boolean): Boolean {
+        if (swapModeActive) return false
+        return GamepadInputFilter.isGamepadKey(event)
     }
 
     private fun resolveElementId(event: KeyEvent): String? {
@@ -114,11 +170,33 @@ object GamepadKeyCodes {
         KeyEvent.KEYCODE_DPAD_LEFT -> "dpadLeft"
         KeyEvent.KEYCODE_DPAD_RIGHT -> "dpadRight"
         KeyEvent.KEYCODE_BUTTON_START, KeyEvent.KEYCODE_MENU -> "buttonMenu"
-        KeyEvent.KEYCODE_BUTTON_SELECT, KeyEvent.KEYCODE_BACK -> "buttonOptions"
+        KeyEvent.KEYCODE_BUTTON_SELECT -> "buttonOptions"
         KeyEvent.KEYCODE_BUTTON_1 -> "macro1"
         KeyEvent.KEYCODE_BUTTON_2 -> "macro2"
         KeyEvent.KEYCODE_BUTTON_3 -> "macro3"
         KeyEvent.KEYCODE_BUTTON_4 -> "macro4"
+        else -> null
+    }
+
+    fun keyCodeForElementId(elementId: String): Int? = when (elementId) {
+        "buttonA" -> KeyEvent.KEYCODE_BUTTON_A
+        "buttonB" -> KeyEvent.KEYCODE_BUTTON_B
+        "buttonX" -> KeyEvent.KEYCODE_BUTTON_X
+        "buttonY" -> KeyEvent.KEYCODE_BUTTON_Y
+        "leftShoulder" -> KeyEvent.KEYCODE_BUTTON_L1
+        "rightShoulder" -> KeyEvent.KEYCODE_BUTTON_R1
+        "leftThumbstickButton" -> KeyEvent.KEYCODE_BUTTON_THUMBL
+        "rightThumbstickButton" -> KeyEvent.KEYCODE_BUTTON_THUMBR
+        "dpadUp" -> KeyEvent.KEYCODE_DPAD_UP
+        "dpadDown" -> KeyEvent.KEYCODE_DPAD_DOWN
+        "dpadLeft" -> KeyEvent.KEYCODE_DPAD_LEFT
+        "dpadRight" -> KeyEvent.KEYCODE_DPAD_RIGHT
+        "buttonMenu" -> KeyEvent.KEYCODE_BUTTON_START
+        "buttonOptions" -> KeyEvent.KEYCODE_BUTTON_SELECT
+        "macro1" -> KeyEvent.KEYCODE_BUTTON_1
+        "macro2" -> KeyEvent.KEYCODE_BUTTON_2
+        "macro3" -> KeyEvent.KEYCODE_BUTTON_3
+        "macro4" -> KeyEvent.KEYCODE_BUTTON_4
         else -> null
     }
 

@@ -5,7 +5,7 @@ import 'package:permission_handler/permission_handler.dart';
 
 import 'streaming_bridge.dart';
 
-/// Android stream notification (Stop + Controller) via native NotificationManager.
+/// Android stream notification (Controller + Shortcuts) via native NotificationManager.
 class PlayniteStreamNotification {
   PlayniteStreamNotification._();
 

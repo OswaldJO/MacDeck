@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 
 import '../data/gamepad_elements.dart';
+import '../data/gamepad_swap_toggle.dart';
 import '../data/moonlight_key_codes.dart';
 import '../services/stream_controller_mapping_store.dart';
 import '../services/stream_controller_settings.dart';
@@ -46,6 +47,26 @@ class _ControllerMappingSectionState extends State<ControllerMappingSection> {
       mapping,
     ];
     widget.onBindingsChanged(updated);
+  }
+
+  Future<void> _assignSwapToggle(GamepadElement element) async {
+    if (!canMapSwapToggleTo(element.id)) return;
+    final existing = _mappingFor(element.id);
+    await _persist(
+      StreamControllerElementMapping(
+        sourceElementId: element.id,
+        sourceLabel: element.label,
+        moonlightKeyCodes: const [],
+        targetLabel: kSwapToggleTargetLabel,
+        targetAction: kSwapToggleTargetAction,
+        physicalKeyCode: existing?.physicalKeyCode,
+        manualPhysicalLink: existing?.manualPhysicalLink ?? false,
+      ),
+    );
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('${element.label} → $kSwapToggleTargetLabel')),
+    );
   }
 
   Future<void> _clearMapping(String elementId) async {
@@ -161,6 +182,7 @@ class _ControllerMappingSectionState extends State<ControllerMappingSection> {
         targetLabel: selected.map((k) => k.label).join(' + '),
         physicalKeyCode: existing?.physicalKeyCode,
         manualPhysicalLink: existing?.manualPhysicalLink ?? false,
+        targetAction: null,
       ),
     );
   }
@@ -226,9 +248,11 @@ class _ControllerMappingSectionState extends State<ControllerMappingSection> {
             ),
             const SizedBox(height: 4),
             Text(
-              mapping?.hasKeyboardMapping == true
-                  ? 'Mac keys: ${mapping!.targetLabel}'
-                  : 'Mac keys: none',
+              mapping?.isSwapToggleMapping == true
+                  ? 'Action: ${mapping!.targetLabel}'
+                  : mapping?.hasKeyboardMapping == true
+                      ? 'Mac keys: ${mapping!.targetLabel}'
+                      : 'Mac keys: none',
               style: Theme.of(context).textTheme.bodySmall,
             ),
             Text(
@@ -248,6 +272,11 @@ class _ControllerMappingSectionState extends State<ControllerMappingSection> {
                   onPressed: listening ? null : () => _linkGamepadButton(element),
                   child: Text(listening ? 'Press a button…' : 'Link gamepad'),
                 ),
+                if (canMapSwapToggleTo(element.id))
+                  OutlinedButton(
+                    onPressed: listening ? null : () => _assignSwapToggle(element),
+                    child: const Text('Assign Swap'),
+                  ),
                 if (mapping != null)
                   TextButton(
                     onPressed: () => _clearMapping(element.id),
@@ -305,8 +334,8 @@ class _ControllerMappingSectionState extends State<ControllerMappingSection> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'Mapped buttons send keyboard chords to your Mac during a stream. '
-          'Unmapped buttons still work as a gamepad.',
+          'Mapped buttons send keyboard chords or toggle Swap mouse mode (except A, B, and X — '
+          'those are used by Swap for click and drag). Unmapped buttons are ignored by the phone UI.',
           style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
         ),
         if (widget.connectedControllers.isNotEmpty) ...[

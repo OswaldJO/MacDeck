@@ -18,12 +18,8 @@ object GamepadLinkCapture {
     fun isListening(): Boolean = pending.get() != null
 
     fun tryConsume(event: KeyEvent): Boolean {
-        if (event.source and android.view.InputDevice.SOURCE_GAMEPAD == 0 &&
-            event.source and android.view.InputDevice.SOURCE_JOYSTICK == 0
-        ) {
-            return false
-        }
-        if (event.action != KeyEvent.ACTION_DOWN) return false
+        if (!GamepadInputFilter.isGamepadKey(event)) return false
+        if (event.action != KeyEvent.ACTION_DOWN) return true
         val handler = pending.getAndSet(null) ?: return false
         handler(event)
         return true

@@ -6,6 +6,7 @@ class StreamTouchSettings {
   static const _tapSlopKey = 'stream.touch.tapSlopPercent';
   static const _tapTimeoutKey = 'stream.touch.tapTimeoutMs';
   static const _tapPressureKey = 'stream.touch.tapPressurePercent';
+  static const _swapStickSensitivityKey = 'stream.touch.swapStickSensitivity';
 
   StreamTouchSettings(this._prefs);
 
@@ -27,11 +28,16 @@ class StreamTouchSettings {
   /// 10–90% — minimum touch pressure (Android) required to register a tap.
   int get tapPressurePercent => _prefs.getInt(_tapPressureKey) ?? 35;
 
+  /// 0.05–1.0 — left stick cursor speed when notification **Swap** mouse mode is on.
+  double get swapStickSensitivity =>
+      _prefs.getDouble(_swapStickSensitivityKey) ?? 0.28;
+
   Future<void> save({
     double? cursorSpeed,
     int? tapSlopPercent,
     int? tapTimeoutMs,
     int? tapPressurePercent,
+    double? swapStickSensitivity,
   }) async {
     if (cursorSpeed != null) {
       await _prefs.setDouble(
@@ -48,6 +54,12 @@ class StreamTouchSettings {
     if (tapPressurePercent != null) {
       await _prefs.setInt(_tapPressureKey, tapPressurePercent.clamp(10, 90));
     }
+    if (swapStickSensitivity != null) {
+      await _prefs.setDouble(
+        _swapStickSensitivityKey,
+        swapStickSensitivity.clamp(0.05, 1.0),
+      );
+    }
   }
 
   Map<String, dynamic> toMethodChannelMap() {
@@ -56,6 +68,7 @@ class StreamTouchSettings {
       'tapSlopPercent': tapSlopPercent,
       'tapTimeoutMs': tapTimeoutMs,
       'tapPressurePercent': tapPressurePercent,
+      'swapStickSensitivity': swapStickSensitivity,
     };
   }
 }

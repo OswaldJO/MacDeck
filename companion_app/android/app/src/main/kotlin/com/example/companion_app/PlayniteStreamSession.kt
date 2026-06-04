@@ -8,6 +8,42 @@ object PlayniteStreamSession {
     @Volatile var hostStreamActive: Boolean = false
     @Volatile var viewerOpen: Boolean = false
 
+    /** Notification **Swap**: gamepad drives Mac mouse instead of keyboard mappings. */
+    @Volatile var swapMouseModeActive: Boolean = false
+
+    /**
+     * Bumped on each Session Stop and each new [startStream]. Background Mac stops only run when
+     * their captured generation still matches (avoids a late stop killing the next stream).
+     */
+    @Volatile
+    private var macStopGeneration: Long = 0L
+
+    /** Call when starting a new stream so an in-flight stop from the prior session is ignored. */
+    fun cancelPendingMacStop() {
+        macStopGeneration += 1
+    }
+
+    /** Schedules a background [PlayniteHostControlClient.stopStreamOnHost] (see [shouldRunBackgroundMacStop]). */
+    fun scheduleBackgroundMacStop(): Long {
+        macStopGeneration += 1
+        return macStopGeneration
+    }
+
+    fun shouldRunBackgroundMacStop(generation: Long): Boolean = generation == macStopGeneration
+
+    /** Set when stream ends outside Session UI (notification Stop); Flutter reads via [toMap]. */
+    @Volatile var pendingExternalStopLogPath: String? = null
+
+    /** Set by [MainActivity] before launching [PlayniteVideoActivity]; cleared after connect result. */
+    @Volatile
+    var pendingVideoConnectCallback: ((Boolean) -> Unit)? = null
+
+    fun reportVideoConnectResult(success: Boolean) {
+        val callback = pendingVideoConnectCallback
+        pendingVideoConnectCallback = null
+        callback?.invoke(success)
+    }
+
     var host: String = ""
     var videoPort: Int = 28766
     var audioPort: Int = 28767
@@ -16,6 +52,7 @@ object PlayniteStreamSession {
     var width: Int = 1920
     var height: Int = 1080
     var cursorSpeed: Float = 1f
+    var swapStickSensitivity: Float = 0.28f
     var tapSlopPercent: Int = 100
     var tapTimeoutMs: Long = PlayniteInputSender.TAP_TIMEOUT_MS
     var tapPressure: Float = 0.35f
@@ -46,6 +83,8 @@ object PlayniteStreamSession {
         width = intent.getIntExtra(PlayniteVideoActivity.EXTRA_WIDTH, 1920)
         height = intent.getIntExtra(PlayniteVideoActivity.EXTRA_HEIGHT, 1080)
         cursorSpeed = intent.getFloatExtra(PlayniteVideoActivity.EXTRA_CURSOR_SPEED, 1f)
+        swapStickSensitivity =
+            intent.getFloatExtra(PlayniteVideoActivity.EXTRA_SWAP_STICK_SENSITIVITY, 0.28f)
         tapSlopPercent = intent.getIntExtra(PlayniteVideoActivity.EXTRA_TAP_SLOP_PERCENT, 100)
         tapTimeoutMs = intent.getLongExtra(
             PlayniteVideoActivity.EXTRA_TAP_TIMEOUT_MS,
@@ -65,23 +104,44 @@ object PlayniteStreamSession {
         intent.putExtra(PlayniteVideoActivity.EXTRA_WIDTH, width)
         intent.putExtra(PlayniteVideoActivity.EXTRA_HEIGHT, height)
         intent.putExtra(PlayniteVideoActivity.EXTRA_CURSOR_SPEED, cursorSpeed)
+        intent.putExtra(PlayniteVideoActivity.EXTRA_SWAP_STICK_SENSITIVITY, swapStickSensitivity)
         intent.putExtra(PlayniteVideoActivity.EXTRA_TAP_SLOP_PERCENT, tapSlopPercent)
         intent.putExtra(PlayniteVideoActivity.EXTRA_TAP_TIMEOUT_MS, tapTimeoutMs)
         intent.putExtra(PlayniteVideoActivity.EXTRA_TAP_PRESSURE, tapPressure)
         intent.putExtra(PlayniteVideoActivity.EXTRA_CONTROLLER_BINDINGS_JSON, controllerBindingsJson)
     }
 
-    fun clear() {
+    /**
+     * Marks the stream inactive immediately (notification Stop, host teardown).
+     * Keeps [host] so [PlayniteHostControlClient] can still POST stream/stop.
+     */
+    fun deactivate() {
+        // Drop callback without invoking — reportVideoConnectResult(false) would re-enter stopAll.
+        pendingVideoConnectCallback = null
         hostStreamActive = false
         viewerOpen = false
+        swapMouseModeActive = false
+        releaseKeyboardSender()
+    }
+
+    fun clear() {
+        deactivate()
         host = ""
         controllerBindingsJson = ""
-        releaseKeyboardSender()
+    }
+
+    fun recordExternalStopLog(context: android.content.Context) {
+        pendingExternalStopLogPath = PlayniteStreamLog.logFilePath(context)
+    }
+
+    fun clearPendingExternalStopLog() {
+        pendingExternalStopLogPath = null
     }
 
     fun toMap(): Map<String, Any?> = mapOf(
         "hostStreamActive" to hostStreamActive,
         "viewerOpen" to viewerOpen,
+        "pendingExternalStopLogPath" to pendingExternalStopLogPath,
         "host" to host,
         "videoPort" to videoPort,
         "audioPort" to audioPort,

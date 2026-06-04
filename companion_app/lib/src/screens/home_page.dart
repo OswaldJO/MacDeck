@@ -39,17 +39,23 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   PairingCancellation? _pairingCancellation;
   bool _streamActive = false;
   bool _streamViewerOpen = false;
+  bool _externalStopLogDialogPending = false;
+  String? _lastOfferedStreamLogPath;
   StreamControllerSettings? _controllerSettings;
   StreamTouchSettings? _touchSettings;
   List<StreamControllerElementMapping> _controllerBindings = const [];
   List<ConnectedControllerInfo> _connectedControllers = const [];
   String _controllerStatus = 'Connect a telescopic or Bluetooth gamepad to this phone.';
   bool _controllersRefreshing = false;
+  bool _startingStream = false;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    if (Platform.isAndroid) {
+      _bridge.installExternalStopListener(_onStreamStoppedExternally);
+    }
     WidgetsBinding.instance.addPostFrameCallback((_) {
       unawaited(_loadSettings());
       unawaited(_loadControllerSettings());
@@ -67,7 +73,11 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
-      unawaited(_refreshStreamSessionState());
+      // After notification Stop, wait one frame so native onResume finishes before getStreamSession.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        unawaited(_refreshStreamSessionState());
+      });
       unawaited(_checkPendingMappingOverlay());
       unawaited(_checkPendingShortcutsOverlay());
     }
@@ -109,6 +119,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     int? tapSlopPercent,
     int? tapTimeoutMs,
     int? tapPressurePercent,
+    double? swapStickSensitivity,
   }) async {
     final current = _touchSettings ?? await StreamTouchSettings.load();
     await current.save(
@@ -116,7 +127,11 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       tapSlopPercent: tapSlopPercent,
       tapTimeoutMs: tapTimeoutMs,
       tapPressurePercent: tapPressurePercent,
+      swapStickSensitivity: swapStickSensitivity,
     );
+    if (swapStickSensitivity != null && Platform.isAndroid) {
+      await _bridge.updateSwapStickSensitivity(swapStickSensitivity);
+    }
     if (!mounted) return;
     setState(() => _touchSettings = current);
   }
@@ -165,11 +180,23 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     setState(() => _controllerBindings = bindings);
   }
 
+  /// True when [status] describes an in-progress or running stream (not idle/pairing copy).
+  static bool _isLiveStreamSessionStatus(String status) {
+    final lower = status.toLowerCase();
+    return lower == 'streaming' ||
+        lower.contains('stream running') ||
+        lower.contains('opening stream') ||
+        lower.contains('starting desktop') ||
+        lower.contains('stopping stream');
+  }
+
   Future<void> _refreshStreamSessionState() async {
+    if (_startingStream) return;
     final session = await _bridge.getStreamSession();
     if (!mounted) return;
     final active = session['hostStreamActive'] == true;
     final viewerOpen = session['viewerOpen'] == true;
+    final wasActive = _streamActive;
     final host = _hosts.where((h) => h.id == _selectedHostId).firstOrNull;
     await PlayniteStreamNotification.syncSession(
       active: active,
@@ -179,11 +206,35 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     setState(() {
       _streamActive = active;
       _streamViewerOpen = viewerOpen;
+      if (!active) {
+        _startingStream = false;
+      }
       if (active && !viewerOpen) {
         _sessionStatus =
-            'Stream running — Enter current stream, or notification Stop / Controller / Shortcuts.';
+            'Stream running — Enter current stream, or use notification Stop / Controller / Shortcuts.';
+      } else if (!active && _isLiveStreamSessionStatus(_sessionStatus)) {
+        _sessionStatus = 'Stream stopped';
       }
     });
+    if (!active && wasActive) {
+      await PlayniteStreamNotification.syncSession(active: false);
+    }
+    await _offerPendingStreamLog(session);
+  }
+
+  /// Notification Stop finishes while [MainActivity] is stopped — offer log after resume refresh.
+  Future<void> _offerPendingStreamLog(Map<String, dynamic> session) async {
+    final logPath = session['pendingExternalStopLogPath'] as String?;
+    if (logPath == null || logPath.isEmpty || !mounted) return;
+    if (_externalStopLogDialogPending || _lastOfferedStreamLogPath == logPath) return;
+    _externalStopLogDialogPending = true;
+    _lastOfferedStreamLogPath = logPath;
+    try {
+      await offerStreamLogShare(context, logPath);
+    } finally {
+      _externalStopLogDialogPending = false;
+      await _bridge.clearPendingExternalStopLog();
+    }
   }
 
   @override
@@ -349,6 +400,34 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   }
 
   Future<void> _startStream() async {
+    if (_startingStream) return;
+    final session = await _bridge.getStreamSession();
+    if (!mounted) return;
+    final nativeActive = session['hostStreamActive'] == true;
+    final viewerOpen = session['viewerOpen'] == true;
+    // After Back, the Mac may still be streaming while the viewer is closed — reopen it.
+    if (nativeActive && !viewerOpen) {
+      setState(() {
+        _streamActive = true;
+        _streamViewerOpen = false;
+        _sessionStatus = 'Opening stream view…';
+      });
+      await _reenterStream();
+      return;
+    }
+    if (nativeActive && viewerOpen) {
+      await _reenterStream();
+      return;
+    }
+    if (_streamActive) {
+      setState(() {
+        _streamActive = false;
+        _streamViewerOpen = false;
+        if (_isLiveStreamSessionStatus(_sessionStatus)) {
+          _sessionStatus = 'Stream stopped';
+        }
+      });
+    }
     final hostId = _selectedHostId;
     if (hostId == null) {
       setState(() => _sessionStatus = 'Select a host on the Hosts tab first.');
@@ -360,11 +439,12 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       return;
     }
 
+    _startingStream = true;
     setState(() => _sessionStatus = 'Starting Desktop stream…');
-    if (Platform.isAndroid) {
-      await PlayniteStreamNotification.ensureNotificationPermission();
-    }
     try {
+      if (Platform.isAndroid) {
+        await PlayniteStreamNotification.ensureNotificationPermission();
+      }
       final mappingStore = await StreamControllerMappingStore.load();
       final outcome = await _bridge.startStream(
         hostId: hostId,
@@ -373,6 +453,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         fps: 60,
         controllerBindingsJson: mappingStore.bindingsJson(),
       );
+      if (!mounted) return;
       setState(() {
         _streamActive = outcome.ok;
         _streamViewerOpen = outcome.ok;
@@ -384,41 +465,76 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         await PlayniteStreamNotification.syncSession(active: false);
       }
     } catch (e) {
+      if (!mounted) return;
       setState(() {
         _streamActive = false;
         _sessionStatus = 'Start stream error: $e';
       });
       await PlayniteStreamNotification.syncSession(active: false);
+    } finally {
+      _startingStream = false;
     }
   }
 
   Future<void> _reenterStream() async {
+    if (_startingStream) return;
+    _startingStream = true;
     setState(() => _sessionStatus = 'Opening stream view…');
-    final ok = await _bridge.resumeStream();
+    try {
+      final ok = await _bridge.resumeStream();
+      if (!mounted) return;
+      setState(() {
+        _streamViewerOpen = ok;
+        _streamActive = ok || _streamActive;
+        _sessionStatus = ok
+            ? 'Stream running — video view open.'
+            : 'Could not reopen stream. Tap Stop, then Start again.';
+      });
+      await _refreshStreamSessionState();
+    } finally {
+      _startingStream = false;
+    }
+  }
+
+  Future<void> _onStreamStoppedExternally({String? logPath}) async {
+    if (!mounted || _startingStream) return;
+    _startingStream = false;
+    await _bridge.ensureHostStreamStopped();
     if (!mounted) return;
     setState(() {
-      _streamViewerOpen = ok;
-      _sessionStatus = ok
-          ? 'Stream running — video view open.'
-          : 'Could not reopen stream. Tap Stop and start again.';
+      _streamActive = false;
+      _streamViewerOpen = false;
+      if (_isLiveStreamSessionStatus(_sessionStatus)) {
+        _sessionStatus = 'Stream stopped';
+      }
     });
+    await PlayniteStreamNotification.syncSession(active: false);
     await _refreshStreamSessionState();
+    if (logPath != null && logPath.isNotEmpty && mounted) {
+      _lastOfferedStreamLogPath = logPath;
+      await offerStreamLogShare(context, logPath);
+      await _bridge.clearPendingExternalStopLog();
+    }
   }
 
   Future<void> _stopStream() async {
     setState(() => _sessionStatus = 'Stopping stream…');
     try {
       final logPath = await _bridge.stopStream();
+      await _bridge.ensureHostStreamStopped();
       if (!mounted) return;
       setState(() {
         _streamActive = false;
         _streamViewerOpen = false;
         _sessionStatus = 'Stream stopped';
       });
-      if (logPath != null) {
+      if (logPath != null && logPath.isNotEmpty) {
+        _lastOfferedStreamLogPath = logPath;
         await offerStreamLogShare(context, logPath);
+        await _bridge.clearPendingExternalStopLog();
       }
       await PlayniteStreamNotification.syncSession(active: false);
+      await _refreshStreamSessionState();
     } catch (e) {
       setState(() => _sessionStatus = 'Stop stream error: $e');
       await PlayniteStreamNotification.syncSession(active: false);
@@ -539,10 +655,10 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
   Widget _buildSessionTab() {
     final selected = _hosts.where((h) => h.id == _selectedHostId).firstOrNull;
-    final canStart = selected?.paired == true && !_streamActive;
+    final canStart = selected?.paired == true && (!_streamActive || !_streamViewerOpen);
     final canReenter = _streamActive && !_streamViewerOpen;
 
-    return Padding(
+    return SingleChildScrollView(
       padding: CompanionInsets.listPadding(context),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -555,7 +671,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
           const Text(
             'Streams your Mac desktop via Playnite H.264 (port ${StreamingHostSettings.defaultVideoPort}). '
             'Connect a gamepad first (Controller tab), then start Desktop stream. '
-            'While streaming, use the notification Stop, Controller, or Shortcuts buttons.',
+            'While streaming, use the notification Stop, Swap, Controller, or Shortcuts buttons (Stop matches the Session tab).',
           ),
           if (_sessionStatus.isNotEmpty) ...[
             const SizedBox(height: 12),
@@ -579,18 +695,13 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
             spacing: 10,
             runSpacing: 10,
             children: [
-              if (canReenter)
-                FilledButton.icon(
-                  onPressed: _reenterStream,
-                  icon: const Icon(Icons.fullscreen),
-                  label: const Text('Enter current stream'),
-                )
-              else
-                FilledButton.icon(
-                  onPressed: canStart ? _startStream : null,
-                  icon: const Icon(Icons.play_arrow),
-                  label: const Text('Start Desktop 1080p60'),
+              FilledButton.icon(
+                onPressed: canStart ? _startStream : null,
+                icon: Icon(canReenter ? Icons.fullscreen : Icons.play_arrow),
+                label: Text(
+                  canReenter ? 'Resume stream view' : 'Start Desktop 1080p60',
                 ),
+              ),
               OutlinedButton.icon(
                 onPressed: _streamActive ? _stopStream : null,
                 icon: const Icon(Icons.stop),
@@ -802,10 +913,68 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   Widget _buildSettingsTab() {
     return ListView(
       padding: CompanionInsets.listPadding(context),
-      children: const [
-        CompanionAppearanceSection(),
-        SizedBox(height: 28),
-        StreamShortcutsSection(),
+      children: [
+        const CompanionAppearanceSection(),
+        const SizedBox(height: 28),
+        const Text(
+          'Notification Swap button',
+          style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          'While a stream is running, open the Playnite stream notification and tap Swap, or map '
+          'Swap to another controller button on the Controller tab (not A, B, or X). Tap again '
+          'to return to your normal keyboard mappings.',
+          style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
+        ),
+        const SizedBox(height: 12),
+        const Text(
+          'When Swap is on:',
+          style: TextStyle(fontWeight: FontWeight.w600),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          '• Left analog stick moves the Mac cursor\n'
+          '• A (Cross on PlayStation) — left click\n'
+          '• B (Circle on PlayStation) — right click\n'
+          '• X (Square on PlayStation) — hold while moving the left stick to highlight text or drag',
+          style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
+        ),
+        const SizedBox(height: 16),
+        if (_touchSettings == null)
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 8),
+            child: Center(child: CircularProgressIndicator()),
+          )
+        else
+          ListTile(
+            title: const Text('Swap stick cursor speed'),
+            subtitle: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const SizedBox(height: 4),
+                Text(
+                  'How fast the left stick moves the Mac cursor while Swap is on. '
+                  'Lower is slower and easier to control.',
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    fontSize: 13,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Slider(
+                  value: _touchSettings!.swapStickSensitivity,
+                  min: 0.05,
+                  max: 1.0,
+                  divisions: 19,
+                  label: _touchSettings!.swapStickSensitivity.toStringAsFixed(2),
+                  onChanged: (value) => _saveTouchSettings(swapStickSensitivity: value),
+                ),
+              ],
+            ),
+          ),
+        const SizedBox(height: 28),
+        const StreamShortcutsSection(),
       ],
     );
   }

@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../data/gamepad_elements.dart';
+import '../data/gamepad_swap_toggle.dart';
 import '../data/moonlight_key_codes.dart';
 
 /// Keyboard chord assigned to a logical gamepad element (native + Moonlight paths).
@@ -14,6 +15,7 @@ class StreamControllerElementMapping {
     required this.targetLabel,
     this.physicalKeyCode,
     this.manualPhysicalLink = false,
+    this.targetAction,
   });
 
   final String sourceElementId;
@@ -22,8 +24,14 @@ class StreamControllerElementMapping {
   final String targetLabel;
   final int? physicalKeyCode;
   final bool manualPhysicalLink;
+  /// When [kSwapToggleTargetAction], pressing the button toggles Swap mouse mode.
+  final String? targetAction;
 
   bool get hasKeyboardMapping => moonlightKeyCodes.isNotEmpty;
+
+  bool get isSwapToggleMapping => targetAction == kSwapToggleTargetAction;
+
+  bool get hasMapping => hasKeyboardMapping || isSwapToggleMapping;
 
   Map<String, dynamic> toJson() => {
         'sourceElementId': sourceElementId,
@@ -32,13 +40,18 @@ class StreamControllerElementMapping {
         'targetLabel': targetLabel,
         if (physicalKeyCode != null) 'physicalKeyCode': physicalKeyCode,
         'manualPhysicalLink': manualPhysicalLink,
+        if (targetAction != null) 'targetAction': targetAction,
       };
 
   factory StreamControllerElementMapping.fromJson(Map<String, dynamic> json) {
     final elementId = json['sourceElementId'] as String? ?? '';
     final element = gamepadElementById(elementId);
     final codes = _parseKeyCodes(json);
-    final label = json['targetLabel'] as String? ?? _labelForCodes(codes);
+    final action = json['targetAction'] as String?;
+    final label = json['targetLabel'] as String? ??
+        (action == kSwapToggleTargetAction
+            ? kSwapToggleTargetLabel
+            : _labelForCodes(codes));
     return StreamControllerElementMapping(
       sourceElementId: elementId,
       sourceLabel: json['sourceLabel'] as String? ?? element?.label ?? elementId,
@@ -46,6 +59,7 @@ class StreamControllerElementMapping {
       targetLabel: label,
       physicalKeyCode: json['physicalKeyCode'] as int?,
       manualPhysicalLink: json['manualPhysicalLink'] as bool? ?? false,
+      targetAction: action,
     );
   }
 
@@ -71,7 +85,9 @@ class StreamControllerElementMapping {
     String? targetLabel,
     int? physicalKeyCode,
     bool? manualPhysicalLink,
+    String? targetAction,
     bool clearPhysicalKeyCode = false,
+    bool clearTargetAction = false,
   }) {
     return StreamControllerElementMapping(
       sourceElementId: sourceElementId,
@@ -80,6 +96,7 @@ class StreamControllerElementMapping {
       targetLabel: targetLabel ?? this.targetLabel,
       physicalKeyCode: clearPhysicalKeyCode ? null : (physicalKeyCode ?? this.physicalKeyCode),
       manualPhysicalLink: manualPhysicalLink ?? this.manualPhysicalLink,
+      targetAction: clearTargetAction ? null : (targetAction ?? this.targetAction),
     );
   }
 }

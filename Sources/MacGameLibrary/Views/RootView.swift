@@ -8,7 +8,6 @@ private enum MainSection: Hashable {
     case emulators
     case paths
     case streaming
-    case controllerMapping
 }
 
 private enum LibrarySidebarSelection: Hashable {
@@ -261,10 +260,6 @@ public struct RootView: View {
             StreamingView()
                 .tabItem { Label("Streaming", systemImage: "dot.radiowaves.left.and.right") }
                 .tag(MainSection.streaming)
-
-            ControllerMappingView()
-                .tabItem { Label("Controllers", systemImage: "gamecontroller") }
-                .tag(MainSection.controllerMapping)
         }
         .onChange(of: emulators.map(\.id)) { _, ids in
             if case .emulator(let selectedId) = sidebarSelection, !ids.contains(selectedId) {

@@ -24,13 +24,17 @@ final class StreamingPairingSession {
         Task { @MainActor in
             await hostManager.ensureReady()
             hostReachable = await hostManager.ping() || hostManager.state == .running
-            statusMessage = hostReachable
-                ? (hostManager.isCaptureReady
-                    ? "Waiting for a device to request pairing from the companion app."
-                    : (hostManager.needsScreenCaptureConsent
-                        ? "Host is up — allow Screen Recording before streaming (pairing works without it)."
-                        : "Host is up — restart the streaming host to refresh capture."))
-                : hostManager.statusLine
+            if hostManager.isVideoStreaming {
+                statusMessage = "Streaming to the companion — audio is on the phone; Mac speakers are muted until the stream stops."
+            } else {
+                statusMessage = hostReachable
+                    ? (hostManager.isCaptureReady
+                        ? "Waiting for a device to request pairing from the companion app."
+                        : (hostManager.needsScreenCaptureConsent
+                            ? "Pairing host is up — allow Screen Recording before streaming (pairing works without it)."
+                            : "Pairing host is up — restart the host to refresh capture."))
+                    : hostManager.statusLine
+            }
         }
     }
 

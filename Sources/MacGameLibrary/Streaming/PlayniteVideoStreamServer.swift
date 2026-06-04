@@ -9,26 +9,33 @@ actor PlayniteVideoStreamServer {
 
     var isStreaming: Bool { capture != nil }
 
+    var hasActiveListener: Bool { listener != nil }
+
     func startListener(port: UInt16 = PlayniteStreamPorts.videoTCP) async throws {
-        if listener != nil { return }
+        if listener != nil {
+            await stopListener()
+        }
         let nwPort = NWEndpoint.Port(rawValue: port)!
-        let listener = try NWListener(using: .tcp, on: nwPort)
+        let parameters = NWParameters.tcp
+        parameters.allowLocalEndpointReuse = true
+        let listener = try NWListener(using: parameters, on: nwPort)
         listener.newConnectionHandler = { [weak self] connection in
             guard let self else { return }
             Task { await self.accept(connection: connection) }
         }
         listener.start(queue: .global(qos: .userInitiated))
+        try await PlayniteNWListenerAwait.waitUntilReady(listener)
         self.listener = listener
     }
 
-    func startStream(
+    /// Screen capture + encode only (call after [startListener]).
+    func startCapture(
         width: Int,
         height: Int,
         fps: Int,
         audioHandler: PlayniteDisplayCapture.AudioHandler? = nil
     ) async throws {
         if capture != nil { return }
-        try await startListener()
 
         let capture = PlayniteDisplayCapture(
             encodedHandler: { [weak self] data, isKeyframe, w, h in
@@ -41,6 +48,16 @@ actor PlayniteVideoStreamServer {
         self.capture = capture
     }
 
+    func startStream(
+        width: Int,
+        height: Int,
+        fps: Int,
+        audioHandler: PlayniteDisplayCapture.AudioHandler? = nil
+    ) async throws {
+        try await startListener()
+        try await startCapture(width: width, height: height, fps: fps, audioHandler: audioHandler)
+    }
+
     func stopStream() async {
         if let capture {
             await capture.stop()
@@ -50,10 +67,16 @@ actor PlayniteVideoStreamServer {
         client = nil
     }
 
+    func stopListener() async {
+        guard let listener else { return }
+        listener.cancel()
+        await PlayniteNWListenerAwait.waitUntilCancelled(listener)
+        self.listener = nil
+    }
+
     func stop() async {
         await stopStream()
-        listener?.cancel()
-        listener = nil
+        await stopListener()
     }
 
     private var framesSent = 0

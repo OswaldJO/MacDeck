@@ -19,8 +19,11 @@ class PlayniteStreamShortcutsOverlay(
     private var dialog: AlertDialog? = null
     private val mainHandler = Handler(Looper.getMainLooper())
 
+    val isShowing: Boolean
+        get() = dialog?.isShowing == true
+
     fun show() {
-        if (dialog?.isShowing == true) return
+        if (isShowing) return
         val shortcuts = PlayniteStreamShortcutsPrefs.load(activity)
         val scroll = ScrollView(activity).apply {
             setBackgroundColor(Color.parseColor("#E6000000"))

@@ -72,14 +72,39 @@ final class PlayniteDisplayCapture: NSObject, @unchecked Sendable {
 
     func stop() async {
         #if canImport(ScreenCaptureKit)
-        if let stream {
-            try? await stream.stopCapture()
+        if let activeStream = stream {
+            stream = nil
+            let stopBox = SCStreamStopBox(stream: activeStream)
+            await withTaskGroup(of: Void.self) { group in
+                group.addTask {
+                    await stopBox.stopCapture()
+                }
+                group.addTask {
+                    try? await Task.sleep(nanoseconds: 2_500_000_000)
+                }
+                _ = await group.next()
+                group.cancelAll()
+            }
         }
-        stream = nil
         #endif
         encoder.invalidate()
     }
 }
+
+#if canImport(ScreenCaptureKit)
+/// `SCStream` is not `Sendable`; this box isolates stop for Swift 6 task-group timeouts.
+private final class SCStreamStopBox: @unchecked Sendable {
+    private let stream: SCStream
+
+    init(stream: SCStream) {
+        self.stream = stream
+    }
+
+    func stopCapture() async {
+        try? await stream.stopCapture()
+    }
+}
+#endif
 
 #if canImport(ScreenCaptureKit)
 extension PlayniteDisplayCapture: SCStreamOutput {

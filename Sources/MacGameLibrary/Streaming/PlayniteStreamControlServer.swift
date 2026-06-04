@@ -22,9 +22,10 @@ actor PlayniteStreamControlServer {
     private var deniedDeviceIDs: Set<String> = []
     private var pairedDevices: [PairedDevice] = []
     private var captureReady = false
+    private var videoStreaming = false
     private let storeURL: URL
 
-    var onStreamStartRequested: (@Sendable (String, Int, Int, Int) async -> Void)?
+    var onStreamStartRequested: (@Sendable (String, Int, Int, Int) async -> Bool)?
     var onStreamStopRequested: (@Sendable () async -> Void)?
     var onPairingQueueChanged: (@Sendable () async -> Void)?
 
@@ -41,6 +42,10 @@ actor PlayniteStreamControlServer {
 
     func setCaptureReady(_ ready: Bool) {
         captureReady = ready
+    }
+
+    func setVideoStreaming(_ active: Bool) {
+        videoStreaming = active
     }
 
     func start(port: UInt16 = PlayniteStreamPorts.controlHTTP) async throws {
@@ -123,7 +128,7 @@ actor PlayniteStreamControlServer {
     }
 
     func setStreamHandlers(
-        onStart: @escaping @Sendable (String, Int, Int, Int) async -> Void,
+        onStart: @escaping @Sendable (String, Int, Int, Int) async -> Bool,
         onStop: @escaping @Sendable () async -> Void
     ) {
         onStreamStartRequested = onStart
@@ -223,7 +228,7 @@ actor PlayniteStreamControlServer {
         return ParsedHTTPRequest(method: method, path: path, query: query, body: body)
     }
 
-    private func route(_ request: ParsedHTTPRequest) -> String {
+    private func route(_ request: ParsedHTTPRequest) async -> String {
         let json = (try? JSONSerialization.jsonObject(with: request.body)) as? [String: Any]
 
         switch (request.method, request.path) {
@@ -232,6 +237,7 @@ actor PlayniteStreamControlServer {
                 "protocol": PlayniteStreamPorts.protocolVersion,
                 "hostname": ProcessInfo.processInfo.hostName,
                 "captureReady": captureReady,
+                "videoStreaming": videoStreaming,
                 "pairedCount": pairedDevices.count,
                 "pendingCount": pendingByDeviceID.count,
                 "videoPort": PlayniteStreamPorts.videoTCP,
@@ -294,8 +300,15 @@ actor PlayniteStreamControlServer {
             let width = json?["width"] as? Int ?? 1920
             let height = json?["height"] as? Int ?? 1080
             let fps = json?["fps"] as? Int ?? 60
+            var started = true
             if let onStreamStartRequested {
-                Task { await onStreamStartRequested(deviceID, width, height, fps) }
+                started = await onStreamStartRequested(deviceID, width, height, fps)
+            }
+            guard started else {
+                return httpResponse(status: 503, body: [
+                    "ok": false,
+                    "error": "stream transport not ready (screen capture or encoder failed)",
+                ])
             }
             return httpResponse(status: 200, body: [
                 "ok": true,
@@ -307,7 +320,7 @@ actor PlayniteStreamControlServer {
             ])
         case ("POST", "/playnite/v1/stream/stop"):
             if let onStreamStopRequested {
-                Task { await onStreamStopRequested() }
+                await onStreamStopRequested()
             }
             return httpResponse(status: 200, body: ["ok": true])
         default:

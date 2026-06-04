@@ -7,19 +7,19 @@ import java.net.URL
 object PlayniteHostControlClient {
     private const val DEFAULT_CONTROL_PORT = 28765
 
+    /** Blocks until the Mac acknowledges stream stop (or times out). */
     fun stopStreamOnHost(host: String, controlPort: Int = DEFAULT_CONTROL_PORT) {
         if (host.isEmpty()) return
-        Thread {
-            try {
-                val url = URL("http://$host:$controlPort/playnite/v1/stream/stop")
-                val connection = url.openConnection() as HttpURLConnection
-                connection.requestMethod = "POST"
-                connection.connectTimeout = 4_000
-                connection.readTimeout = 4_000
-                connection.connect()
-                connection.disconnect()
-            } catch (_: Exception) {
-            }
-        }.start()
+        try {
+            val url = URL("http://$host:$controlPort/playnite/v1/stream/stop")
+            val connection = url.openConnection() as HttpURLConnection
+            connection.requestMethod = "POST"
+            connection.connectTimeout = 20_000
+            connection.readTimeout = 20_000
+            connection.connect()
+            connection.inputStream.use { }
+            connection.disconnect()
+        } catch (_: Exception) {
+        }
     }
 }

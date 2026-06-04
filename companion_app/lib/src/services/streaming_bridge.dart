@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/services.dart';
 
 import '../models/host_info.dart';
@@ -79,6 +81,12 @@ class StreamingBridge {
     }
   }
 
+  Future<void> clearPendingExternalStopLog() async {
+    try {
+      await _channel.invokeMethod<void>('clearPendingExternalStopLog');
+    } catch (_) {}
+  }
+
   Future<bool> resumeStream() async {
     try {
       final resumed = await _channel.invokeMethod<bool>('resumeStream');
@@ -150,10 +158,43 @@ class StreamingBridge {
     }
   }
 
-  /// Stops the Mac host and native player. On Android, returns a log file path if one was written.
-  Future<String?> stopStream() async {
+  /// Best-effort Mac teardown (notification Stop may have already called native HTTP stop).
+  Future<void> updateSwapStickSensitivity(double sensitivity) async {
+    try {
+      await _channel.invokeMethod<void>('updateSwapStickSensitivity', {
+        'swapStickSensitivity': sensitivity,
+      });
+    } catch (_) {}
+  }
+
+  Future<void> ensureHostStreamStopped() async {
     final client = await _client();
     await client.stopStreamOnHost();
+  }
+
+  /// Android: notification Stop and other native paths invoke [onStreamStoppedExternally].
+  void installExternalStopListener(
+    Future<void> Function({String? logPath}) onStopped,
+  ) {
+    _channel.setMethodCallHandler((call) {
+      if (call.method == 'onStreamStoppedExternally') {
+        String? logPath;
+        final args = call.arguments;
+        if (args is Map) {
+          final raw = args['logPath'];
+          if (raw is String && raw.isNotEmpty) {
+            logPath = raw;
+          }
+        }
+        // Synchronous handler — async handlers still make Android wait for the Future.
+        scheduleMicrotask(() => unawaited(onStopped(logPath: logPath)));
+      }
+      return Future.value(null);
+    });
+  }
+
+  /// Stops the Mac host and native player. On Android, returns a log file path if one was written.
+  Future<String?> stopStream() async {
     try {
       final raw = await _channel.invokeMethod<Map<Object?, Object?>>('stopStream');
       final path = raw?['logPath'];

@@ -2,6 +2,8 @@
 <resources>
     <string name="playnite_stream_notification_title">Playnite stream</string>
     <string name="playnite_stream_action_stop">Stop</string>
+    <string name="playnite_stream_action_swap">Swap</string>
+    <string name="playnite_stream_action_swap_on">Swap on</string>
     <string name="playnite_stream_action_controller">Controller</string>
     <string name="playnite_stream_action_shortcuts">Shortcuts</string>
 </resources>

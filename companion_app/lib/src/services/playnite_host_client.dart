@@ -166,49 +166,111 @@ class PlayniteHostClient {
       return StreamStartOutcome.failed('Not paired with this Mac.');
     }
 
-    try {
-      final response = await http
-          .post(
-            _uri('/playnite/v1/stream/start'),
-            headers: {'Content-Type': 'application/json'},
-            body: jsonEncode({
-              'deviceId': deviceId,
-              'width': width,
-              'height': height,
-              'fps': fps,
-            }),
-          )
-          .timeout(const Duration(seconds: 8));
+    // Ensure the Mac finished the previous session before opening a new one.
+    await stopStreamOnHost();
+    await _waitForMacStreamIdle();
+    await _waitForControlHostReady();
+    Object? lastError;
+    for (var attempt = 1; attempt <= 5; attempt++) {
+      try {
+        final response = await http
+            .post(
+              _uri('/playnite/v1/stream/start'),
+              headers: {'Content-Type': 'application/json'},
+              body: jsonEncode({
+                'deviceId': deviceId,
+                'width': width,
+                'height': height,
+                'fps': fps,
+              }),
+            )
+            .timeout(const Duration(seconds: 25));
 
-      if (response.statusCode != 200) {
-        return StreamStartOutcome.failed('Mac could not start stream (HTTP ${response.statusCode}).');
+        if (response.statusCode == 503) {
+          final json = jsonDecode(response.body) as Map<String, dynamic>?;
+          lastError = json?['error'] ?? 'Mac stream transport is not ready.';
+          if (attempt < 5) {
+            await Future<void>.delayed(Duration(milliseconds: 600 * attempt));
+            continue;
+          }
+          return StreamStartOutcome.failed(lastError.toString());
+        }
+        if (response.statusCode != 200) {
+          lastError = 'HTTP ${response.statusCode}';
+          if (attempt < 5) {
+            await Future<void>.delayed(Duration(milliseconds: 600 * attempt));
+            continue;
+          }
+          return StreamStartOutcome.failed('Mac could not start stream (HTTP ${response.statusCode}).');
+        }
+        final json = jsonDecode(response.body) as Map<String, dynamic>?;
+        if (json?['ok'] != true) {
+          lastError = json?['error'] ?? 'Stream start failed.';
+          if (attempt < 5) {
+            await Future<void>.delayed(Duration(milliseconds: 600 * attempt));
+            continue;
+          }
+          return StreamStartOutcome.failed(lastError.toString());
+        }
+        final host = json?['host'] as String? ?? _settings.hostAddress;
+        final videoPort = json?['videoPort'] as int? ?? StreamingHostSettings.defaultVideoPort;
+        final audioPort = json?['audioPort'] as int? ?? StreamingHostSettings.defaultAudioPort;
+        final audioTcpPort = json?['audioTcpPort'] as int? ?? StreamingHostSettings.defaultAudioTcpPort;
+        final inputPort = json?['inputPort'] as int? ?? StreamingHostSettings.defaultInputPort;
+        return StreamStartOutcome.success(
+          host: host,
+          videoPort: videoPort,
+          audioPort: audioPort,
+          audioTcpPort: audioTcpPort,
+          inputPort: inputPort,
+          width: width,
+          height: height,
+        );
+      } catch (e) {
+        lastError = e;
+        if (attempt < 5) {
+          await Future<void>.delayed(Duration(milliseconds: 600 * attempt));
+          continue;
+        }
       }
-      final json = jsonDecode(response.body) as Map<String, dynamic>?;
-      if (json?['ok'] != true) {
-        return StreamStartOutcome.failed(json?['error'] as String? ?? 'Stream start failed.');
+    }
+    return StreamStartOutcome.failed('Could not start stream: $lastError');
+  }
+
+  /// After [stopStreamOnHost], poll until the Mac reports it is not actively streaming.
+  Future<void> _waitForMacStreamIdle() async {
+    const attempts = 30;
+    for (var i = 0; i < attempts; i++) {
+      final status = await fetchStatus();
+      if (status != null && status['videoStreaming'] != true) {
+        if (i > 0) {
+          await Future<void>.delayed(const Duration(milliseconds: 250));
+        }
+        return;
       }
-      final host = json?['host'] as String? ?? _settings.hostAddress;
-      final videoPort = json?['videoPort'] as int? ?? StreamingHostSettings.defaultVideoPort;
-      final audioPort = json?['audioPort'] as int? ?? StreamingHostSettings.defaultAudioPort;
-      final audioTcpPort = json?['audioTcpPort'] as int? ?? StreamingHostSettings.defaultAudioTcpPort;
-      final inputPort = json?['inputPort'] as int? ?? StreamingHostSettings.defaultInputPort;
-      return StreamStartOutcome.success(
-        host: host,
-        videoPort: videoPort,
-        audioPort: audioPort,
-        audioTcpPort: audioTcpPort,
-        inputPort: inputPort,
-        width: width,
-        height: height,
-      );
-    } catch (e) {
-      return StreamStartOutcome.failed('Could not start stream: $e');
+      await Future<void>.delayed(const Duration(milliseconds: 350));
+    }
+  }
+
+  /// After [stopStreamOnHost], poll until the Mac control server answers (capture may still be stopping).
+  Future<void> _waitForControlHostReady() async {
+    const attempts = 12;
+    for (var i = 0; i < attempts; i++) {
+      try {
+        await http.get(_uri('/playnite/v1/status')).timeout(const Duration(seconds: 4));
+        if (i > 0) {
+          await Future<void>.delayed(const Duration(milliseconds: 400));
+        }
+        return;
+      } catch (_) {
+        await Future<void>.delayed(const Duration(milliseconds: 500));
+      }
     }
   }
 
   Future<void> stopStreamOnHost() async {
     try {
-      await http.post(_uri('/playnite/v1/stream/stop')).timeout(const Duration(seconds: 4));
+      await http.post(_uri('/playnite/v1/stream/stop')).timeout(const Duration(seconds: 20));
     } catch (_) {}
   }
 }

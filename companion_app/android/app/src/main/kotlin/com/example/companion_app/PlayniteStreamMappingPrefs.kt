@@ -40,7 +40,10 @@ object PlayniteStreamMappingPrefs {
             item.put("sourceLabel", elementLabel)
             item.put("physicalKeyCode", keyCode)
             item.put("manualPhysicalLink", true)
-            item.put("targetLabel", keyLabel)
+            val keys = item.optJSONArray("moonlightKeyCodes")
+            if (keys == null || keys.length() == 0) {
+                item.put("targetLabel", keyLabel)
+            }
             found = true
             break
         }
@@ -60,6 +63,117 @@ object PlayniteStreamMappingPrefs {
         return json
     }
 
+    fun bindingForElement(context: Context, elementId: String): JSONObject? {
+        val array = try {
+            JSONArray(loadBindingsJson(context).ifEmpty { "[]" })
+        } catch (_: Exception) {
+            return null
+        }
+        for (i in 0 until array.length()) {
+            val item = array.optJSONObject(i) ?: continue
+            if (item.optString("sourceElementId") == elementId) return item
+        }
+        return null
+    }
+
+    fun moonlightKeyCodesForElement(context: Context, elementId: String): List<Int> {
+        val item = bindingForElement(context, elementId) ?: return emptyList()
+        val arr = item.optJSONArray("moonlightKeyCodes") ?: return emptyList()
+        return (0 until arr.length()).mapNotNull { idx ->
+            arr.optInt(idx, 0).takeIf { it != 0 }
+        }
+    }
+
+    fun upsertSwapToggleMapping(
+        context: Context,
+        elementId: String,
+        elementLabel: String,
+    ): String {
+        val array = try {
+            JSONArray(loadBindingsJson(context).ifEmpty { "[]" })
+        } catch (_: Exception) {
+            JSONArray()
+        }
+        var found = false
+        for (i in 0 until array.length()) {
+            val item = array.optJSONObject(i) ?: continue
+            if (item.optString("sourceElementId") != elementId) continue
+            item.put("sourceLabel", elementLabel)
+            item.put("targetAction", PlayniteSwapToggleMapping.TARGET_ACTION_TOGGLE_SWAP)
+            item.put("targetLabel", PlayniteSwapToggleMapping.TARGET_LABEL)
+            item.put("moonlightKeyCodes", JSONArray())
+            found = true
+            break
+        }
+        if (!found) {
+            array.put(
+                JSONObject()
+                    .put("sourceElementId", elementId)
+                    .put("sourceLabel", elementLabel)
+                    .put("targetAction", PlayniteSwapToggleMapping.TARGET_ACTION_TOGGLE_SWAP)
+                    .put("targetLabel", PlayniteSwapToggleMapping.TARGET_LABEL)
+                    .put("moonlightKeyCodes", JSONArray()),
+            )
+        }
+        val json = array.toString()
+        saveBindingsJson(context, json)
+        return json
+    }
+
+    fun upsertKeyboardMapping(
+        context: Context,
+        elementId: String,
+        elementLabel: String,
+        moonlightKeyCodes: List<Int>,
+        targetLabel: String,
+    ): String {
+        val array = try {
+            JSONArray(loadBindingsJson(context).ifEmpty { "[]" })
+        } catch (_: Exception) {
+            JSONArray()
+        }
+        var found = false
+        for (i in 0 until array.length()) {
+            val item = array.optJSONObject(i) ?: continue
+            if (item.optString("sourceElementId") != elementId) continue
+            item.put("sourceLabel", elementLabel)
+            item.put("moonlightKeyCodes", JSONArray(moonlightKeyCodes))
+            item.put("targetLabel", targetLabel)
+            item.remove("targetAction")
+            found = true
+            break
+        }
+        if (!found) {
+            array.put(
+                JSONObject()
+                    .put("sourceElementId", elementId)
+                    .put("sourceLabel", elementLabel)
+                    .put("moonlightKeyCodes", JSONArray(moonlightKeyCodes))
+                    .put("targetLabel", targetLabel),
+            )
+        }
+        val json = array.toString()
+        saveBindingsJson(context, json)
+        return json
+    }
+
+    fun clearElementMapping(context: Context, elementId: String): String {
+        val array = try {
+            JSONArray(loadBindingsJson(context).ifEmpty { "[]" })
+        } catch (_: Exception) {
+            return "[]"
+        }
+        val kept = JSONArray()
+        for (i in 0 until array.length()) {
+            val item = array.optJSONObject(i) ?: continue
+            if (item.optString("sourceElementId") == elementId) continue
+            kept.put(item)
+        }
+        val json = kept.toString()
+        saveBindingsJson(context, json)
+        return json
+    }
+
     fun targetLabelForElement(context: Context, elementId: String): String {
         val array = try {
             JSONArray(loadBindingsJson(context).ifEmpty { "[]" })
@@ -69,6 +183,9 @@ object PlayniteStreamMappingPrefs {
         for (i in 0 until array.length()) {
             val item = array.optJSONObject(i) ?: continue
             if (item.optString("sourceElementId") != elementId) continue
+            if (item.optString("targetAction") == PlayniteSwapToggleMapping.TARGET_ACTION_TOGGLE_SWAP) {
+                return PlayniteSwapToggleMapping.TARGET_LABEL
+            }
             val label = item.optString("targetLabel", "")
             if (label.isNotEmpty()) return label
             val keys = item.optJSONArray("moonlightKeyCodes")
