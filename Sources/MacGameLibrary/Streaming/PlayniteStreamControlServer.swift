@@ -103,11 +103,12 @@ actor PlayniteStreamControlServer {
     }
 
     func pairStatus(deviceID: String) -> String {
-        if pairedDevices.contains(where: { $0.deviceID == deviceID }) {
-            return "paired"
-        }
+        // Pending wins over stored pairing so companion "Pair again" waits for Mac approval.
         if pendingByDeviceID[deviceID] != nil {
             return "pending"
+        }
+        if pairedDevices.contains(where: { $0.deviceID == deviceID }) {
+            return "paired"
         }
         if deniedDeviceIDs.contains(deviceID) {
             return "denied"

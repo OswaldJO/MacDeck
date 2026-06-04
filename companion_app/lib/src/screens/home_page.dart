@@ -14,6 +14,8 @@ import '../services/streaming_bridge.dart';
 import '../services/streaming_host_settings.dart';
 import '../widgets/companion_insets.dart';
 import '../widgets/controller_mapping_section.dart';
+import '../widgets/controller_profile_section.dart';
+import '../services/stream_controller_profile_store.dart';
 import '../widgets/stream_shortcuts_picker_sheet.dart';
 import '../widgets/companion_appearance_section.dart';
 import '../widgets/stream_shortcuts_section.dart';
@@ -44,6 +46,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   StreamControllerSettings? _controllerSettings;
   StreamTouchSettings? _touchSettings;
   List<StreamControllerElementMapping> _controllerBindings = const [];
+  List<StreamControllerProfile> _controllerProfiles = const [];
+  String? _activeControllerProfileId;
   List<ConnectedControllerInfo> _connectedControllers = const [];
   String _controllerStatus = 'Connect a telescopic or Bluetooth gamepad to this phone.';
   bool _controllersRefreshing = false;
@@ -80,6 +84,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       });
       unawaited(_checkPendingMappingOverlay());
       unawaited(_checkPendingShortcutsOverlay());
+      unawaited(_reloadControllerMappingState());
     }
     if (_pairingInProgress &&
         (state == AppLifecycleState.paused || state == AppLifecycleState.inactive)) {
@@ -99,13 +104,21 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
   Future<void> _loadControllerSettings() async {
     final settings = await StreamControllerSettings.load();
+    await _reloadControllerMappingState();
+    if (!mounted) return;
+    setState(() => _controllerSettings = settings);
+    await _refreshConnectedControllers();
+  }
+
+  Future<void> _reloadControllerMappingState() async {
     final mappingStore = await StreamControllerMappingStore.load();
+    await mappingStore.syncFromLegacyBindings();
     if (!mounted) return;
     setState(() {
-      _controllerSettings = settings;
       _controllerBindings = mappingStore.bindings;
+      _controllerProfiles = mappingStore.profiles;
+      _activeControllerProfileId = mappingStore.activeProfileId;
     });
-    await _refreshConnectedControllers();
   }
 
   Future<void> _loadTouchSettings() async {
@@ -177,7 +190,10 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     final store = await StreamControllerMappingStore.load();
     await store.saveBindings(bindings);
     if (!mounted) return;
-    setState(() => _controllerBindings = bindings);
+    setState(() {
+      _controllerBindings = bindings;
+      _controllerProfiles = store.profiles;
+    });
   }
 
   /// True when [status] describes an in-progress or running stream (not idle/pairing copy).
@@ -345,12 +361,15 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     }
 
     final cancellation = PairingCancellation();
+    final wasPaired = host.paired;
     setState(() {
       _pairingInProgress = true;
       _pairingHostId = host.id;
       _pairingCancellation = cancellation;
       _selectedHostId = host.id;
-      _pairingStatus = 'Requesting pairing…';
+      _pairingStatus = wasPaired
+          ? 'Requesting re-pair… approve on your Mac.'
+          : 'Requesting pairing…';
     });
 
     try {
@@ -368,10 +387,12 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         _pairingCancellation = null;
         if (outcome.cancelled) {
           _pairingStatus = 'Pairing cancelled. Tap Pair when you are ready on the Mac.';
+        } else if (outcome.ok) {
+          _pairingStatus = wasPaired
+              ? 'Re-paired with ${host.name}'
+              : 'Paired with ${host.name}';
         } else {
-          _pairingStatus = _shortError(
-            outcome.message ?? (outcome.ok ? 'Paired with ${host.name}' : 'Failed'),
-          );
+          _pairingStatus = _shortError(outcome.message ?? 'Failed');
         }
       });
       if (outcome.ok) await _refreshHosts();
@@ -632,17 +653,15 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                         onTap: () => setState(() => _selectedHostId = host.id),
                         title: Text(host.name),
                         subtitle: Text('${host.address} • ${host.paired ? "Paired" : "Not paired"}'),
-                        trailing: host.paired
-                            ? Icon(Icons.check_circle, color: Theme.of(context).colorScheme.primary)
-                            : _pairingInProgress && _pairingHostId == host.id
-                                ? OutlinedButton(
-                                    onPressed: _cancelPairing,
-                                    child: const Text('Cancel'),
-                                  )
-                                : OutlinedButton(
-                                    onPressed: _pairingInProgress ? null : () => _pairHost(host),
-                                    child: const Text('Pair'),
-                                  ),
+                        trailing: _pairingInProgress && _pairingHostId == host.id
+                            ? OutlinedButton(
+                                onPressed: _cancelPairing,
+                                child: const Text('Cancel'),
+                              )
+                            : OutlinedButton(
+                                onPressed: _pairingInProgress ? null : () => _pairHost(host),
+                                child: Text(host.paired ? 'Pair again' : 'Pair'),
+                              ),
                       ),
                     );
                   },
@@ -765,6 +784,13 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
           ),
         ],
         const SizedBox(height: 24),
+        if (isAndroid) ...[
+          ControllerProfileSection(
+            profiles: _controllerProfiles,
+            activeProfileId: _activeControllerProfileId,
+            onProfilesChanged: _reloadControllerMappingState,
+          ),
+        ],
         const Text(
           'Button → keyboard mapping',
           style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),

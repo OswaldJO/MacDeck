@@ -66,6 +66,7 @@ class PlayniteStreamShortcutsOverlay(
             .setView(scroll)
             .setNegativeButton("Close") { d, _ -> d.dismiss() }
             .create()
+        PlayniteOverlayUi.applyDialogWindow(dialog)
         dialog?.window?.setLayout(
             ViewGroup.LayoutParams.MATCH_PARENT,
             (activity.resources.displayMetrics.heightPixels * 0.75f).toInt(),

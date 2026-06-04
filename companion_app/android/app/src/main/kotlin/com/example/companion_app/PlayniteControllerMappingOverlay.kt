@@ -6,7 +6,6 @@ import android.graphics.Color
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
-import android.widget.ArrayAdapter
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.Spinner
@@ -59,7 +58,7 @@ class PlayniteControllerMappingOverlay(
     private fun rebuildDialog() {
         val elements = mappableElements()
         val scroll = ScrollView(activity).apply {
-            setBackgroundColor(Color.parseColor("#E6000000"))
+            setBackgroundColor(PlayniteOverlayUi.PANEL_BG)
             layoutParams = ViewGroup.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT,
@@ -72,7 +71,7 @@ class PlayniteControllerMappingOverlay(
         root.addView(
             TextView(activity).apply {
                 text = "Controller mapping"
-                setTextColor(Color.WHITE)
+                setTextColor(PlayniteOverlayUi.TEXT_PRIMARY)
                 textSize = 20f
                 setPadding(0, 0, 0, 8)
             },
@@ -80,7 +79,7 @@ class PlayniteControllerMappingOverlay(
         root.addView(
             TextView(activity).apply {
                 text = "Tap a button below, then assign keyboard keys or link your gamepad."
-                setTextColor(Color.parseColor("#B3FFFFFF"))
+                setTextColor(PlayniteOverlayUi.TEXT_SECONDARY)
                 textSize = 13f
                 setPadding(0, 0, 0, 16)
             },
@@ -104,6 +103,7 @@ class PlayniteControllerMappingOverlay(
             .setView(scroll)
             .setNegativeButton("Close") { d, _ -> d.dismiss() }
             .create()
+        PlayniteOverlayUi.applyDialogWindow(dialog)
         dialog?.window?.setLayout(
             ViewGroup.LayoutParams.MATCH_PARENT,
             (activity.resources.displayMetrics.heightPixels * 0.88f).toInt(),
@@ -120,14 +120,14 @@ class PlayniteControllerMappingOverlay(
         val panel = LinearLayout(activity).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(20, 16, 20, 16)
-            setBackgroundColor(Color.parseColor("#33000000"))
+            setBackgroundColor(PlayniteOverlayUi.CARD_BG)
         }
         val selected = elements.firstOrNull { it.id == selectedElementId }
         if (selected == null) {
             panel.addView(
                 TextView(activity).apply {
                     text = "Select a controller button"
-                    setTextColor(Color.parseColor("#99FFFFFF"))
+                    setTextColor(PlayniteOverlayUi.TEXT_MUTED)
                     textSize = 14f
                 },
             )
@@ -137,7 +137,7 @@ class PlayniteControllerMappingOverlay(
         panel.addView(
             TextView(activity).apply {
                 text = "Editing: ${selected.label}"
-                setTextColor(Color.WHITE)
+                setTextColor(PlayniteOverlayUi.TEXT_PRIMARY)
                 textSize = 17f
                 setPadding(0, 0, 0, 8)
             },
@@ -145,7 +145,7 @@ class PlayniteControllerMappingOverlay(
         panel.addView(
             TextView(activity).apply {
                 text = "Mapped to: ${PlayniteStreamMappingPrefs.targetLabelForElement(activity, selected.id)}"
-                setTextColor(Color.parseColor("#99FFFFFF"))
+                setTextColor(PlayniteOverlayUi.TEXT_MUTED)
                 textSize = 13f
                 setPadding(0, 0, 0, 12)
             },
@@ -163,7 +163,7 @@ class PlayniteControllerMappingOverlay(
         }
         val spinner = Spinner(activity)
         val labels = MoonlightKeyboardKeys.common.map { it.label }
-        spinner.adapter = ArrayAdapter(activity, android.R.layout.simple_spinner_dropdown_item, labels)
+        PlayniteOverlayUi.bindKeySpinner(activity, spinner, labels)
         addRow.addView(
             spinner,
             LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f),
@@ -171,7 +171,7 @@ class PlayniteControllerMappingOverlay(
         addRow.addView(
             TextView(activity).apply {
                 text = "Add key"
-                setTextColor(Color.parseColor("#FF8AB4FF"))
+                setTextColor(PlayniteOverlayUi.ACCENT)
                 textSize = 14f
                 setPadding(24, 16, 0, 16)
                 setOnClickListener {
@@ -199,7 +199,7 @@ class PlayniteControllerMappingOverlay(
             panel.addView(
                 TextView(activity).apply {
                     text = "Assign Swap mode (toggle)"
-                    setTextColor(Color.parseColor("#FF8AB4FF"))
+                    setTextColor(PlayniteOverlayUi.ACCENT)
                     textSize = 14f
                     setPadding(0, 16, 0, 0)
                     setOnClickListener { assignSwapToggle(selected) }
@@ -210,7 +210,7 @@ class PlayniteControllerMappingOverlay(
         panel.addView(
             TextView(activity).apply {
                 text = "Link physical gamepad button"
-                setTextColor(Color.parseColor("#FF8AB4FF"))
+                setTextColor(PlayniteOverlayUi.ACCENT)
                 textSize = 14f
                 setPadding(0, 16, 0, 0)
                 setOnClickListener { startLink(selected) }
@@ -226,7 +226,7 @@ class PlayniteControllerMappingOverlay(
             row.addView(
                 TextView(activity).apply {
                     text = "No keys in chord — add keys above"
-                    setTextColor(Color.parseColor("#88FFFFFF"))
+                    setTextColor(PlayniteOverlayUi.TEXT_MUTED)
                     textSize = 13f
                 },
             )
@@ -239,7 +239,7 @@ class PlayniteControllerMappingOverlay(
             chips.addView(
                 TextView(activity).apply {
                     text = "${MoonlightKeyboardKeys.labelForCode(code)}  ✕"
-                    setTextColor(Color.WHITE)
+                    setTextColor(PlayniteOverlayUi.TEXT_PRIMARY)
                     textSize = 13f
                     setPadding(16, 8, 16, 8)
                     setBackgroundColor(Color.parseColor("#44FFFFFF"))
@@ -270,14 +270,14 @@ class PlayniteControllerMappingOverlay(
             addView(
                 TextView(activity).apply {
                     text = element.label
-                    setTextColor(Color.WHITE)
+                    setTextColor(PlayniteOverlayUi.TEXT_PRIMARY)
                     textSize = 16f
                 },
             )
             addView(
                 TextView(activity).apply {
                     text = PlayniteStreamMappingPrefs.targetLabelForElement(activity, element.id)
-                    setTextColor(Color.parseColor("#99FFFFFF"))
+                    setTextColor(PlayniteOverlayUi.TEXT_MUTED)
                     textSize = 13f
                     setPadding(0, 4, 0, 0)
                 },
@@ -288,7 +288,7 @@ class PlayniteControllerMappingOverlay(
     private fun actionButton(label: String, onClick: () -> Unit): TextView =
         TextView(activity).apply {
             text = label
-            setTextColor(Color.parseColor("#FF8AB4FF"))
+            setTextColor(PlayniteOverlayUi.ACCENT)
             textSize = 14f
             setPadding(0, 8, 24, 8)
             setOnClickListener { onClick() }

@@ -169,6 +169,7 @@ class PlayniteHostClient {
     // Ensure the Mac finished the previous session before opening a new one.
     await stopStreamOnHost();
     await _waitForMacStreamIdle();
+    await _waitForMacCaptureReady();
     await _waitForControlHostReady();
     Object? lastError;
     for (var attempt = 1; attempt <= 5; attempt++) {
@@ -239,16 +240,31 @@ class PlayniteHostClient {
 
   /// After [stopStreamOnHost], poll until the Mac reports it is not actively streaming.
   Future<void> _waitForMacStreamIdle() async {
-    const attempts = 30;
+    const attempts = 45;
     for (var i = 0; i < attempts; i++) {
       final status = await fetchStatus();
       if (status != null && status['videoStreaming'] != true) {
-        if (i > 0) {
-          await Future<void>.delayed(const Duration(milliseconds: 250));
-        }
+        await Future<void>.delayed(const Duration(milliseconds: 450));
         return;
       }
       await Future<void>.delayed(const Duration(milliseconds: 350));
+    }
+  }
+
+  /// After idle, wait until ScreenCaptureKit reports ready (host can accept stream/start).
+  Future<void> _waitForMacCaptureReady() async {
+    const attempts = 24;
+    for (var i = 0; i < attempts; i++) {
+      final status = await fetchStatus();
+      if (status != null &&
+          status['captureReady'] == true &&
+          status['videoStreaming'] != true) {
+        if (i > 0) {
+          await Future<void>.delayed(const Duration(milliseconds: 300));
+        }
+        return;
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 300));
     }
   }
 

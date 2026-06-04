@@ -36,11 +36,12 @@ class PlayniteGamepadMapping(bindingsJson: String) {
                     if (elementId.isEmpty()) continue
                     val action = item.optString("targetAction", "").ifEmpty { null }
                     val keys = parseKeyCodes(item)
-                    if (keys.isEmpty() && action != PlayniteSwapToggleMapping.TARGET_ACTION_TOGGLE_SWAP) {
-                        continue
-                    }
                     val physical = if (item.has("physicalKeyCode")) item.optInt("physicalKeyCode", -1) else -1
                     val manual = item.optBoolean("manualPhysicalLink", false)
+                    val isSwap = action == PlayniteSwapToggleMapping.TARGET_ACTION_TOGGLE_SWAP
+                    if (keys.isEmpty() && !isSwap && !(manual && physical >= 0)) {
+                        continue
+                    }
                     val binding = ElementBinding(
                         elementId = elementId,
                         moonlightKeyCodes = keys,
@@ -50,13 +51,15 @@ class PlayniteGamepadMapping(bindingsJson: String) {
                     )
                     bindingsByElement[elementId] = binding
                     if (manual && physical >= 0) {
-                        physicalToElementManual[physical] = elementId
+                        registerManualPhysicalLink(elementId, physical)
                     }
                 }
             } catch (e: Exception) {
                 Log.w(TAG, "Failed to parse bindings", e)
             }
         }
+        applyStartMenuAliases()
+        mappingLogsEmitted = 0
     }
 
     fun hasBindings(): Boolean = bindingsByElement.isNotEmpty()
@@ -71,7 +74,10 @@ class PlayniteGamepadMapping(bindingsJson: String) {
         onToggleSwap: () -> Unit,
     ): Boolean {
         if (bindingsByElement.isEmpty()) return false
-        val elementId = resolveElementId(event) ?: return false
+        val elementId = resolveElementId(event) ?: run {
+            logUnmappedKey(event)
+            return false
+        }
         val binding = bindingsByElement[elementId] ?: return handleUnmapped(event, swapModeActive)
         val down = event.action == KeyEvent.ACTION_DOWN
         val up = event.action == KeyEvent.ACTION_UP
@@ -91,7 +97,11 @@ class PlayniteGamepadMapping(bindingsJson: String) {
 
         if (binding.moonlightKeyCodes.isEmpty()) return true
         keyboard ?: return true
+        if (down && event.repeatCount > 0) return true
         keyboard.sendChord(binding.moonlightKeyCodes, down)
+        if (down && event.repeatCount == 0) {
+            logMappingFire(elementId, binding.moonlightKeyCodes, event.keyCode)
+        }
         return true
     }
 
@@ -132,7 +142,52 @@ class PlayniteGamepadMapping(bindingsJson: String) {
     private fun resolveElementId(event: KeyEvent): String? {
         val keyCode = event.keyCode
         physicalToElementManual[keyCode]?.let { return it }
-        return GamepadKeyCodes.elementIdForKeyCode(keyCode)
+        GamepadKeyCodes.elementIdForKeyCode(keyCode)?.let { elementId ->
+            if (bindingsByElement.containsKey(elementId)) return elementId
+        }
+        if (GamepadKeyCodes.startMenuKeyCodes.contains(keyCode) &&
+            bindingsByElement.containsKey("buttonMenu")
+        ) {
+            return "buttonMenu"
+        }
+        return null
+    }
+
+    /** Map Start / Menu / App to [buttonMenu] when that slot has any binding. */
+    private fun applyStartMenuAliases() {
+        if (!bindingsByElement.containsKey("buttonMenu")) return
+        for (code in GamepadKeyCodes.startMenuKeyCodes) {
+            physicalToElementManual.putIfAbsent(code, "buttonMenu")
+        }
+    }
+
+    private fun registerManualPhysicalLink(elementId: String, physical: Int) {
+        physicalToElementManual[physical] = elementId
+        if (elementId == "buttonMenu") {
+            for (code in GamepadKeyCodes.startMenuKeyCodes) {
+                physicalToElementManual[code] = elementId
+            }
+        }
+    }
+
+    private fun logUnmappedKey(event: KeyEvent) {
+        if (event.action != KeyEvent.ACTION_DOWN || event.repeatCount > 0) return
+        if (!GamepadInputFilter.isGamepadKey(event)) return
+        if (mappingLogsEmitted >= MAX_MAPPING_LOGS) return
+        mappingLogsEmitted += 1
+        PlayniteStreamLog.i(
+            "Gamepad key not mapped keyCode=${event.keyCode} " +
+                "(${GamepadKeyCodes.labelForKeyCode(event.keyCode)}) — use Link gamepad on Start / Menu",
+        )
+    }
+
+    private fun logMappingFire(elementId: String, codes: List<Int>, physicalKey: Int) {
+        if (mappingLogsEmitted >= MAX_MAPPING_LOGS) return
+        mappingLogsEmitted += 1
+        val keys = codes.joinToString { "0x${it.toString(16)}" }
+        PlayniteStreamLog.i(
+            "Gamepad map $elementId physical=$physicalKey (${GamepadKeyCodes.labelForKeyCode(physicalKey)}) → PNK1 $keys",
+        )
     }
 
     private fun parseKeyCodes(item: JSONObject): List<Int> {
@@ -149,11 +204,17 @@ class PlayniteGamepadMapping(bindingsJson: String) {
 
     companion object {
         private const val TAG = "PlayniteGamepadMap"
+        private const val MAX_MAPPING_LOGS = 24
+        @Volatile
+        private var mappingLogsEmitted = 0
     }
 }
 
 /** Shared keyCode ↔ logical gamepad element mapping. */
 object GamepadKeyCodes {
+    /** [KeyEvent.KEYCODE_APP] (API 24+); some pads use this for Start/Guide. */
+    const val KEYCODE_APP_COMPAT = 88
+
     fun elementIdForKeyCode(keyCode: Int): String? = when (keyCode) {
         KeyEvent.KEYCODE_BUTTON_A, KeyEvent.KEYCODE_DPAD_CENTER -> "buttonA"
         KeyEvent.KEYCODE_BUTTON_B -> "buttonB"
@@ -169,7 +230,10 @@ object GamepadKeyCodes {
         KeyEvent.KEYCODE_DPAD_DOWN -> "dpadDown"
         KeyEvent.KEYCODE_DPAD_LEFT -> "dpadLeft"
         KeyEvent.KEYCODE_DPAD_RIGHT -> "dpadRight"
-        KeyEvent.KEYCODE_BUTTON_START, KeyEvent.KEYCODE_MENU -> "buttonMenu"
+        KeyEvent.KEYCODE_BUTTON_START,
+        KeyEvent.KEYCODE_MENU,
+        KEYCODE_APP_COMPAT,
+        -> "buttonMenu"
         KeyEvent.KEYCODE_BUTTON_SELECT -> "buttonOptions"
         KeyEvent.KEYCODE_BUTTON_1 -> "macro1"
         KeyEvent.KEYCODE_BUTTON_2 -> "macro2"
@@ -216,6 +280,8 @@ object GamepadKeyCodes {
         KeyEvent.KEYCODE_DPAD_LEFT -> "D-pad left"
         KeyEvent.KEYCODE_DPAD_RIGHT -> "D-pad right"
         KeyEvent.KEYCODE_BUTTON_START -> "Start"
+        KeyEvent.KEYCODE_MENU -> "Menu"
+        KEYCODE_APP_COMPAT -> "App"
         KeyEvent.KEYCODE_BUTTON_SELECT -> "Select"
         KeyEvent.KEYCODE_BUTTON_1 -> "Macro 1"
         KeyEvent.KEYCODE_BUTTON_2 -> "Macro 2"
@@ -223,6 +289,13 @@ object GamepadKeyCodes {
         KeyEvent.KEYCODE_BUTTON_4 -> "Macro 4"
         else -> "Key $keyCode"
     }
+
+    /** Android often reports Start as [KEYCODE_BUTTON_START] or [KEYCODE_MENU]. */
+    val startMenuKeyCodes: List<Int> = listOf(
+        KeyEvent.KEYCODE_BUTTON_START,
+        KeyEvent.KEYCODE_MENU,
+        KEYCODE_APP_COMPAT,
+    )
 
     val probeKeyCodes: List<Int> = listOf(
         KeyEvent.KEYCODE_BUTTON_A,
@@ -240,6 +313,8 @@ object GamepadKeyCodes {
         KeyEvent.KEYCODE_DPAD_LEFT,
         KeyEvent.KEYCODE_DPAD_RIGHT,
         KeyEvent.KEYCODE_BUTTON_START,
+        KeyEvent.KEYCODE_MENU,
+        KEYCODE_APP_COMPAT,
         KeyEvent.KEYCODE_BUTTON_SELECT,
         KeyEvent.KEYCODE_BUTTON_1,
         KeyEvent.KEYCODE_BUTTON_2,

@@ -71,6 +71,7 @@ class PlayniteVideoActivity : Activity(), SurfaceHolder.Callback {
     private var inputSender: PlayniteInputSender? = null
     private var keyboardSender: PlayniteKeyboardSender? = null
     private var gamepadMapping: PlayniteGamepadMapping? = null
+    private var gamepadMappingJsonCache: String? = null
     private var gamepadMouseSender: PlayniteGamepadMouseSender? = null
     private var mappingOverlay: PlayniteControllerMappingOverlay? = null
     private var shortcutsOverlay: PlayniteStreamShortcutsOverlay? = null
@@ -258,9 +259,9 @@ class PlayniteVideoActivity : Activity(), SurfaceHolder.Callback {
     }
 
     private fun connectVideoSocket(host: String, port: Int): Socket {
-        val maxAttempts = 12
+        val maxAttempts = 16
         var lastError: Exception? = null
-        Thread.sleep(150)
+        Thread.sleep(400)
         repeat(maxAttempts) { attempt ->
             val sock = Socket()
             try {
@@ -329,6 +330,7 @@ class PlayniteVideoActivity : Activity(), SurfaceHolder.Callback {
     override fun surfaceDestroyed(holder: SurfaceHolder) {
         surfaceValid = false
         renderSurface = null
+        codecHandler?.post { releaseDecoder() }
         PlayniteStreamLog.w("Surface destroyed (stream still running=${running.get()})")
     }
 
@@ -427,7 +429,7 @@ class PlayniteVideoActivity : Activity(), SurfaceHolder.Callback {
         if (GamepadLinkCapture.tryConsume(event)) {
             return true
         }
-        val mapping = gamepadMapping
+        val mapping = gamepadMappingForEvent()
         val keyboard = keyboardSender
         val swapActive = PlayniteStreamSession.swapMouseModeActive
         if (mapping != null) {
@@ -458,7 +460,7 @@ class PlayniteVideoActivity : Activity(), SurfaceHolder.Callback {
         if (!GamepadInputFilter.isGamepadMotion(event)) {
             return super.dispatchGenericMotionEvent(event)
         }
-        val mapping = gamepadMapping
+        val mapping = gamepadMappingForEvent()
         val keyboard = keyboardSender
         val swapActive = PlayniteStreamSession.swapMouseModeActive
         if (mapping != null) {
@@ -496,9 +498,25 @@ class PlayniteVideoActivity : Activity(), SurfaceHolder.Callback {
         )
     }
 
+    /** Reload bindings from prefs so Controller-tab edits apply without restarting the stream. */
+    private fun gamepadMappingForEvent(): PlayniteGamepadMapping? {
+        val json = PlayniteStreamMappingPrefs.loadBindingsJson(applicationContext)
+            .ifEmpty { PlayniteStreamSession.controllerBindingsJson }
+        if (json.isNotEmpty()) {
+            PlayniteStreamSession.controllerBindingsJson = json
+        }
+        if (json == gamepadMappingJsonCache) {
+            return gamepadMapping
+        }
+        gamepadMappingJsonCache = json
+        gamepadMapping = PlayniteGamepadMapping(json).takeIf { it.hasBindings() }
+        return gamepadMapping
+    }
+
     private fun teardownStream(endReason: String, releaseKeyboard: Boolean = true) {
         if (logSessionEnded) return
         running.set(false)
+        codecHandler?.post { releaseDecoder() }
         endLogSession(endReason)
         audioReceiver?.stop()
         audioReceiver = null

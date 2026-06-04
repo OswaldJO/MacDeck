@@ -144,7 +144,20 @@ class MainActivity : FlutterActivity() {
                         result.success(true)
                         return@setMethodCallHandler
                     }
+                    PlayniteStreamSession.cancelPendingMacStop()
                     launchStreamActivity(result)
+                }
+
+                "prepareForNewStream" -> {
+                    PlayniteStreamSession.cancelPendingMacStop()
+                    val video = PlayniteVideoActivity.current
+                    if (video != null) {
+                        video.runOnUiThread { video.finishFromHost() }
+                    } else if (PlayniteStreamSession.hostStreamActive) {
+                        PlayniteStreamSession.deactivate()
+                        PlayniteStreamNotificationHelper.dismiss(applicationContext)
+                    }
+                    result.success(null)
                 }
 
                 "stopStream" -> runOnUiThread { completeStopStreamFromSession(result) }

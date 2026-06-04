@@ -119,6 +119,12 @@ class StreamingBridge {
     } catch (_) {}
   }
 
+  Future<void> prepareForNewStream() async {
+    try {
+      await _channel.invokeMethod<void>('prepareForNewStream');
+    } catch (_) {}
+  }
+
   Future<StreamStartOutcome> startStream({
     required String hostId,
     required int width,
@@ -128,6 +134,7 @@ class StreamingBridge {
     StreamTouchSettings? touchSettings,
     String? controllerBindingsJson,
   }) async {
+    await prepareForNewStream();
     final client = await _client();
     final outcome = await client.startStream(width: width, height: height, fps: fps);
     if (!outcome.ok || outcome.host == null || outcome.videoPort == null) {

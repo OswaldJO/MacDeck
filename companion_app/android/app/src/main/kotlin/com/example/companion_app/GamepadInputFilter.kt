@@ -19,6 +19,10 @@ object GamepadInputFilter {
             KeyEvent.KEYCODE_DPAD_LEFT,
             KeyEvent.KEYCODE_DPAD_RIGHT,
             KeyEvent.KEYCODE_DPAD_CENTER,
+            KeyEvent.KEYCODE_BUTTON_START,
+            KeyEvent.KEYCODE_BUTTON_SELECT,
+            KeyEvent.KEYCODE_MENU,
+            GamepadKeyCodes.KEYCODE_APP_COMPAT,
             -> true
             else -> hasGamepadSource(event.source)
         }
