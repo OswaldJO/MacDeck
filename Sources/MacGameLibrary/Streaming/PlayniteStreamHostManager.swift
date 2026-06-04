@@ -187,7 +187,9 @@ final class PlayniteStreamHostManager {
     @discardableResult
     private func beginVideoStreamUnlocked(width: Int, height: Int, fps: Int) async -> Bool {
         // Always tear down prior transport/capture so a second session works after app kill or failed connect.
-        await endVideoStreamUnlocked()
+        await server.setTransportReady(false)
+        await endVideoStreamUnlocked(releaseTransport: false)
+        try? await Task.sleep(nanoseconds: 500_000_000)
         if !capture.isReady {
             guard await capture.requestSystemPrompt() else { return false }
             await server.setCaptureReady(capture.isReady)
@@ -221,6 +223,7 @@ final class PlayniteStreamHostManager {
             PlayniteLocalOutputMute.setStreamingMuted(false)
             isVideoStreaming = false
             await server.setVideoStreaming(false)
+            await server.setTransportReady(true)
             print("[PlayniteStream] stream start failed: \(error.localizedDescription)")
             return false
         }
@@ -232,7 +235,7 @@ final class PlayniteStreamHostManager {
         }
     }
 
-    private func endVideoStreamUnlocked() async {
+    private func endVideoStreamUnlocked(releaseTransport: Bool = true) async {
         captureTask?.cancel()
         captureTask = nil
         isVideoStreaming = false
@@ -241,6 +244,9 @@ final class PlayniteStreamHostManager {
         PlayniteLocalOutputMute.setStreamingMuted(false)
         await video.stopStream()
         await stopListeners()
+        if releaseTransport {
+            await server.setTransportReady(true)
+        }
         print("[PlayniteStream] stream ended")
     }
 

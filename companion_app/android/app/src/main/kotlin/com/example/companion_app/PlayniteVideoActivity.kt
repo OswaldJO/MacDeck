@@ -137,7 +137,7 @@ class PlayniteVideoActivity : Activity(), SurfaceHolder.Callback {
         inputPort = intent.getIntExtra(EXTRA_INPUT_PORT, 28768)
         val cursorSpeed = intent.getFloatExtra(EXTRA_CURSOR_SPEED, 1f)
         val swapStickSensitivity =
-            intent.getFloatExtra(EXTRA_SWAP_STICK_SENSITIVITY, 0.28f).coerceIn(0.05f, 1f)
+            intent.getFloatExtra(EXTRA_SWAP_STICK_SENSITIVITY, 0.05f).coerceIn(0.05f, 1f)
         val tapSlopPercent = intent.getIntExtra(EXTRA_TAP_SLOP_PERCENT, 100)
         val tapTimeoutMs = intent.getLongExtra(EXTRA_TAP_TIMEOUT_MS, PlayniteInputSender.TAP_TIMEOUT_MS)
         val tapPressure = intent.getFloatExtra(EXTRA_TAP_PRESSURE, 0.35f)

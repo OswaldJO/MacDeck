@@ -58,7 +58,7 @@ object PlayniteStreamSession {
     var width: Int = 1920
     var height: Int = 1080
     var cursorSpeed: Float = 1f
-    var swapStickSensitivity: Float = 0.28f
+    var swapStickSensitivity: Float = 0.05f
     var tapSlopPercent: Int = 100
     var tapTimeoutMs: Long = PlayniteInputSender.TAP_TIMEOUT_MS
     var tapPressure: Float = 0.35f
@@ -90,7 +90,7 @@ object PlayniteStreamSession {
         height = intent.getIntExtra(PlayniteVideoActivity.EXTRA_HEIGHT, 1080)
         cursorSpeed = intent.getFloatExtra(PlayniteVideoActivity.EXTRA_CURSOR_SPEED, 1f)
         swapStickSensitivity =
-            intent.getFloatExtra(PlayniteVideoActivity.EXTRA_SWAP_STICK_SENSITIVITY, 0.28f)
+            intent.getFloatExtra(PlayniteVideoActivity.EXTRA_SWAP_STICK_SENSITIVITY, 0.05f)
         tapSlopPercent = intent.getIntExtra(PlayniteVideoActivity.EXTRA_TAP_SLOP_PERCENT, 100)
         tapTimeoutMs = intent.getLongExtra(
             PlayniteVideoActivity.EXTRA_TAP_TIMEOUT_MS,

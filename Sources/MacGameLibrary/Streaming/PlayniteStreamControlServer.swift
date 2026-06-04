@@ -23,6 +23,8 @@ actor PlayniteStreamControlServer {
     private var pairedDevices: [PairedDevice] = []
     private var captureReady = false
     private var videoStreaming = false
+    /// True when video/audio/input listeners are torn down and a new `stream/start` can bind ports.
+    private var transportReady = true
     private let storeURL: URL
 
     var onStreamStartRequested: (@Sendable (String, Int, Int, Int) async -> Bool)?
@@ -46,6 +48,10 @@ actor PlayniteStreamControlServer {
 
     func setVideoStreaming(_ active: Bool) {
         videoStreaming = active
+    }
+
+    func setTransportReady(_ ready: Bool) {
+        transportReady = ready
     }
 
     func start(port: UInt16 = PlayniteStreamPorts.controlHTTP) async throws {
@@ -239,6 +245,7 @@ actor PlayniteStreamControlServer {
                 "hostname": ProcessInfo.processInfo.hostName,
                 "captureReady": captureReady,
                 "videoStreaming": videoStreaming,
+                "transportReady": transportReady,
                 "pairedCount": pairedDevices.count,
                 "pendingCount": pendingByDeviceID.count,
                 "videoPort": PlayniteStreamPorts.videoTCP,
@@ -320,10 +327,12 @@ actor PlayniteStreamControlServer {
                 "host": LocalNetworkAddress.primaryIPv4() ?? "127.0.0.1",
             ])
         case ("POST", "/playnite/v1/stream/stop"):
-            // Report idle immediately so the companion can start a new session without polling a stale flag.
-            await setVideoStreaming(false)
+            // Tear down listeners/capture before reporting idle (companion polls transportReady).
             if let onStreamStopRequested {
                 await onStreamStopRequested()
+            } else {
+                setVideoStreaming(false)
+                setTransportReady(true)
             }
             return httpResponse(status: 200, body: ["ok": true])
         default:

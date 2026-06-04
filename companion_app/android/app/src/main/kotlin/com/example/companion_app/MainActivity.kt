@@ -119,7 +119,7 @@ class MainActivity : FlutterActivity() {
                     val height = call.argument<Int>("height") ?: 1080
                     val cursorSpeed = (call.argument<Double>("cursorSpeed") ?: 1.0).toFloat()
                     val swapStickSensitivity =
-                        (call.argument<Double>("swapStickSensitivity") ?: 0.28).toFloat()
+                        (call.argument<Double>("swapStickSensitivity") ?: 0.05).toFloat()
                     val tapSlopPercent = call.argument<Int>("tapSlopPercent") ?: 100
                     val tapTimeoutMs = call.argument<Int>("tapTimeoutMs")?.toLong()
                         ?: PlayniteInputSender.TAP_TIMEOUT_MS
@@ -182,7 +182,7 @@ class MainActivity : FlutterActivity() {
 
                 "updateSwapStickSensitivity" -> {
                     val value =
-                        (call.argument<Double>("swapStickSensitivity") ?: 0.28).toFloat()
+                        (call.argument<Double>("swapStickSensitivity") ?: 0.05).toFloat()
                             .coerceIn(0.05f, 1f)
                     PlayniteStreamSession.swapStickSensitivity = value
                     PlayniteVideoActivity.current?.updateSwapStickSensitivity(value)

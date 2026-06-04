@@ -15,7 +15,7 @@ import kotlin.math.abs
 class PlayniteGamepadMouseSender(
     private val host: String,
     private val port: Int,
-    private var stickSensitivity: Float = 0.28f,
+    private var stickSensitivity: Float = 0.05f,
     private val stickDeadZone: Float = 0.12f,
 ) {
     /** Caps per-frame stick delta; touch uses small finger deltas, sticks report full [-1, 1]. */

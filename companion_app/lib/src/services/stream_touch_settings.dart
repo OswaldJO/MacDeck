@@ -30,7 +30,7 @@ class StreamTouchSettings {
 
   /// 0.05–1.0 — left stick cursor speed when notification **Swap** mouse mode is on.
   double get swapStickSensitivity =>
-      _prefs.getDouble(_swapStickSensitivityKey) ?? 0.28;
+      _prefs.getDouble(_swapStickSensitivityKey) ?? 0.05;
 
   Future<void> save({
     double? cursorSpeed,
