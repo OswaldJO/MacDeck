@@ -9,6 +9,7 @@ import '../services/stream_controller_settings.dart';
 import '../services/stream_touch_settings.dart';
 import '../services/stream_log_share.dart';
 import '../services/playnite_stream_foreground.dart' show PlayniteStreamNotification;
+import '../services/pairing_cancellation.dart';
 import '../services/streaming_bridge.dart';
 import '../services/streaming_host_settings.dart';
 import '../widgets/companion_insets.dart';
@@ -34,6 +35,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   String _pairingStatus = '';
   String _sessionStatus = 'Pair with your Mac first, then start a Desktop stream.';
   bool _pairingInProgress = false;
+  String? _pairingHostId;
+  PairingCancellation? _pairingCancellation;
   bool _streamActive = false;
   bool _streamViewerOpen = false;
   StreamControllerSettings? _controllerSettings;
@@ -290,8 +293,11 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       return;
     }
 
+    final cancellation = PairingCancellation();
     setState(() {
       _pairingInProgress = true;
+      _pairingHostId = host.id;
+      _pairingCancellation = cancellation;
       _selectedHostId = host.id;
       _pairingStatus = 'Requesting pairing…';
     });
@@ -299,6 +305,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     try {
       final outcome = await _bridge.pairWithHost(
         hostId: host.id,
+        cancellation: cancellation,
         onProgress: (message) {
           if (mounted) setState(() => _pairingStatus = message);
         },
@@ -306,16 +313,33 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       if (!mounted) return;
       setState(() {
         _pairingInProgress = false;
-        _pairingStatus = _shortError(outcome.message ?? (outcome.ok ? 'Paired with ${host.name}' : 'Failed'));
+        _pairingHostId = null;
+        _pairingCancellation = null;
+        if (outcome.cancelled) {
+          _pairingStatus = 'Pairing cancelled. Tap Pair when you are ready on the Mac.';
+        } else {
+          _pairingStatus = _shortError(
+            outcome.message ?? (outcome.ok ? 'Paired with ${host.name}' : 'Failed'),
+          );
+        }
       });
       if (outcome.ok) await _refreshHosts();
     } catch (e) {
       if (!mounted) return;
       setState(() {
         _pairingInProgress = false;
+        _pairingHostId = null;
+        _pairingCancellation = null;
         _pairingStatus = _shortError('Pairing error: $e');
       });
     }
+  }
+
+  Future<void> _cancelPairing() async {
+    if (!_pairingInProgress) return;
+    _pairingCancellation?.cancel();
+    setState(() => _pairingStatus = 'Cancelling pairing…');
+    await _bridge.cancelPairing();
   }
 
   String _shortError(String message) {
@@ -449,7 +473,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       children: [
         ListTile(
           title: Text(_hostStatus),
-          trailing: FilledButton.icon(
+          trailing: OutlinedButton.icon(
             onPressed: _showAddHostIpDialog,
             icon: const Icon(Icons.add),
             label: const Text('Add IP'),
@@ -494,10 +518,15 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                         subtitle: Text('${host.address} • ${host.paired ? "Paired" : "Not paired"}'),
                         trailing: host.paired
                             ? Icon(Icons.check_circle, color: Theme.of(context).colorScheme.primary)
-                            : FilledButton(
-                                onPressed: _pairingInProgress ? null : () => _pairHost(host),
-                                child: const Text('Pair'),
-                              ),
+                            : _pairingInProgress && _pairingHostId == host.id
+                                ? OutlinedButton(
+                                    onPressed: _cancelPairing,
+                                    child: const Text('Cancel'),
+                                  )
+                                : OutlinedButton(
+                                    onPressed: _pairingInProgress ? null : () => _pairHost(host),
+                                    child: const Text('Pair'),
+                                  ),
                       ),
                     );
                   },
@@ -824,35 +853,34 @@ class _AddMacHostIpDialogState extends State<_AddMacHostIpDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
+      scrollable: true,
       title: const Text('Add Mac host IP'),
-      content: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            const Text(
-              'LAN IPv4 from Mac → Streaming. IP only — not 127.0.0.1. '
-              'Port 28765 is automatic.',
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const Text(
+            'LAN IPv4 from Mac → Streaming. IP only — not 127.0.0.1. '
+            'Port 28765 is automatic.',
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _ipController,
+            keyboardType: TextInputType.number,
+            autofocus: true,
+            decoration: InputDecoration(
+              labelText: 'Mac host IP',
+              hintText: 'e.g. 192.168.1.42',
+              errorText: _inlineError,
             ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: _ipController,
-              keyboardType: TextInputType.number,
-              autofocus: true,
-              decoration: InputDecoration(
-                labelText: 'Mac host IP',
-                hintText: 'e.g. 192.168.1.42',
-                errorText: _inlineError,
-              ),
-              onChanged: (_) {
-                if (_inlineError != null) {
-                  setState(() => _inlineError = null);
-                }
-              },
-              onSubmitted: (_) => _submit(),
-            ),
-          ],
-        ),
+            onChanged: (_) {
+              if (_inlineError != null) {
+                setState(() => _inlineError = null);
+              }
+            },
+            onSubmitted: (_) => _submit(),
+          ),
+        ],
       ),
       actions: [
         TextButton(

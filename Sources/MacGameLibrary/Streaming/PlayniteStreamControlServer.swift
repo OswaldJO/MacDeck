@@ -88,6 +88,15 @@ actor PlayniteStreamControlServer {
         return true
     }
 
+    /// Companion withdrew a pending request (not a Mac deny).
+    func cancelPending(deviceID: String) -> Bool {
+        guard let pending = pendingByDeviceID.removeValue(forKey: deviceID) else { return false }
+        deniedDeviceIDs.remove(deviceID)
+        notifyPairingQueueChanged()
+        DebugLog.log("Playnite pairing cancelled by companion: \(pending.deviceName)")
+        return true
+    }
+
     func pairStatus(deviceID: String) -> String {
         if pairedDevices.contains(where: { $0.deviceID == deviceID }) {
             return "paired"
@@ -262,6 +271,12 @@ actor PlayniteStreamControlServer {
                 return httpResponse(status: 400, body: ["ok": false])
             }
             let ok = deny(deviceID: deviceID)
+            return httpResponse(status: ok ? 200 : 404, body: ["ok": ok])
+        case ("POST", "/playnite/v1/pair/cancel"):
+            guard let deviceID = json?["deviceId"] as? String, !deviceID.isEmpty else {
+                return httpResponse(status: 400, body: ["ok": false, "error": "deviceId required"])
+            }
+            let ok = cancelPending(deviceID: deviceID)
             return httpResponse(status: ok ? 200 : 404, body: ["ok": ok])
         case ("GET", "/playnite/v1/pair/status"):
             guard let deviceID = request.query["deviceId"], !deviceID.isEmpty else {

@@ -149,7 +149,7 @@ class PlayniteVideoActivity : Activity(), SurfaceHolder.Callback {
 
         val bindingsJson = intent.getStringExtra(EXTRA_CONTROLLER_BINDINGS_JSON).orEmpty()
         gamepadMapping = PlayniteGamepadMapping(bindingsJson).takeIf { it.hasBindings() }
-        keyboardSender = PlayniteKeyboardSender(streamHost, inputPort)
+        keyboardSender = PlayniteStreamSession.keyboardSender()
 
         current = this
         logSessionEnded = false
@@ -293,6 +293,7 @@ class PlayniteVideoActivity : Activity(), SurfaceHolder.Callback {
     private fun leaveViewerOnly() {
         teardownStream(
             "viewer closed (received=$framesReceived rendered=$framesRendered dropped=$framesDropped)",
+            releaseKeyboard = false,
         )
         PlayniteStreamSession.viewerOpen = false
         mappingOverlay?.dismiss()
@@ -303,11 +304,14 @@ class PlayniteVideoActivity : Activity(), SurfaceHolder.Callback {
     }
 
     fun showStreamShortcutsOverlay() {
-        val keyboard = keyboardSender ?: return
+        if (PlayniteStreamSession.keyboardSender() == null) {
+            PlayniteStreamLog.w("Shortcuts overlay unavailable — keyboard sender missing")
+            return
+        }
         shortcutsOverlay?.dismiss()
         mappingOverlay?.dismiss()
         mappingOverlay = null
-        shortcutsOverlay = PlayniteStreamShortcutsOverlay(this, keyboard)
+        shortcutsOverlay = PlayniteStreamShortcutsOverlay(this)
         shortcutsOverlay?.show()
     }
 
@@ -349,7 +353,7 @@ class PlayniteVideoActivity : Activity(), SurfaceHolder.Callback {
         )
     }
 
-    private fun teardownStream(endReason: String) {
+    private fun teardownStream(endReason: String, releaseKeyboard: Boolean = true) {
         if (logSessionEnded) return
         running.set(false)
         endLogSession(endReason)
@@ -357,7 +361,9 @@ class PlayniteVideoActivity : Activity(), SurfaceHolder.Callback {
         audioReceiver = null
         inputSender?.close()
         inputSender = null
-        keyboardSender?.close()
+        if (releaseKeyboard) {
+            PlayniteStreamSession.releaseKeyboardSender()
+        }
         keyboardSender = null
         streamThread?.interrupt()
         runCatching { socket?.close() }
@@ -377,7 +383,9 @@ class PlayniteVideoActivity : Activity(), SurfaceHolder.Callback {
         audioReceiver = null
         inputSender?.close()
         inputSender = null
-        keyboardSender?.close()
+        if (!PlayniteStreamSession.hostStreamActive) {
+            PlayniteStreamSession.releaseKeyboardSender()
+        }
         keyboardSender = null
         streamThread?.interrupt()
         runCatching { socket?.close() }

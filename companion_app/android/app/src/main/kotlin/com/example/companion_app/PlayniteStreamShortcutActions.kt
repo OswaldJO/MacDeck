@@ -7,15 +7,18 @@ object PlayniteStreamShortcutActions {
     const val EXTRA_OPEN_SHORTCUTS = "openStreamShortcuts"
 
     fun openShortcutsUi(context: Context) {
+        val appContext = context.applicationContext
         val video = PlayniteVideoActivity.current
-        if (video != null) {
+        if (video != null && !video.isFinishing) {
             video.runOnUiThread { video.showStreamShortcutsOverlay() }
             return
         }
-        val launch = Intent(context, MainActivity::class.java).apply {
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
+        val launch = Intent(appContext, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or
+                Intent.FLAG_ACTIVITY_SINGLE_TOP or
+                Intent.FLAG_ACTIVITY_REORDER_TO_FRONT
             putExtra(EXTRA_OPEN_SHORTCUTS, true)
         }
-        context.startActivity(launch)
+        appContext.startActivity(launch)
     }
 }

@@ -6,6 +6,18 @@ actor PlayniteStreamInputServer {
     private var udp: PlayniteUDPSocket?
     private nonisolated(unsafe) static var packetsReceived = 0
 
+    private nonisolated(unsafe) static var keyboardPacketsReceived = 0
+
+    private nonisolated static func noteKeyboard(_ event: PlayniteKeyboardEventFormat.Event) {
+        keyboardPacketsReceived += 1
+        if keyboardPacketsReceived <= 8 || keyboardPacketsReceived % 20 == 0 {
+            print(
+                "[PlayniteInput] PNK1 #\(keyboardPacketsReceived) " +
+                    "\(event.down ? "down" : "up") key=0x\(String(event.moonlightKeyCode, radix: 16))"
+            )
+        }
+    }
+
     private nonisolated static func noteReceived(_ event: PlayniteInputEventFormat.Event) {
         packetsReceived += 1
         if packetsReceived == 1 || packetsReceived % 100 == 0 {
@@ -21,6 +33,7 @@ actor PlayniteStreamInputServer {
         let socket = PlayniteUDPSocket()
         socket.onDatagram = { (data: Data, _: sockaddr_storage, _: socklen_t) in
             if let keyboard = PlayniteKeyboardEventFormat.parse(data) {
+                PlayniteStreamInputServer.noteKeyboard(keyboard)
                 PlayniteKeyboardPlayback.handle(keyboard)
                 return
             }

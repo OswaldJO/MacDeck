@@ -16,5 +16,7 @@ class PlayniteStreamNotificationReceiver : BroadcastReceiver() {
             PlayniteStreamNotificationHelper.ACTION_SHORTCUTS ->
                 PlayniteStreamShortcutActions.openShortcutsUi(context)
         }
+        // After launching UI; best-effort only — must not crash if blocked by the OS.
+        NotificationShadeUtils.collapse(context)
     }
 }

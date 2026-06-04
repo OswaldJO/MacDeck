@@ -24,7 +24,15 @@ class PlayniteKeyboardSender(
                         InetSocketAddress(host, port),
                     ),
                 )
-            } catch (_: Exception) {
+                if (packetsLogged < 16) {
+                    packetsLogged++
+                    PlayniteStreamLog.i(
+                        "Keyboard PNK1 ${if (down) "down" else "up"} " +
+                            "key=0x${moonlightKeyCode.toString(16)} → $host:$port",
+                    )
+                }
+            } catch (e: Exception) {
+                PlayniteStreamLog.w("Keyboard send failed key=0x${moonlightKeyCode.toString(16)}: ${e.message}")
             }
         }
     }
@@ -36,6 +44,9 @@ class PlayniteKeyboardSender(
             sendKey(code, down)
         }
     }
+
+    @Volatile
+    private var packetsLogged = 0
 
     fun close() {
         executor.shutdown()

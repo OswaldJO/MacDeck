@@ -128,18 +128,18 @@ class MainActivity : FlutterActivity() {
 
                 "fireStreamShortcut" -> {
                     val codes = call.argument<List<Int>>("moonlightKeyCodes")?.filter { it != 0 }.orEmpty()
-                    val host = PlayniteStreamSession.host
-                    val port = PlayniteStreamSession.inputPort
-                    if (!PlayniteStreamSession.hostStreamActive || host.isEmpty() || codes.isEmpty()) {
+                    val sender = PlayniteStreamSession.keyboardSender()
+                    if (!PlayniteStreamSession.hostStreamActive || codes.isEmpty() || sender == null) {
                         result.success(false)
                         return@setMethodCallHandler
                     }
-                    val sender = PlayniteKeyboardSender(host, port)
+                    PlayniteStreamLog.i(
+                        "Shortcut fire ${codes.size} keys → ${PlayniteStreamSession.host}:${PlayniteStreamSession.inputPort}",
+                    )
                     sender.sendChord(codes, down = true)
                     mainHandler.postDelayed({
                         sender.sendChord(codes, down = false)
-                        sender.close()
-                    }, 80L)
+                    }, 140L)
                     result.success(true)
                 }
 

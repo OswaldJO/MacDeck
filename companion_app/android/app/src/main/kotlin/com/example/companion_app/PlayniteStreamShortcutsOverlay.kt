@@ -15,7 +15,6 @@ import android.widget.Toast
 /** Shortcut picker overlay on the live stream; sends chords to the Mac via [PlayniteKeyboardSender]. */
 class PlayniteStreamShortcutsOverlay(
     private val activity: Activity,
-    private val keyboard: PlayniteKeyboardSender,
 ) {
     private var dialog: AlertDialog? = null
     private val mainHandler = Handler(Looper.getMainLooper())
@@ -78,11 +77,24 @@ class PlayniteStreamShortcutsOverlay(
     }
 
     private fun fireShortcut(shortcut: PlayniteStreamShortcutsPrefs.Shortcut) {
+        val keyboard = PlayniteStreamSession.keyboardSender()
+        if (keyboard == null) {
+            Toast.makeText(activity, "Stream keyboard unavailable", Toast.LENGTH_SHORT).show()
+            PlayniteStreamLog.w("Shortcut \"${shortcut.name}\" skipped — no keyboard sender")
+            return
+        }
         val codes = shortcut.moonlightKeyCodes
         if (codes.isEmpty()) return
+        PlayniteStreamLog.i(
+            "Shortcut \"${shortcut.name}\" (${shortcut.keyLabel}) → ${PlayniteStreamSession.host}:${PlayniteStreamSession.inputPort}",
+        )
         keyboard.sendChord(codes, down = true)
         mainHandler.postDelayed({
             keyboard.sendChord(codes, down = false)
-        }, 80L)
+        }, CHORD_HOLD_MS)
+    }
+
+    companion object {
+        private const val CHORD_HOLD_MS = 140L
     }
 }

@@ -73,6 +73,29 @@ abstract final class CompanionTheme {
       switchTheme: SwitchThemeData(
         thumbColor: WidgetStateProperty.resolveWith((_) => _seed),
       ),
+      chipTheme: ChipThemeData(
+        backgroundColor: Colors.transparent,
+        disabledColor: Colors.transparent,
+        selectedColor: Colors.transparent,
+        side: BorderSide(color: primaryText),
+        labelStyle: TextStyle(color: primaryText),
+        secondaryLabelStyle: TextStyle(color: primaryText),
+        deleteIconColor: primaryText,
+        iconTheme: IconThemeData(color: primaryText, size: 18),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      ),
+      outlinedButtonTheme: OutlinedButtonThemeData(
+        style: OutlinedButton.styleFrom(
+          foregroundColor: primaryText,
+          disabledForegroundColor: primaryText.withValues(alpha: 0.38),
+          side: BorderSide(color: primaryText, width: 1.5),
+          disabledBackgroundColor: Colors.transparent,
+          backgroundColor: Colors.transparent,
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        ),
+      ),
       filledButtonTheme: FilledButtonThemeData(
         style: FilledButton.styleFrom(foregroundColor: _background),
       ),

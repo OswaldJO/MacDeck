@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="playnite_stream_notification_title">Playnite stream</string>
+    <string name="playnite_stream_action_stop">Stop</string>
+    <string name="playnite_stream_action_controller">Controller</string>
+    <string name="playnite_stream_action_shortcuts">Shortcuts</string>
+</resources>

@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 
 import '../models/host_info.dart';
 import 'companion_device_identity.dart';
+import 'pairing_cancellation.dart';
 import 'streaming_host_settings.dart';
 
 /// Playnite-native LAN streaming client.
@@ -78,8 +79,25 @@ class PlayniteHostClient {
     }
   }
 
+  /// Withdraw a pending pairing request on the Mac (companion cancel).
+  Future<void> cancelPairRequest(String deviceId) async {
+    if (!_settings.isConfigured) return;
+    try {
+      await http
+          .post(
+            _uri('/playnite/v1/pair/cancel'),
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({'deviceId': deviceId}),
+          )
+          .timeout(const Duration(seconds: 4));
+    } catch (_) {}
+  }
+
   /// Phone requests pairing; Mac user taps Pair or Deny.
-  Future<PairingOutcome> requestPair({void Function(String status)? onProgress}) async {
+  Future<PairingOutcome> requestPair({
+    void Function(String status)? onProgress,
+    PairingCancellation? cancellation,
+  }) async {
     if (!_settings.isConfigured) {
       return PairingOutcome.failed('Add your Mac’s LAN IP on the Hosts tab first.');
     }
@@ -107,9 +125,18 @@ class PlayniteHostClient {
         );
       }
 
+      if (cancellation?.isCancelled == true) {
+        await cancelPairRequest(deviceId);
+        return PairingOutcome.cancelled();
+      }
+
       onProgress?.call('Waiting for approval on Mac…');
       final deadline = DateTime.now().add(const Duration(minutes: 5));
       while (DateTime.now().isBefore(deadline)) {
+        if (cancellation?.isCancelled == true) {
+          await cancelPairRequest(deviceId);
+          return PairingOutcome.cancelled();
+        }
         final status = await pairStatus(deviceId);
         if (status == 'paired') {
           return PairingOutcome.success();
@@ -118,6 +145,10 @@ class PlayniteHostClient {
           return PairingOutcome.failed('Mac denied pairing.');
         }
         await Future<void>.delayed(const Duration(seconds: 1));
+        if (cancellation?.isCancelled == true) {
+          await cancelPairRequest(deviceId);
+          return PairingOutcome.cancelled();
+        }
       }
       return PairingOutcome.failed('Timed out waiting for Mac to approve pairing.');
     } catch (e) {
@@ -183,14 +214,17 @@ class PlayniteHostClient {
 }
 
 class PairingOutcome {
-  const PairingOutcome._({required this.ok, this.message});
+  const PairingOutcome._({required this.ok, this.message, this.cancelled = false});
 
   final bool ok;
   final String? message;
+  final bool cancelled;
 
   factory PairingOutcome.success() => const PairingOutcome._(ok: true);
 
   factory PairingOutcome.failed(String message) => PairingOutcome._(ok: false, message: message);
+
+  factory PairingOutcome.cancelled() => const PairingOutcome._(ok: false, cancelled: true);
 }
 
 class StreamStartOutcome {

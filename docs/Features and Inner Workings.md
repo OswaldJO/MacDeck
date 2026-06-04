@@ -98,11 +98,11 @@ The Mac app embeds its own **Playnite stream host** (ScreenCaptureKit → H.264,
 ### Host lifecycle
 
 - **`PlayniteStreamHostManager`** — starts HTTP control (**28765**), TCP video (**28766**), UDP audio subscribe (**28767**), TCP audio downlink (**28769**), UDP input (**28768**); on stream start calls **`PlayniteLocalOutputMute`** to mute Mac default output; unmutes on stream stop or host stop.
-- **`PlayniteStreamControlServer`** — pairing queue, stream start/stop; JSON includes `videoPort`, `audioPort`, `audioTcpPort`, `inputPort`.
+- **`PlayniteStreamControlServer`** — pairing queue (approve / deny / **cancel**), stream start/stop; JSON includes `videoPort`, `audioPort`, `audioTcpPort`, `inputPort`.
 - **`PlayniteVideoStreamServer`** — one TCP client; sends framed **`PNV1`** H.264 (Annex-B from `PlayniteH264Encoder`).
 - **`PlayniteDisplayCapture`** — SCK display + **system audio** (`capturesAudio`); PCM converted to s16le (packed or planar stereo interleave when ScreenCaptureKit returns multiple buffers).
 - **`PlayniteAudioStreamServer`** — phone sends **`PNAS`** on UDP **28767**; Mac streams **`PNA1`** PCM primarily over **TCP 28769** (4-byte little-endian length + frame); UDP downlink remains as fallback. Serial TCP send queue with subscribe ack (silent frames) on connect.
-- **`PlayniteStreamInputServer`** — receives **`PNI1`** touch packets; **`PlayniteRemoteInputPlayback`** posts `CGEvent` pointer events (relative move, tap, drag). **`PNK1`** keyboard packets from mapped gamepad chords; **`PlayniteKeyboardPlayback`** maps Moonlight short key codes (Windows VK + `0x80` prefix) to macOS virtual keys, including **Option** (`0xA4` / `0xA5`) and **Command** (`0x5B` / `0x5C`).
+- **`PlayniteStreamInputServer`** — receives **`PNI1`** touch packets; **`PlayniteRemoteInputPlayback`** posts `CGEvent` pointer events (relative move, tap, drag). **`PNK1`** keyboard packets from gamepad mapping and stream shortcuts; **`PlayniteKeyboardPlayback`** maps Moonlight short codes (Windows VK in the low byte) to US ANSI **`CGKeyCode`** via Carbon `kVK_ANSI_*` (letters are **not** `vk - 0x41`). Modifiers (**Shift**, **Control**, **Option** `0xA4`/`0xA5`, **Command** `0x5B`/`0x5C`) update **`CGEvent.flags`** only; chord keys (e.g. **Q** for quit) are posted with those flags held. Requires **Accessibility**; logs `[PlayniteInput] PNK1` / `keyboard` lines to Console when packets arrive.
 - **`PlayniteLocalOutputMute`** — CoreAudio mute on default output device during an active stream; restores prior mute state afterward.
 - **`StreamingView`** — LAN IP, port summary, Screen Recording + **Accessibility** status, **Test cursor on streamed display**, pairing approve/deny; notes that playback is on the phone and Mac speakers are muted while streaming.
 
@@ -125,7 +125,7 @@ Restart the Mac app after toggling Accessibility. Stream audio is **not** a sepa
 | 28769 | TCP | Audio downlink — length-prefixed `PNA1` PCM (primary path on Android) |
 | 28768 | UDP | Input — phone `PNI1` normalized touch |
 
-**Key types:** `StreamingView.swift`, `PlayniteStreamHostManager.swift`, `PlayniteStreamControlServer.swift`, `PlayniteVideoStreamServer.swift`, `PlayniteDisplayCapture.swift`, `PlayniteAudioStreamServer.swift`, `PlayniteLocalOutputMute.swift`, `PlayniteStreamInputServer.swift`, `PlayniteRemoteInputPlayback.swift`, `PlayniteStreamPorts.swift`, `AccessibilityPermission.swift`.
+**Key types:** `StreamingView.swift`, `PlayniteStreamHostManager.swift`, `PlayniteStreamControlServer.swift`, `PlayniteVideoStreamServer.swift`, `PlayniteDisplayCapture.swift`, `PlayniteAudioStreamServer.swift`, `PlayniteLocalOutputMute.swift`, `PlayniteStreamInputServer.swift`, `PlayniteRemoteInputPlayback.swift`, `PlayniteKeyboardPlayback.swift`, `PlayniteStreamPorts.swift`, `AccessibilityPermission.swift`.
 
 Setup: `docs/streaming-native.md`.
 
@@ -137,10 +137,10 @@ Flutter shell (iOS + Android) for discovery, HTTP pairing with the native Mac ho
 
 ### Tabs
 
-- **Settings** — Mac LAN IP; saved in `StreamingHostSettings`.
-- **Hosts** — discover Mac via Playnite HTTP control plane.
-- **Pairing** — device requests pairing; user approves on Mac **Streaming** tab.
-- **Session** — **`StreamingBridge.startPlayniteStream`** → **Android** `PlayniteVideoActivity` (full-screen `SurfaceView` + `MediaCodec`). Passes `videoPort`, `audioPort`, `audioTcpPort`, `inputPort`, width/height from stream start response.
+- **Hosts** — discover Mac via Playnite HTTP control plane; **Add IP** (outlined); **Pair** / **Cancel** while a pairing request is pending (`PairingCancellation` + **`POST /playnite/v1/pair/cancel`** on the Mac).
+- **Session** — **`StreamingBridge.startPlayniteStream`** → **Android** `PlayniteVideoActivity` (full-screen `SurfaceView` + `MediaCodec`). Passes `videoPort`, `audioPort`, `audioTcpPort`, `inputPort`, width/height from stream start response. **Back** leaves the video view but keeps the host stream active until **Stop**.
+- **Controller** — gamepad mapping chords and touchpad tunables.
+- **Settings** — **Appearance** (primary text color → outlined buttons, chips, labels), **Shortcuts** (named chords), Mac LAN IP (`StreamingHostSettings`).
 
 ### Android native (Playnite video)
 
@@ -149,16 +149,16 @@ Flutter shell (iOS + Android) for discovery, HTTP pairing with the native Mac ho
 - **`PlayniteInputSender`** — relative cursor, tap/drag gestures on the video `SurfaceView` → UDP `PNI1` to Mac (background thread). Tunables in **Settings → Controllers → Touchpad (stream view)**. Primary pointer path during native stream (no Moonlight mouse-emulation toggle).
 - **`PlayniteRemoteInputPlayback`** (Mac) — maps normalized touch to the **captured display** frame; Y uses `minY + ny × height` so finger-up on the phone moves the cursor up on the Mac.
 - **`PlayniteStreamLog`** — writes `playnite_stream.log` under app files dir for export/debug.
-- **Appearance (companion)** — **Settings → Appearance**: primary text color presets (White, Purple, Lavender, Blue, Mint, Peach) or **Custom** RGB sliders. Persisted in `companion.appearance.primaryTextColor`; `CompanionApp` rebuilds `CompanionTheme.dark(primaryText:)` when the value changes (`CompanionAppearanceSettings.themeRevision`).
-- **Stream shortcuts (Android)** — **Settings → Shortcuts**: named keyboard chords (multi-key). Default **Close app** = **Command + Q** (macOS quit); upgrades a stored ⌘⌥Esc default on launch. Stored in `stream.shortcuts` SharedPreferences; native overlay reads the same JSON. Notification **Shortcuts** action (right of **Controller**) opens a picker over the live stream; tapping a row sends the chord to the Mac (`PlayniteKeyboardSender`, press then release). If the video view is not open but the host stream is still active, the app shows a Flutter picker and uses `fireStreamShortcut` on the method channel.
-- **Controller mapping (Android)** — **Controller** tab: list of gamepad elements → keyboard **chords** (multi-select from `kMoonlightKeyboardKeys`, including Mac **Option** and **Command**), optional **Link gamepad** per element, four macro slots. Bindings JSON is passed into `PlayniteVideoActivity` and applied by **`PlayniteGamepadMapping`** + **`PlayniteKeyboardSender`** (`PNK1` on UDP **28768**). While a stream is active, the system notification **Controller** action opens a semi-transparent overlay on the video for quick gamepad linking; **Stop** ends the session without reopening the app.
-- **`PlayniteStreamNotificationHelper`** — ongoing notification channel `playnite_stream_session` (DEFAULT importance) for stream controls when the native host is active (including after Back leaves the video view).
+- **Appearance (companion)** — **Settings → Appearance**: primary text color presets (White, Purple, Lavender, Blue, Mint, Peach) or **Custom** RGB sliders. Persisted in `companion.appearance.primaryTextColor`; `CompanionApp` rebuilds `CompanionTheme.dark(primaryText:)` when the value changes (`CompanionAppearanceSettings.themeRevision`). The color drives **`outlinedButtonTheme`** (Hosts **Add IP**, **Pair**, **Cancel**) and **`chipTheme`** (mapping/shortcut key chips: transparent fill, matching outline and label).
+- **Stream shortcuts (Android)** — **Settings → Shortcuts**: named keyboard chords (multi-key). Default **Close app** = **Command + Q** (macOS quit foreground app); upgrades a stored ⌘⌥Esc default on launch. Stored in `stream.shortcuts` SharedPreferences; native overlay reads the same JSON. **`PlayniteStreamSession.keyboardSender`** is shared for the whole stream (survives leaving `PlayniteVideoActivity` with Back). Notification **Shortcuts** opens a picker on the video overlay or, if the viewer is closed, a Flutter sheet + `fireStreamShortcut`. Chords are sent as **`PNK1`** UDP on **28768** (~140 ms hold). Verified Jun 3 2026 with Mac **`PlayniteKeyboardPlayback`** VK table fix.
+- **Controller mapping (Android)** — **Controller** tab: list of gamepad elements → keyboard **chords** (multi-select from `kMoonlightKeyboardKeys`, including Mac **Option** and **Command**), optional **Link gamepad** per element, four macro slots. Bindings JSON is passed into `PlayniteVideoActivity` and applied by **`PlayniteGamepadMapping`** + session **`PlayniteKeyboardSender`**. Notification **Controller** opens mapping overlay on the video when it is open.
+- **`PlayniteStreamNotificationHelper`** — ongoing notification on channel **`playnite_stream_session_v2`** (HIGH importance). Custom layout `playnite_stream_notification.xml` inlines **Stop | Controller | Shortcuts**; standard `addAction` entries are a fallback on OEMs that collapse custom views. **`PlayniteStreamNotificationReceiver`** handles actions without crashing (no `CLOSE_SYSTEM_DIALOGS` broadcast). Best-effort shade collapse after the action. **Stop** calls **`PlayniteStreamStopper`** (Mac HTTP stop + end phone stream).
 
 **Key types:** `streaming_bridge.dart`, `playnite_host_client.dart`, `moonlight_key_codes.dart`, `controller_mapping_section.dart`, `PlayniteVideoActivity.kt`, `PlayniteAudioReceiver.kt`, `PlayniteInputSender.kt`, `PlayniteKeyboardSender.kt`, `PlayniteGamepadMapping.kt`, `PlayniteStreamNotificationHelper.kt`, `PlayniteStreamProtocols.kt`, `PlayniteKeyboardPlayback.swift`.
 
 ### Keyboard chord codes (companion → Mac)
 
-Companion labels use Moonlight’s Windows virtual-key codes (`moonlightKeyCode = (0x80 << 8) | vk`). Mac playback maps the low byte to `CGKeyCode`. Mac-specific modifiers:
+Companion labels use Moonlight’s Windows virtual-key codes (`moonlightKeyCode = (0x80 << 8) | vk`). Mac playback maps the low byte through a **US ANSI VK → `CGKeyCode`** table (see `PlayniteKeyboardPlayback.swift`). Example: **Q** is Windows `0x51` → Mac key code **12** (`kVK_ANSI_Q`), not `0x51 - 0x41`. Mac-specific modifiers:
 
 | UI label | Windows VK | Mac key |
 |----------|------------|---------|
@@ -179,8 +179,12 @@ Legacy bindings that used **Alt** (`0x12`) still map to left Option on the Mac.
 | `AudioTrack started … buf=…` | Playback started; `buf` should be tens of KB, not multi-MB |
 | `Audio subscribed` | UDP fallback path only (TCP preferred) |
 | `Input UDP #1` | Touch packets leaving the phone |
-| `Input send failed` | Network/firewall or socket error on input port |
-| `Back pressed — stopping stream` | Clean shutdown |
+| `Shortcut "…" (Command + Q) → host:28768` | User fired a stream shortcut |
+| `Keyboard PNK1 down key=0x805b` | Modifier/key down (e.g. Command) |
+| `Keyboard PNK1 down key=0x8051` | Key down (e.g. Q) |
+| `Input send failed` / `Keyboard send failed` | Network/firewall or socket error on input port |
+| `Back pressed — leaving stream view` | Video UI closed; host stream may stay active until **Stop** |
+| `Pairing cancelled` / `Cancelling pairing` | User tapped **Cancel** on Hosts |
 
 **Doc:** `docs/companion-flutter.md`, `docs/streaming-native.md`.
 
@@ -208,6 +212,8 @@ Legacy bindings that used **Alt** (`0x12`) still map to left Option on the Mac.
 - **Native streaming (Android)** is verified: video over TCP **28766** (~99% rendered vs. received); audio over TCP **28769** with Mac output muted during stream; touch over UDP **28768** with Accessibility granted.
 - **Audio troubleshooting:** expect `Audio TCP connected`, then `Audio packet #1` and `AudioTrack started` with a modest buffer size. Mac console: `[PlayniteAudio] phone connected (TCP audio)`, `muted Mac default output`, `sent TCP audio frame #N`. If silent, check phone **media** volume and Mac firewall for **28767** / **28769**.
 - **Touch** requires Mac **Accessibility** for **Mac Game Library**; phone should log `Input UDP #1`. Rebuild Mac app after input-mapping changes.
+- **Keyboard shortcuts** require the same **Accessibility** grant; phone logs `Keyboard PNK1`; Mac Console shows `[PlayniteInput] PNK1` / `keyboard`. Rebuild Mac app after `PlayniteKeyboardPlayback` changes.
+- **Stream notification** on some OEMs may still collapse custom layouts; inline buttons + `addAction` fallback are both present. Do not rely on `CLOSE_SYSTEM_DIALOGS` from the app (blocked on modern Android).
 - **Companion iOS** native video receiver is still limited; Android `PlayniteVideoActivity` is the reference client.
 - Use the Mac’s **LAN IP** (e.g. `192.168.1.x`), not `127.0.0.1`, on the phone.
 

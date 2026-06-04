@@ -1,6 +1,8 @@
 import 'package:flutter/services.dart';
 
 import '../models/host_info.dart';
+import 'companion_device_identity.dart';
+import 'pairing_cancellation.dart';
 import 'playnite_host_client.dart';
 import 'stream_controller_settings.dart';
 import 'stream_touch_settings.dart';
@@ -55,9 +57,16 @@ class StreamingBridge {
   Future<PairingOutcome> pairWithHost({
     required String hostId,
     void Function(String status)? onProgress,
+    PairingCancellation? cancellation,
   }) async {
     final client = await _client();
-    return client.requestPair(onProgress: onProgress);
+    return client.requestPair(onProgress: onProgress, cancellation: cancellation);
+  }
+
+  Future<void> cancelPairing() async {
+    final client = await _client();
+    final deviceId = await CompanionDeviceIdentity.deviceId();
+    await client.cancelPairRequest(deviceId);
   }
 
   Future<Map<String, dynamic>> getStreamSession() async {

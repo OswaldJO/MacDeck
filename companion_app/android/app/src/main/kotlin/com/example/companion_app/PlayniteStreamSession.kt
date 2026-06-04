@@ -21,6 +21,22 @@ object PlayniteStreamSession {
     var tapPressure: Float = 0.35f
     var controllerBindingsJson: String = ""
 
+    @Volatile
+    private var keyboardSender: PlayniteKeyboardSender? = null
+
+    /** Shared UDP keyboard client for shortcuts and gamepad mapping for the active stream. */
+    fun keyboardSender(): PlayniteKeyboardSender? {
+        if (!hostStreamActive || host.isEmpty()) return null
+        val existing = keyboardSender
+        if (existing != null) return existing
+        return PlayniteKeyboardSender(host, inputPort).also { keyboardSender = it }
+    }
+
+    fun releaseKeyboardSender() {
+        keyboardSender?.close()
+        keyboardSender = null
+    }
+
     fun applyFromIntent(intent: android.content.Intent) {
         host = intent.getStringExtra(PlayniteVideoActivity.EXTRA_HOST).orEmpty()
         videoPort = intent.getIntExtra(PlayniteVideoActivity.EXTRA_VIDEO_PORT, 28766)
@@ -60,6 +76,7 @@ object PlayniteStreamSession {
         viewerOpen = false
         host = ""
         controllerBindingsJson = ""
+        releaseKeyboardSender()
     }
 
     fun toMap(): Map<String, Any?> = mapOf(

@@ -9,13 +9,14 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
+import android.widget.RemoteViews
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 
-/** Ongoing stream controls in the system notification shade (Stop + Controller mapping). */
+/** Ongoing stream controls in the system notification shade (Stop + Controller + Shortcuts). */
 object PlayniteStreamNotificationHelper {
-    const val CHANNEL_ID = "playnite_stream_session"
+    const val CHANNEL_ID = "playnite_stream_session_v2"
     private const val NOTIFICATION_ID = 28765
 
     const val ACTION_STOP = "com.playnite.companion.STREAM_STOP"
@@ -32,15 +33,9 @@ object PlayniteStreamNotificationHelper {
         createChannel(appContext)
         if (!canPostNotifications(appContext)) return
 
-        val stopIntent = Intent(appContext, PlayniteStreamNotificationReceiver::class.java).apply {
-            action = ACTION_STOP
-        }
-        val mappingIntent = Intent(appContext, PlayniteStreamNotificationReceiver::class.java).apply {
-            action = ACTION_MAPPING
-        }
-        val shortcutsIntent = Intent(appContext, PlayniteStreamNotificationReceiver::class.java).apply {
-            action = ACTION_SHORTCUTS
-        }
+        val stopIntent = actionIntent(appContext, ACTION_STOP)
+        val mappingIntent = actionIntent(appContext, ACTION_MAPPING)
+        val shortcutsIntent = actionIntent(appContext, ACTION_SHORTCUTS)
         val flags = PendingIntent.FLAG_UPDATE_CURRENT or
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) PendingIntent.FLAG_IMMUTABLE else 0
 
@@ -53,17 +48,25 @@ object PlayniteStreamNotificationHelper {
         }
         val contentPending = PendingIntent.getActivity(appContext, 3, launchIntent, flags)
 
+        val remote = RemoteViews(appContext.packageName, R.layout.playnite_stream_notification)
+        remote.setTextViewText(R.id.stream_text, contentText)
+        remote.setOnClickPendingIntent(R.id.btn_stop, stopPending)
+        remote.setOnClickPendingIntent(R.id.btn_controller, mappingPending)
+        remote.setOnClickPendingIntent(R.id.btn_shortcuts, shortcutsPending)
+
+        // Do not use DecoratedCustomViewStyle — Samsung/One UI collapses to title-only and hides buttons.
         val notification = NotificationCompat.Builder(appContext, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_media_play)
-            .setContentTitle("Playnite stream")
-            .setContentText(contentText)
             .setContentIntent(contentPending)
+            .setCustomContentView(remote)
+            .setCustomBigContentView(remote)
             .setOngoing(true)
             .setOnlyAlertOnce(true)
             .setCategory(Notification.CATEGORY_TRANSPORT)
-            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .setPriority(NotificationCompat.PRIORITY_MAX)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
-            .setShowWhen(true)
+            .setShowWhen(false)
+            .setUsesChronometer(false)
             .addAction(android.R.drawable.ic_menu_close_clear_cancel, "Stop", stopPending)
             .addAction(android.R.drawable.ic_menu_manage, "Controller", mappingPending)
             .addAction(android.R.drawable.ic_menu_edit, "Shortcuts", shortcutsPending)
@@ -71,6 +74,11 @@ object PlayniteStreamNotificationHelper {
 
         NotificationManagerCompat.from(appContext).notify(NOTIFICATION_ID, notification)
     }
+
+    private fun actionIntent(context: Context, action: String): Intent =
+        Intent(context, PlayniteStreamNotificationReceiver::class.java).apply {
+            this.action = action
+        }
 
     fun dismiss(context: Context) {
         NotificationManagerCompat.from(context.applicationContext).cancel(NOTIFICATION_ID)
@@ -82,17 +90,19 @@ object PlayniteStreamNotificationHelper {
             return
         }
         val base = if (hostLabel.isNotEmpty()) "Streaming from $hostLabel" else "Streaming Mac desktop"
-        val text = if (viewerOpen) base else "$base — tap Shortcuts, Controller, or open app"
+        val text = if (viewerOpen) base else "$base — tap a button below"
         showWithText(context, text)
     }
 
     private fun createChannel(context: Context) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
         val manager = context.getSystemService(NotificationManager::class.java) ?: return
+        manager.deleteNotificationChannel("playnite_stream_session")
+        if (manager.getNotificationChannel(CHANNEL_ID) != null) return
         val channel = NotificationChannel(
             CHANNEL_ID,
             "Playnite stream",
-            NotificationManager.IMPORTANCE_DEFAULT,
+            NotificationManager.IMPORTANCE_HIGH,
         ).apply {
             description = "Controls while streaming your Mac desktop"
             setShowBadge(false)

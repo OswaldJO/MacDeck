@@ -204,7 +204,10 @@ class _ColorChip extends StatelessWidget {
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
-            color: selected ? color : Theme.of(context).colorScheme.outlineVariant,
+            color: selected
+                ? color
+                : (Theme.of(context).chipTheme.side?.color ??
+                    Theme.of(context).colorScheme.outlineVariant),
             width: selected ? 2 : 1,
           ),
         ),
@@ -221,7 +224,7 @@ class _ColorChip extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 8),
-            Text(label),
+            Text(label, style: Theme.of(context).chipTheme.labelStyle),
           ],
         ),
       ),
