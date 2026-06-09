@@ -1,7 +1,9 @@
+import AppKit
 import Foundation
 import SwiftData
 
 /// Background metadata passes: periodically fills missing covers from local folders and ScreenScraper when credentials are set.
+@Observable
 @MainActor
 final class MetadataBackgroundFetcher {
     static let shared = MetadataBackgroundFetcher()
@@ -10,7 +12,19 @@ final class MetadataBackgroundFetcher {
         var updated: Int
     }
 
+    private(set) var libraryScrapeInProgress = false
+    private(set) var libraryScrapeProcessed = 0
+    private(set) var libraryScrapeTotal = 0
+    private(set) var libraryScrapeUpdated = 0
+    private(set) var libraryScrapeCurrentTitle: String?
+    private(set) var lastLibraryScrapeSummary: ScrapeSummary?
+    private(set) var lastLibraryScrapeFinishedAt: Date?
+    private(set) var lastLibraryScrapeLogPath: String?
+    private(set) var backgroundPassInProgress = false
+    private(set) var libraryScrapeWaitingForBackground = false
+
     private var loopTask: Task<Void, Never>?
+    private var libraryScrapeTask: Task<Void, Never>?
     private var container: ModelContainer?
 
     private init() {}
@@ -33,26 +47,81 @@ final class MetadataBackgroundFetcher {
     func scheduleExtraPass(container: ModelContainer) {
         Task { @MainActor in
             self.container = container
-            _ = await processBatch(container: container, forceAll: false, maxGames: 3)
+            _ = await processBatch(container: container, forceAll: false, maxGames: 3, reportLibraryProgress: false)
         }
     }
 
-    /// Trigger a user-requested scrape pass across the full library.
+    /// Starts a user-requested full-library scrape; observe [libraryScrapeInProgress] and counters for UI.
+    func startLibraryScrape(container: ModelContainer) {
+        guard !libraryScrapeInProgress else { return }
+        self.container = container
+        libraryScrapeTask?.cancel()
+        libraryScrapeInProgress = true
+        libraryScrapeProcessed = 0
+        libraryScrapeTotal = 0
+        libraryScrapeUpdated = 0
+        libraryScrapeCurrentTitle = nil
+        lastLibraryScrapeSummary = nil
+        lastLibraryScrapeLogPath = nil
+        libraryScrapeTask = Task { @MainActor in
+            defer {
+                libraryScrapeInProgress = false
+                libraryScrapeWaitingForBackground = false
+                libraryScrapeCurrentTitle = nil
+                libraryScrapeTask = nil
+            }
+
+            if backgroundPassInProgress {
+                libraryScrapeWaitingForBackground = true
+                while backgroundPassInProgress && !Task.isCancelled {
+                    try? await Task.sleep(for: .milliseconds(250))
+                }
+                libraryScrapeWaitingForBackground = false
+            }
+            guard !Task.isCancelled else { return }
+            let summary = await processBatch(
+                container: container,
+                forceAll: true,
+                maxGames: nil,
+                reportLibraryProgress: true
+            )
+            lastLibraryScrapeSummary = summary
+            lastLibraryScrapeFinishedAt = Date()
+            if let logURL = MetadataScrapeSessionLog.endSession(summary: summary),
+               let saved = MetadataScrapeSessionLog.saveCopyToDownloads(from: logURL) {
+                lastLibraryScrapeLogPath = saved.path
+                NSWorkspace.shared.activateFileViewerSelecting([saved])
+            }
+        }
+    }
+
+    func cancelLibraryScrape() {
+        libraryScrapeTask?.cancel()
+    }
+
+    /// Legacy await API — prefer [startLibraryScrape] for UI progress.
     func scrapeAllNow(container: ModelContainer) async -> ScrapeSummary {
         self.container = container
-        return await processBatch(container: container, forceAll: true, maxGames: nil)
+        return await processBatch(container: container, forceAll: true, maxGames: nil, reportLibraryProgress: false)
     }
 
     private func runLoop() async {
         while !Task.isCancelled {
-            if let c = container {
-                _ = await processBatch(container: c, forceAll: false, maxGames: 3)
+            if let c = container, !libraryScrapeInProgress {
+                backgroundPassInProgress = true
+                defer { backgroundPassInProgress = false }
+                _ = await processBatch(container: c, forceAll: false, maxGames: 3, reportLibraryProgress: false)
             }
             try? await Task.sleep(for: .seconds(45))
         }
     }
 
-    private func processBatch(container: ModelContainer, forceAll: Bool, maxGames: Int?) async -> ScrapeSummary {
+    private func processBatch(
+        container: ModelContainer,
+        forceAll: Bool,
+        maxGames: Int?,
+        reportLibraryProgress: Bool
+    ) async -> ScrapeSummary {
         let context = container.mainContext
         var descriptor = FetchDescriptor<LibraryGame>(sortBy: [SortDescriptor(\.sortOrder)])
         descriptor.fetchLimit = forceAll ? 0 : 250
@@ -76,20 +145,37 @@ final class MetadataBackgroundFetcher {
             selectedCandidates = candidates
         }
 
+        if reportLibraryProgress {
+            libraryScrapeTotal = selectedCandidates.count
+            libraryScrapeProcessed = 0
+            libraryScrapeUpdated = 0
+            MetadataScrapeSessionLog.startSession(
+                totalGames: selectedCandidates.count,
+                preferredRegion: MetadataCredentials.screenScraperPreferredRegion
+            )
+        }
+
         var processed = 0
         var updated = 0
         for game in selectedCandidates {
             if Task.isCancelled { break }
+            if reportLibraryProgress {
+                libraryScrapeCurrentTitle = game.libraryListTitle
+            }
             processed += 1
-            if await fetchAndSave(gameID: game.id, container: container) {
+            if await fetchAndSave(gameID: game.id, container: container, logToSession: reportLibraryProgress) {
                 updated += 1
+            }
+            if reportLibraryProgress {
+                libraryScrapeProcessed = processed
+                libraryScrapeUpdated = updated
             }
             try? await Task.sleep(for: .milliseconds(450))
         }
         return ScrapeSummary(processed: processed, updated: updated)
     }
 
-    private func fetchAndSave(gameID: UUID, container: ModelContainer) async -> Bool {
+    private func fetchAndSave(gameID: UUID, container: ModelContainer, logToSession: Bool = false) async -> Bool {
         let context = container.mainContext
         var desc = FetchDescriptor<LibraryGame>(predicate: #Predicate { $0.id == gameID })
         desc.fetchLimit = 1
@@ -98,17 +184,72 @@ final class MetadataBackgroundFetcher {
         let romStem = URL(fileURLWithPath: game.romPath).deletingPathExtension().lastPathComponent
         let searchTitle = game.libraryListTitle
         let preferScreenScraper = game.emulator?.preferScreenScraperCovers == true
+        let emulatorSystemId = EmulatorPlatformResolver.resolve(emulator: game.emulator)?.primarySystemId
         let localCoverURL = localCoverForGame(path: game.romPath, title: searchTitle, romStem: romStem)
         var remoteResult: MetadataResult?
         if MetadataCredentials.isConfigured {
-            remoteResult = try? await MetadataService.fetchMetadata(
-                displayTitle: searchTitle,
-                romFileNameStem: romStem,
-                platformHint: game.platformHint
-            )
+            do {
+                if let outcome = try await MetadataService.fetchMetadata(
+                    libraryGameId: game.id,
+                    displayTitle: searchTitle,
+                    romFileNameStem: romStem,
+                    emulatorSystemId: emulatorSystemId,
+                    pinnedGameId: game.screenScraperGameId,
+                    pinnedSystemId: game.screenScraperSystemId,
+                    selectionSkipped: game.screenScraperSelectionSkipped
+                ) {
+                    switch outcome {
+                    case .resolved(let result):
+                        remoteResult = result
+                        if logToSession {
+                            let coverNote = result.coverImageURL?.absoluteString ?? "none"
+                            let mode = result.autoResolvedAmbiguity ? "auto_ambiguous" : "resolved"
+                            MetadataScrapeSessionLog.i(
+                                "\(mode) title=\(searchTitle) query=\(MetadataService.searchQuery(displayTitle: searchTitle, romFileNameStem: romStem)) " +
+                                    "systemeid=\(result.screenScraperSystemId.map(String.init) ?? "nil") pick=\(result.normalizedTitle) cover=\(coverNote)"
+                            )
+                        }
+                    case .needsDisambiguation(let request):
+                        ScreenScraperDisambiguationCoordinator.shared.enqueue(request)
+                        if logToSession {
+                            MetadataScrapeSessionLog.w(
+                                "ambiguous title=\(searchTitle) candidates=\(request.candidates.count) " +
+                                    "systems=\(Set(request.candidates.map(\.systemName)).sorted().joined(separator: ", "))"
+                            )
+                        }
+                    case .unavailable:
+                        if logToSession {
+                            MetadataScrapeSessionLog.w(
+                                "no_match title=\(searchTitle) emulatorSystemeid=\(emulatorSystemId.map(String.init) ?? "nil")"
+                            )
+                        }
+                    }
+                } else if logToSession {
+                    MetadataScrapeSessionLog.w("skipped title=\(searchTitle) reason=credentials_not_configured")
+                }
+            } catch {
+                if logToSession {
+                    MetadataScrapeSessionLog.e("error title=\(searchTitle) message=\(error.localizedDescription)")
+                }
+            }
+        } else if logToSession {
+            MetadataScrapeSessionLog.w("skipped title=\(searchTitle) reason=credentials_not_configured")
         }
 
         var didChange = false
+
+        if let ids = remoteResult?.screenScraperGameId {
+            if game.screenScraperGameId != ids {
+                game.screenScraperGameId = ids
+                didChange = true
+            }
+        }
+        if let systemId = remoteResult?.screenScraperSystemId {
+            if game.screenScraperSystemId != systemId {
+                game.screenScraperSystemId = systemId
+                didChange = true
+            }
+        }
 
         if let normalized = remoteResult?.normalizedTitle.trimmingCharacters(in: .whitespacesAndNewlines),
            !normalized.isEmpty,
@@ -125,9 +266,10 @@ final class MetadataBackgroundFetcher {
                 didChange = true
             }
         }
-        if let remoteURL = remoteResult?.coverImageURL {
-            let remoteCandidate = remoteURL.absoluteString
-            if !options.contains(remoteCandidate) {
+        var cachedRemotePrimary: String?
+        if let remote = remoteResult?.coverImageURL?.absoluteString {
+            cachedRemotePrimary = await CoverImageCache.persistCoverReference(remote)
+            if let remoteCandidate = cachedRemotePrimary, !options.contains(remoteCandidate) {
                 options.append(remoteCandidate)
                 didChange = true
             }
@@ -136,13 +278,18 @@ final class MetadataBackgroundFetcher {
         let priorPrimary = game.coverImageURLString
         game.coverImageOptions = options
 
+        let hasPrimaryCover = !(game.coverImageURLString?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true)
+
         let preferredPrimary: String? = {
             if preferScreenScraper {
-                if let remote = remoteResult?.coverImageURL?.absoluteString { return remote }
+                if let remote = cachedRemotePrimary { return remote }
                 if let local = localCoverURL?.absoluteString { return local }
             } else {
                 if let local = localCoverURL?.absoluteString { return local }
-                if let remote = remoteResult?.coverImageURL?.absoluteString { return remote }
+                if let remote = cachedRemotePrimary { return remote }
+            }
+            if !hasPrimaryCover, let remote = cachedRemotePrimary {
+                return remote
             }
             return game.coverImageURLString
         }()

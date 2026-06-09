@@ -106,10 +106,10 @@ public enum GamePathScanner {
     }
 
     /// Keeps scan results focused on playable titles and avoids importing game data/patch/DLC folders.
-    /// Common playable categories are `DG` (disc game) and `HG` (HDD game).
+    /// Playable PARAM.SFO categories: `GD` (disc install) and `HG` (PSN/HDD install).
     private static func shouldIncludePS3Folder(_ folder: URL) -> Bool {
         guard let meta = ps3Metadata(for: folder), let category = meta.category?.uppercased() else { return false }
-        return category == "DG" || category == "HG"
+        return category == "GD" || category == "HG"
     }
 
     private static func isPS3StyleEmulator(_ emulator: EmulatorProfile) -> Bool {
@@ -210,7 +210,7 @@ public enum GamePathScanner {
             }
             guard let enumerator = FileManager.default.enumerator(
                 at: root,
-                includingPropertiesForKeys: [.isRegularFileKey],
+                includingPropertiesForKeys: [.isRegularFileKey, .isDirectoryKey],
                 options: [.skipsHiddenFiles, .skipsPackageDescendants]
             ) else { continue }
 
@@ -386,7 +386,7 @@ public enum GamePathScanner {
 
             guard let enumerator = FileManager.default.enumerator(
                 at: root,
-                includingPropertiesForKeys: [.isRegularFileKey],
+                includingPropertiesForKeys: [.isRegularFileKey, .isDirectoryKey],
                 options: [.skipsHiddenFiles, .skipsPackageDescendants]
             ) else { continue }
 
@@ -406,12 +406,21 @@ public enum GamePathScanner {
                     }
                     let standardized = (ps3Launch.path as NSString).standardizingPath
                     let comparisonPath = normalizedPathForComparison(standardized)
+                    let title = ps3DisplayTitle(for: item)
                     if existingPaths.contains(comparisonPath) {
-                        if let existing = existingByPath[comparisonPath], existing.emulatorUUID != emulator.id {
-                            existing.emulator = emulator
-                            existing.emulatorIDString = emulator.id.uuidString
-                            reassignedExisting += 1
-                            reassignedTotal += 1
+                        if let existing = existingByPath[comparisonPath] {
+                            if existing.emulatorUUID != emulator.id {
+                                existing.emulator = emulator
+                                existing.emulatorIDString = emulator.id.uuidString
+                                existing.platformHint = EmulatorPlatformResolver.resolve(emulator: emulator)?.primaryPlatformHint
+                                reassignedExisting += 1
+                                reassignedTotal += 1
+                            }
+                            if existing.title != title {
+                                existing.title = title
+                                reassignedExisting += 1
+                                reassignedTotal += 1
+                            }
                         } else {
                             skippedAsExisting += 1
                         }
@@ -419,8 +428,6 @@ public enum GamePathScanner {
                         continue
                     }
                     existingPaths.insert(comparisonPath)
-
-                    let title = ps3DisplayTitle(for: item)
                     let matchedCovers = matchedCoverURLs(
                         for: title,
                         romPath: standardized,
@@ -432,6 +439,7 @@ public enum GamePathScanner {
                         romPath: standardized,
                         emulatorIDString: emulator.id.uuidString,
                         emulator: emulator,
+                        platformHint: EmulatorPlatformResolver.resolve(emulator: emulator)?.primaryPlatformHint,
                         sortOrder: maxSort
                     )
                     applyDetectedCovers(matchedCovers, to: game)
@@ -475,6 +483,7 @@ public enum GamePathScanner {
                     if let existing = existingByPath[comparisonItemPath], existing.emulatorUUID != emulator.id {
                         existing.emulator = emulator
                         existing.emulatorIDString = emulator.id.uuidString
+                        existing.platformHint = EmulatorPlatformResolver.resolve(emulator: emulator)?.primaryPlatformHint
                         reassignedExisting += 1
                         reassignedTotal += 1
                     } else {
@@ -496,6 +505,7 @@ public enum GamePathScanner {
                     romPath: standardized,
                     emulatorIDString: emulator.id.uuidString,
                     emulator: emulator,
+                    platformHint: EmulatorPlatformResolver.resolve(emulator: emulator)?.primaryPlatformHint,
                     sortOrder: maxSort
                 )
                 applyDetectedCovers(matchedCovers, to: game)

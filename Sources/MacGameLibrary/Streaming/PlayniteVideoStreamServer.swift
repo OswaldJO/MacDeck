@@ -105,6 +105,7 @@ actor PlayniteVideoStreamServer {
         }
 
         connection.start(queue: .global(qos: .userInitiated))
+        PlayniteStreamSessionLog.i("Phone connected to TCP video port; requesting keyframe with SPS/PPS")
         print("[PlayniteVideo] phone connected to TCP video port; requesting keyframe with SPS/PPS")
         capture?.requestKeyframe()
     }
@@ -117,6 +118,7 @@ actor PlayniteVideoStreamServer {
             print("[PlayniteVideo] client connection failed: \(error.localizedDescription)")
             dropClient()
         case .cancelled:
+            PlayniteStreamSessionLog.i("Phone disconnected from TCP video")
             print("[PlayniteVideo] client disconnected")
             dropClient()
         default:
@@ -178,11 +180,11 @@ actor PlayniteVideoStreamServer {
 
         framesSent += 1
         if framesSent == 1 || framesSent % 60 == 0 {
-            print(
-                "[PlayniteVideo] sent frame #\(framesSent) keyframe=\(sent.isKeyframe) " +
-                    "bytes=\(sent.payloadBytes) \(sent.width)x\(sent.height) " +
-                    "queued=\(pendingPackets.count)"
-            )
+            let line =
+                "Video sent frame #\(framesSent) keyframe=\(sent.isKeyframe) " +
+                "bytes=\(sent.payloadBytes) \(sent.width)x\(sent.height) queued=\(pendingPackets.count)"
+            PlayniteStreamSessionLog.i(line)
+            print("[PlayniteVideo] \(line)")
         }
         flushPendingSends()
     }

@@ -123,6 +123,7 @@ actor PlayniteAudioStreamServer {
         udp?.connect(to: address, addressLen: addressLen)
         packetsSent = 0
         loggedWaitingForSubscribe = false
+        PlayniteStreamSessionLog.i("Phone subscribed for audio (UDP \(PlayniteStreamPorts.audioUDP))")
         print("[PlayniteAudio] phone subscribed for audio (UDP) — will send PNA1 packets")
         sendSubscribeAck()
     }
@@ -161,6 +162,7 @@ actor PlayniteAudioStreamServer {
             }
         }
         connection.start(queue: .global(qos: .userInitiated))
+        PlayniteStreamSessionLog.i("Phone connected (TCP audio \(PlayniteStreamPorts.audioTCP))")
         print("[PlayniteAudio] phone connected (TCP audio)")
         sendSubscribeAck()
     }

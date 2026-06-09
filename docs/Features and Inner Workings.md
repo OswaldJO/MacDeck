@@ -59,6 +59,28 @@ Per **selected emulator**:
 
 **Key types:** `PathsView.swift`, `GameFolderPath.swift`, `GamePathScanner.swift`.
 
+### RPCS3 / PS3 folder scanning
+
+When a configured **game folder** belongs to an RPCS3 (or PS3-style) emulator, `GamePathScanner` uses **folder-aware** import instead of treating every file under `dev_hdd0/game` as a ROM:
+
+| Detection | Behavior |
+|-----------|----------|
+| **Title folder** | Subfolder with `PARAM.SFO` and `USRDIR/EBOOT.BIN` (RPCS3 install) or `PS3_GAME/USRDIR/EBOOT.BIN` (disc dump layout). |
+| **Title** | Read from `PARAM.SFO` (`TITLE`, else `TITLE_ID`, else folder name). |
+| **Launch path** | Stored `romPath` is the **`EBOOT.BIN`** file; `GameLauncher` substitutes it into the emulator’s `{ImagePath}` / `{rom}` template (RPCS3 catalog default: `"{ImagePath}"`). |
+| **Category filter** | Only **`GD`** (disc install) and **`HG`** (PSN/HDD install) folders are imported; patch/DLC/UCC/APPDATA-style siblings are skipped. |
+| **File scan** | For PS3-style emulators with no per-emulator extension list, only **`.iso`** files are imported at file depth — avoids pulling thousands of `.bin` assets from `dev_hdd0/game`. |
+
+**Typical path:** `~/Library/Application Support/rpcs3/dev_hdd0/game` assigned to the RPCS3 `EmulatorProfile` on the **Paths** tab.
+
+**Rescan:** If a library row already exists for the same normalized `EBOOT.BIN` path, scan **updates the title** from `PARAM.SFO` (and can reassign emulator if the path moved profiles). Counts toward `ScanSummary.reassigned`.
+
+**Limits:** Retail **GD** HDD folders often contain **game data only** (no `USRDIR/EBOOT.BIN`); RPCS3 boots those from the Blu-ray image or its internal list, not from an EBOOT path in `dev_hdd0/game`. Import those titles via **PS3 `.iso`** paths (or manual add) if you want them in the library grid.
+
+**Help:** App menu **RPCS3 Game not launching** — if RPCS3 is already open, close it before launching a different PS3 game from the library (single-instance / open-document behavior).
+
+**Key implementation:** `GamePathScanner.ps3LaunchPathIfPresent`, `ps3Metadata` / `parsePS3SFO`, `shouldIncludePS3Folder`, `isPS3StyleEmulator`.
+
 ---
 
 ## Metadata and ScreenScraper
@@ -211,6 +233,7 @@ Legacy bindings that used **Alt** (`0x12`) still map to left Option on the Mac.
 
 ## Known constraints / pitfalls
 
+- **RPCS3 `dev_hdd0/game`:** Assign the folder to the **RPCS3** emulator profile (not a generic multi-system profile) so folder import and ISO-only file rules apply. After scanner fixes, run **Scan Paths** to rename stale **EBOOT** entries. PSN/HDD (**HG**) installs need `USRDIR/EBOOT.BIN`; disc **GD** data folders without EBOOT are not launchable from this path alone.
 - **ScreenScraper** quotas, threading, and API shape can change; search-by-name without `systemeid` may mismatch platforms.
 - **SwiftData migration:** new non-optional attributes need defaults or optional types; a prior crash on `preferScreenScraperCovers` was fixed with `= false` on the property.
 - **Full-library scrape** is synchronous per game with delays; large libraries take time and network.

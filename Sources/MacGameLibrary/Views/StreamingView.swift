@@ -5,6 +5,7 @@ struct StreamingView: View {
     @State private var session: StreamingPairingSession
     @State private var hostManager = PlayniteStreamHostManager.shared
     @State private var confirmDisconnect = false
+    @State private var streamLogSavedPath: String?
 
     private let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
@@ -68,7 +69,7 @@ struct StreamingView: View {
     private var heroSection: some View {
         Section {
             HStack(alignment: .center, spacing: 12) {
-                Image(systemName: "iphone.gen3.radiowaves.right")
+                Image(systemName: "iphone.radiowaves.left.and.right")
                     .font(.system(size: 36))
                     .foregroundStyle(.secondary)
                     .symbolRenderingMode(.hierarchical)
@@ -115,10 +116,22 @@ struct StreamingView: View {
                     .foregroundStyle(.green)
                 Button("Stop active stream", role: .destructive) {
                     Task {
-                        await hostManager.stopActiveVideoStream()
+                        let logURL = await hostManager.stopActiveVideoStream()
                         session.refreshHostStatus()
+                        if let logURL, let saved = PlayniteStreamSessionLog.saveCopyToDownloads(from: logURL) {
+                            streamLogSavedPath = saved.path
+                            NSWorkspace.shared.activateFileViewerSelecting([saved])
+                        } else {
+                            streamLogSavedPath = nil
+                        }
                     }
                 }
+            }
+            if let streamLogSavedPath {
+                Text("Stream log saved to Downloads: \(streamLogSavedPath)")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .textSelection(.enabled)
             }
             screenRecordingPermissionBlock
             if let guidance = hostManager.captureGuidance {
@@ -161,7 +174,7 @@ struct StreamingView: View {
                             Text("\(request.deviceName) is trying to pair")
                                 .font(.headline)
                         } icon: {
-                            Image(systemName: "iphone.gen3.circle")
+                            Image(systemName: "iphone.circle")
                         }
                         Text("Device ID: \(request.deviceID)")
                             .font(.caption.monospaced())
@@ -257,7 +270,7 @@ struct StreamingView: View {
         Group {
             Section("Paired device") {
                 LabeledContent("Device") {
-                    Label(deviceName, systemImage: "iphone.gen3")
+                    Label(deviceName, systemImage: "iphone")
                 }
                 LabeledContent("Mac") {
                     Text(ProcessInfo.processInfo.hostName)

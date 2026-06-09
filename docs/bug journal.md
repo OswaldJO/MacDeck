@@ -53,6 +53,15 @@ For release notes style summaries, see `source control log.md`. For architecture
 | **Fix** | Catalog generation script + `BuiltinEmulatorCatalog` / `PathsView` / `GameLauncher` updates so hidden or path-related state is consistent. |
 | **Commit** | `46891e0` |
 
+### BJ-006 — RPCS3 `dev_hdd0/game` titles show as **EBOOT** and won’t launch
+| | |
+|---|---|
+| **When** | Jun 9, 2026 (**in progress** — not yet committed) |
+| **Symptom** | Games under `~/Library/Application Support/rpcs3/dev_hdd0/game` appeared in the library as **EBOOT** (generic placeholder, no cover/metadata); **Play** failed or did nothing. PSN/HDD titles that previously worked regressed after rescan. |
+| **Cause** | (1) `shouldIncludePS3Folder` filtered on **`DG`** but PlayStation `PARAM.SFO` uses **`GD`** for disc installs — retail HDD folders were never imported via folder logic. (2) Early scans imported `USRDIR/EBOOT.BIN` as a plain `.bin` file (filename → title **EBOOT**); later folder-aware rescans hit the same normalized path in `existingPaths` and **skipped without updating the title**. (3) File enumerator did not pre-request `.isDirectoryKey`, making PS3 title-folder detection less reliable on some systems. |
+| **Fix** | `GamePathScanner`: category filter **`GD` \| `HG`**; on PS3 folder match for an existing `EBOOT.BIN` path, refresh `LibraryGame.title` from `PARAM.SFO`; include `.isDirectoryKey` in scan enumerator `includingPropertiesForKeys`. User action: assign `dev_hdd0/game` to RPCS3 profile, rebuild, **Scan Paths**. |
+| **Commit** | (pending) |
+
 ---
 
 ## Streaming — architecture (Sunshine → native Playnite)

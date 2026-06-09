@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../models/host_info.dart';
 import '../services/stream_controller_mapping_store.dart';
@@ -10,6 +11,7 @@ import '../services/stream_touch_settings.dart';
 import '../services/stream_log_share.dart';
 import '../services/playnite_stream_foreground.dart' show PlayniteStreamNotification;
 import '../services/pairing_cancellation.dart';
+import '../services/stream_debug_log.dart';
 import '../services/streaming_bridge.dart';
 import '../services/streaming_host_settings.dart';
 import '../widgets/companion_insets.dart';
@@ -57,10 +59,13 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    if (Platform.isAndroid) {
+    if (Platform.isAndroid || Platform.isIOS) {
       _bridge.installExternalStopListener(_onStreamStoppedExternally);
     }
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (Platform.isIOS) {
+        _dismissCompanionKeyboard();
+      }
       unawaited(_loadSettings());
       unawaited(_loadControllerSettings());
       unawaited(_loadTouchSettings());
@@ -77,6 +82,9 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
+      if (Platform.isIOS) {
+        _dismissCompanionKeyboard();
+      }
       // After notification Stop, wait one frame so native onResume finishes before getStreamSession.
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
@@ -315,9 +323,11 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
     final normalized = await showDialog<String>(
       context: context,
+      barrierDismissible: true,
       builder: (dialogContext) => _AddMacHostIpDialog(initialAddress: settings.hostAddress),
     );
 
+    _dismissCompanionKeyboard();
     if (normalized == null || !mounted) return;
 
     final store = await StreamingHostSettings.load();
@@ -421,6 +431,11 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     return '${message.substring(0, maxLen)}…';
   }
 
+  /// Same 1080p capture as Android; use lower resolution only if a device struggles in the field.
+  (int, int, int) _defaultStreamCapture() {
+    return (1920, 1080, 60);
+  }
+
   Future<void> _startStream() async {
     if (_startingStream) return;
     final session = await _bridge.getStreamSession();
@@ -463,19 +478,22 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
     _startingStream = true;
     setState(() => _sessionStatus = 'Starting Desktop stream…');
+    playniteStreamDebug('Start Desktop stream tapped');
     try {
       if (Platform.isAndroid) {
         await PlayniteStreamNotification.ensureNotificationPermission();
       }
       final mappingStore = await StreamControllerMappingStore.load();
+      final (streamWidth, streamHeight, streamFps) = _defaultStreamCapture();
       final outcome = await _bridge.startStream(
         hostId: hostId,
-        width: 1920,
-        height: 1080,
-        fps: 60,
+        width: streamWidth,
+        height: streamHeight,
+        fps: streamFps,
         controllerBindingsJson: mappingStore.bindingsJson(),
       );
       if (!mounted) return;
+      playniteStreamDebug('startStream done ok=${outcome.ok} msg=${outcome.message}');
       setState(() {
         _streamActive = outcome.ok;
         _streamViewerOpen = outcome.ok;
@@ -487,14 +505,20 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         await PlayniteStreamNotification.syncSession(active: false);
       }
     } catch (e) {
+      playniteStreamDebug('startStream exception: $e');
       if (!mounted) return;
       setState(() {
         _streamActive = false;
+        _streamViewerOpen = false;
         _sessionStatus = 'Start stream error: $e';
       });
       await PlayniteStreamNotification.syncSession(active: false);
     } finally {
-      _startingStream = false;
+      if (mounted) {
+        setState(() => _startingStream = false);
+      } else {
+        _startingStream = false;
+      }
     }
   }
 
@@ -1039,6 +1063,12 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   }
 }
 
+/// Unfocus and hide the software keyboard (iOS decimal pad has no Done key).
+void _dismissCompanionKeyboard() {
+  FocusManager.instance.primaryFocus?.unfocus();
+  SystemChannels.textInput.invokeMethod('TextInput.hide');
+}
+
 /// Dialog for entering the Mac streaming host LAN IP (owns its [TextEditingController]).
 class _AddMacHostIpDialog extends StatefulWidget {
   const _AddMacHostIpDialog({required this.initialAddress});
@@ -1051,18 +1081,34 @@ class _AddMacHostIpDialog extends StatefulWidget {
 
 class _AddMacHostIpDialogState extends State<_AddMacHostIpDialog> {
   late final TextEditingController _ipController;
+  late final FocusNode _ipFocusNode;
   String? _inlineError;
 
   @override
   void initState() {
     super.initState();
     _ipController = TextEditingController(text: widget.initialAddress);
+    _ipFocusNode = FocusNode();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        _ipFocusNode.requestFocus();
+      }
+    });
   }
 
   @override
   void dispose() {
+    _dismissCompanionKeyboard();
+    _ipFocusNode.dispose();
     _ipController.dispose();
     super.dispose();
+  }
+
+  void _close([String? result]) {
+    _dismissCompanionKeyboard();
+    if (context.mounted) {
+      Navigator.of(context).pop(result);
+    }
   }
 
   void _submit() {
@@ -1075,51 +1121,65 @@ class _AddMacHostIpDialogState extends State<_AddMacHostIpDialog> {
       setState(() => _inlineError = '127.0.0.1 is this phone, not your Mac.');
       return;
     }
-    Navigator.pop(context, normalized);
+    _close(normalized);
   }
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
-      scrollable: true,
-      title: const Text('Add Mac host IP'),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          const Text(
-            'LAN IPv4 from Mac → Streaming. IP only — not 127.0.0.1. '
-            'Port 28765 is automatic.',
+    return PopScope(
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) {
+          _dismissCompanionKeyboard();
+        }
+      },
+      child: AlertDialog(
+        scrollable: true,
+        title: const Text('Add Mac host IP'),
+        content: GestureDetector(
+          onTap: _dismissCompanionKeyboard,
+          behavior: HitTestBehavior.opaque,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const Text(
+                'LAN IPv4 from Mac → Streaming. IP only — not 127.0.0.1. '
+                'Port 28765 is automatic.',
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _ipController,
+                focusNode: _ipFocusNode,
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                inputFormatters: [
+                  FilteringTextInputFormatter.allow(RegExp(r'[0-9.]')),
+                ],
+                decoration: InputDecoration(
+                  labelText: 'Mac host IP',
+                  hintText: 'e.g. 192.168.1.42',
+                  errorText: _inlineError,
+                ),
+                onChanged: (_) {
+                  if (_inlineError != null) {
+                    setState(() => _inlineError = null);
+                  }
+                },
+                onSubmitted: (_) => _submit(),
+              ),
+            ],
           ),
-          const SizedBox(height: 12),
-          TextField(
-            controller: _ipController,
-            keyboardType: TextInputType.number,
-            autofocus: true,
-            decoration: InputDecoration(
-              labelText: 'Mac host IP',
-              hintText: 'e.g. 192.168.1.42',
-              errorText: _inlineError,
-            ),
-            onChanged: (_) {
-              if (_inlineError != null) {
-                setState(() => _inlineError = null);
-              }
-            },
-            onSubmitted: (_) => _submit(),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => _close(),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: _submit,
+            child: const Text('Add'),
           ),
         ],
       ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text('Cancel'),
-        ),
-        FilledButton(
-          onPressed: _submit,
-          child: const Text('Add'),
-        ),
-      ],
     );
   }
 }

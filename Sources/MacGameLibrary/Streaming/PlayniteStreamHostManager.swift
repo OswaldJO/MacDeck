@@ -16,6 +16,7 @@ final class PlayniteStreamHostManager {
     private(set) var state: HostState = .idle
     private(set) var pendingPairRequests: [PlayniteStreamControlServer.PendingPairRequest] = []
     private(set) var isVideoStreaming = false
+    private(set) var lastStreamLogURL: URL?
 
     private let server = PlayniteStreamControlServer()
     private let video = PlayniteVideoStreamServer()
@@ -93,8 +94,12 @@ final class PlayniteStreamHostManager {
     }
 
     /// Ends an active companion stream (e.g. after the phone force-quit without Stop).
-    func stopActiveVideoStream() async {
-        await endVideoStream()
+    /// Returns a log file URL when a session journal was written this stream.
+    @discardableResult
+    func stopActiveVideoStream() async -> URL? {
+        PlayniteStreamSessionLog.i("Stop active stream tapped on Mac Streaming tab")
+        await endVideoStream(reason: "stopped from Mac Streaming tab")
+        return lastStreamLogURL
     }
 
     func restartHost() async {
@@ -142,15 +147,16 @@ final class PlayniteStreamHostManager {
 
     private func wireStreamCallbacks() async {
         await server.setStreamHandlers(
-            onStart: { _, width, height, fps in
+            onStart: { deviceID, width, height, fps in
                 await PlayniteStreamHostManager.shared.beginVideoStream(
+                    deviceID: deviceID,
                     width: width,
                     height: height,
                     fps: fps
                 )
             },
             onStop: {
-                await PlayniteStreamHostManager.shared.endVideoStream()
+                await PlayniteStreamHostManager.shared.endVideoStream(reason: "companion POST stream/stop")
             }
         )
     }
@@ -165,9 +171,9 @@ final class PlayniteStreamHostManager {
         pendingPairRequests = await server.pendingRequests()
     }
 
-    func beginVideoStream(width: Int, height: Int, fps: Int) async {
+    func beginVideoStream(deviceID: String, width: Int, height: Int, fps: Int) async {
         await enqueueStreamOperation {
-            await self.beginVideoStreamUnlocked(width: width, height: height, fps: fps)
+            await self.beginVideoStreamUnlocked(deviceID: deviceID, width: width, height: height, fps: fps)
         }
     }
 
@@ -184,13 +190,15 @@ final class PlayniteStreamHostManager {
         await task.value
     }
 
-    private func beginVideoStreamUnlocked(width: Int, height: Int, fps: Int) async {
-        await endVideoStreamUnlocked()
+    private func beginVideoStreamUnlocked(deviceID: String, width: Int, height: Int, fps: Int) async {
+        await endVideoStreamUnlocked(reason: "starting new capture session")
         if !capture.isReady {
             guard await capture.requestSystemPrompt() else { return }
             await server.setCaptureReady(capture.isReady)
             guard capture.isReady else { return }
         }
+        let deviceName = await server.pairedDeviceName(deviceID: deviceID)
+        PlayniteStreamSessionLog.startSession(deviceName: deviceName, width: width, height: height, fps: fps)
         PlayniteKeyboardPlayback.resetModifierState()
         isVideoStreaming = true
         await server.setVideoStreaming(true)
@@ -202,23 +210,26 @@ final class PlayniteStreamHostManager {
                 try await video.startCapture(width: width, height: height, fps: fps) { pcm, sampleRate, channels in
                     Task { await audioServer.sendPCM(pcm, sampleRate: sampleRate, channels: channels) }
                 }
+                PlayniteStreamSessionLog.i("Capture started \(width)x\(height) @ \(fps)fps")
                 print("[PlayniteStream] companion stream \(width)x\(height) @ \(fps)fps")
             } catch {
                 if !Task.isCancelled {
-                    print("[PlayniteStream] capture start failed: \(error.localizedDescription)")
-                    await self.endVideoStreamUnlocked()
+                    let message = error.localizedDescription
+                    PlayniteStreamSessionLog.e("Capture start failed: \(message)")
+                    print("[PlayniteStream] capture start failed: \(message)")
+                    await self.endVideoStreamUnlocked(reason: "capture start failed")
                 }
             }
         }
     }
 
-    private func endVideoStream() async {
+    private func endVideoStream(reason: String = "stream ended") async {
         await enqueueStreamOperation {
-            await self.endVideoStreamUnlocked()
+            await self.endVideoStreamUnlocked(reason: reason)
         }
     }
 
-    private func endVideoStreamUnlocked() async {
+    private func endVideoStreamUnlocked(reason: String) async {
         captureTask?.cancel()
         captureTask = nil
         await video.stopStream()
@@ -226,6 +237,7 @@ final class PlayniteStreamHostManager {
         await server.setVideoStreaming(false)
         PlayniteKeyboardPlayback.resetModifierState()
         PlayniteLocalOutputMute.setStreamingMuted(false)
+        lastStreamLogURL = PlayniteStreamSessionLog.endSession(reason: reason)
         print("[PlayniteStream] stream ended")
     }
 

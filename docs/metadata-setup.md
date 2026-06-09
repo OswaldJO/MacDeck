@@ -20,14 +20,29 @@ ScreenScraper credentials from [Web API v2](https://www.screenscraper.fr/webapi2
 
 ## Storage
 
-Credentials are stored in **UserDefaults** via `MetadataCredentials`:
+Developer credentials can be **obfuscated in the app binary** (`ScreenScraperBuiltInCredentials`) or overridden in **Metadata Settings** (UserDefaults via `MetadataCredentials`):
 
-- `Metadata.ScreenScraper.DevID`
-- `Metadata.ScreenScraper.DevPassword`
-- `Metadata.ScreenScraper.UserID`
-- `Metadata.ScreenScraper.UserPassword`
+- `Metadata.ScreenScraper.DevID` / `DevPassword` — optional overrides
+- `Metadata.ScreenScraper.UserID` / `UserPassword` — optional user credentials (Settings only)
 
-For production hardening, move these secrets to Keychain.
+### Embed obfuscated developer credentials (your own builds)
+
+Do **not** commit plaintext `devid` / `devpassword`. Generate byte arrays locally:
+
+```bash
+swift Scripts/obfuscate-screenscraper-credential.swift YOUR_DEV_ID YOUR_DEV_PASSWORD
+```
+
+Or (avoids shell history):
+
+```bash
+SCREENSCRAPER_DEV_ID=... SCREENSCRAPER_DEV_PASSWORD=... \
+  swift Scripts/obfuscate-screenscraper-credential.swift
+```
+
+Paste the printed arrays into `Sources/MacGameLibrary/Services/ScreenScraperBuiltInCredentials.swift`, then rebuild.
+
+This is **obfuscation**, not encryption — it keeps secrets out of git and casual string search. Optional user `ssid` / `sspassword` stay in UserDefaults only.
 
 ## Notes
 

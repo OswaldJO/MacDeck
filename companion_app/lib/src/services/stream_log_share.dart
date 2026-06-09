@@ -5,7 +5,7 @@ import 'package:share_plus/share_plus.dart';
 
 /// Offers to share the native stream debug log after a session ends.
 Future<void> offerStreamLogShare(BuildContext context, String logPath) async {
-  if (!Platform.isAndroid) return;
+  if (!Platform.isAndroid && !Platform.isIOS) return;
   final file = File(logPath);
   if (!await file.exists()) return;
 
@@ -36,6 +36,6 @@ Future<void> offerStreamLogShare(BuildContext context, String logPath) async {
   await Share.shareXFiles(
     [XFile(logPath, mimeType: 'text/plain', name: 'playnite_stream.log')],
     subject: 'Playnite companion stream log',
-    text: 'Playnite companion stream debug log (Android).',
+    text: 'Playnite companion stream debug log.',
   );
 }

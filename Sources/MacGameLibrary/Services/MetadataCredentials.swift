@@ -6,14 +6,28 @@ enum MetadataCredentials {
     private static let devPasswordKey = "Metadata.ScreenScraper.DevPassword"
     private static let userIDKey = "Metadata.ScreenScraper.UserID"
     private static let userPasswordKey = "Metadata.ScreenScraper.UserPassword"
+    private static let preferredRegionKey = "Metadata.ScreenScraper.PreferredRegion"
+    private static let autoSelectAmbiguityKey = "Metadata.ScreenScraper.AutoSelectAmbiguity"
 
+    /// Effective developer id for API calls (UserDefaults override, else obfuscated built-in).
     static var screenScraperDevID: String? {
-        get { UserDefaults.standard.string(forKey: devIDKey)?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty }
+        screenScraperDevIDOverride ?? ScreenScraperBuiltInCredentials.devID
+    }
+
+    /// Effective developer password for API calls (UserDefaults override, else obfuscated built-in).
+    static var screenScraperDevPassword: String? {
+        screenScraperDevPasswordOverride ?? ScreenScraperBuiltInCredentials.devPassword
+    }
+
+    /// User-entered developer id in Settings (nil when relying on built-in credentials).
+    static var screenScraperDevIDOverride: String? {
+        get { storedCredential(forKey: devIDKey) }
         set { UserDefaults.standard.set(newValue, forKey: devIDKey) }
     }
 
-    static var screenScraperDevPassword: String? {
-        get { UserDefaults.standard.string(forKey: devPasswordKey)?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty }
+    /// User-entered developer password in Settings (nil when relying on built-in credentials).
+    static var screenScraperDevPasswordOverride: String? {
+        get { storedCredential(forKey: devPasswordKey) }
         set { UserDefaults.standard.set(newValue, forKey: devPasswordKey) }
     }
 
@@ -29,6 +43,43 @@ enum MetadataCredentials {
 
     static var isConfigured: Bool {
         screenScraperDevID != nil && screenScraperDevPassword != nil
+    }
+
+    static var hasUserCredentials: Bool {
+        screenScraperUserID != nil && screenScraperUserPassword != nil
+    }
+
+    /// When true, ambiguous multi-platform matches are resolved by the algorithm instead of prompting the user.
+    static var screenScraperAutoSelectAmbiguousMatches: Bool {
+        get {
+            if UserDefaults.standard.object(forKey: autoSelectAmbiguityKey) == nil {
+                return false
+            }
+            return UserDefaults.standard.bool(forKey: autoSelectAmbiguityKey)
+        }
+        set {
+            UserDefaults.standard.set(newValue, forKey: autoSelectAmbiguityKey)
+        }
+    }
+
+    /// Preferred ScreenScraper region short code for covers/titles (`us`, `eu`, `jp`, `wor`, …).
+    static var screenScraperPreferredRegion: String {
+        get {
+            let stored = UserDefaults.standard.string(forKey: preferredRegionKey)?
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+                .lowercased()
+            if let stored, !stored.isEmpty {
+                return stored
+            }
+            return ScreenScraperRegionPreference.defaultRegionCode
+        }
+        set {
+            UserDefaults.standard.set(newValue.lowercased(), forKey: preferredRegionKey)
+        }
+    }
+
+    private static func storedCredential(forKey key: String) -> String? {
+        UserDefaults.standard.string(forKey: key)?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
     }
 }
 

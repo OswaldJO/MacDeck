@@ -195,12 +195,14 @@ class PlayniteHostClient {
         return StreamStartOutcome.failed(json?['error'] as String? ?? 'Stream start failed.');
       }
       final host = json?['host'] as String? ?? _settings.hostAddress;
+      final loopbackHost = json?['loopbackHost'] as String? ?? '127.0.0.1';
       final videoPort = json?['videoPort'] as int? ?? StreamingHostSettings.defaultVideoPort;
       final audioPort = json?['audioPort'] as int? ?? StreamingHostSettings.defaultAudioPort;
       final audioTcpPort = json?['audioTcpPort'] as int? ?? StreamingHostSettings.defaultAudioTcpPort;
       final inputPort = json?['inputPort'] as int? ?? StreamingHostSettings.defaultInputPort;
       return StreamStartOutcome.success(
         host: host,
+        loopbackHost: loopbackHost,
         videoPort: videoPort,
         audioPort: audioPort,
         audioTcpPort: audioTcpPort,
@@ -226,12 +228,22 @@ class PlayniteHostClient {
 
   /// After [stopStreamOnHost], poll until the Mac reports capture has ended.
   Future<void> waitForMacStreamIdle() async {
-    const attempts = 30;
+    const attempts = 20;
+    var unreachableStreak = 0;
     for (var i = 0; i < attempts; i++) {
       final status = await fetchStatus();
-      if (_macStreamFullyIdle(status)) {
-        await Future<void>.delayed(const Duration(milliseconds: 400));
-        return;
+      if (status == null) {
+        unreachableStreak += 1;
+        // Control plane unreachable — do not spin for ~6s before every start.
+        if (unreachableStreak >= 2) {
+          return;
+        }
+      } else {
+        unreachableStreak = 0;
+        if (_macStreamFullyIdle(status)) {
+          await Future<void>.delayed(const Duration(milliseconds: 400));
+          return;
+        }
       }
       await Future<void>.delayed(const Duration(milliseconds: 300));
     }
@@ -263,6 +275,7 @@ class StreamStartOutcome {
     required this.ok,
     this.message,
     this.host,
+    this.loopbackHost,
     this.videoPort,
     this.audioPort,
     this.audioTcpPort,
@@ -274,6 +287,7 @@ class StreamStartOutcome {
   final bool ok;
   final String? message;
   final String? host;
+  final String? loopbackHost;
   final int? videoPort;
   final int? audioPort;
   final int? audioTcpPort;
@@ -283,6 +297,7 @@ class StreamStartOutcome {
 
   factory StreamStartOutcome.success({
     required String host,
+    String loopbackHost = '127.0.0.1',
     required int videoPort,
     required int audioPort,
     required int audioTcpPort,
@@ -293,6 +308,7 @@ class StreamStartOutcome {
       StreamStartOutcome._(
         ok: true,
         host: host,
+        loopbackHost: loopbackHost,
         videoPort: videoPort,
         audioPort: audioPort,
         audioTcpPort: audioTcpPort,

@@ -29,10 +29,12 @@ public struct RootView: View {
     @State private var section: MainSection = .library
     @State private var scanFeedback: String?
     @State private var cleanupFeedback: String?
-    @State private var metadataFeedback: String?
     @State private var confirmClearAllGames = false
     @State private var confirmClearMacGames = false
     @State private var showScreenScraperSettings = false
+    @State private var showScreenScraperDisambiguation = false
+    @State private var screenScraperCredentialsRevision = 0
+    @Bindable private var screenScraperDisambiguationCoordinator = ScreenScraperDisambiguationCoordinator.shared
     @State private var clearEmulatorGamesID: UUID?
     /// Game card showing play / info overlay.
     @State private var actionOverlayGameID: UUID?
@@ -88,9 +90,13 @@ public struct RootView: View {
         switch sidebarSelection {
         case .screenScraper:
             ScreenScraperLibrarySettingsView(
+                fetcher: MetadataBackgroundFetcher.shared,
+                disambiguationCoordinator: ScreenScraperDisambiguationCoordinator.shared,
                 isConfigured: MetadataCredentials.isConfigured,
+                credentialsRevision: screenScraperCredentialsRevision,
                 onOpenCredentials: { showScreenScraperSettings = true },
-                onScrapeNow: { runScreenScraperScrapeNow() }
+                onScrapeNow: { runScreenScraperScrapeNow() },
+                onResolveAmbiguous: { showScreenScraperDisambiguation = true }
             )
         case .all, .macGames, .emulator:
             HStack(spacing: 0) {
@@ -146,7 +152,7 @@ public struct RootView: View {
                     }
                 }
                 Section("Cover Art and Metadata") {
-                    Text("Screen Scrapper")
+                    ScreenScraperSidebarRow(fetcher: MetadataBackgroundFetcher.shared)
                         .tag(LibrarySidebarSelection.screenScraper)
                 }
             }
@@ -177,8 +183,20 @@ public struct RootView: View {
                     Button {
                         showScreenScraperSettings = true
                     } label: {
-                        Label("Metadata Settings", systemImage: "photo.on.rectangle.angled")
-                            .labelStyle(.titleAndIcon)
+                        Label {
+                            Text("ScreenScraper Login")
+                        } icon: {
+                            ZStack(alignment: .topTrailing) {
+                                Image(systemName: "person.badge.key")
+                                if MetadataCredentials.hasUserCredentials {
+                                    Circle()
+                                        .fill(.green)
+                                        .frame(width: 7, height: 7)
+                                        .offset(x: 3, y: -3)
+                                }
+                            }
+                        }
+                        .labelStyle(.titleAndIcon)
                     }
                 }
             }
@@ -289,24 +307,23 @@ public struct RootView: View {
         } message: {
             Text(cleanupFeedback ?? "")
         }
-        .alert("Metadata", isPresented: Binding(
-            get: { metadataFeedback != nil },
-            set: { if !$0 { metadataFeedback = nil } }
-        )) {
-            Button("OK", role: .cancel) {}
-        } message: {
-            Text(metadataFeedback ?? "")
-        }
-        .sheet(isPresented: $showScreenScraperSettings) {
+        .sheet(isPresented: $showScreenScraperSettings, onDismiss: {
+            screenScraperCredentialsRevision += 1
+        }) {
             ScreenScraperSettingsSheet()
+        }
+        .sheet(isPresented: $showScreenScraperDisambiguation) {
+            ScreenScraperDisambiguationSheet(coordinator: ScreenScraperDisambiguationCoordinator.shared)
+        }
+        .onChange(of: screenScraperDisambiguationCoordinator.pending.count) { _, newCount in
+            if newCount > 0, !showScreenScraperDisambiguation {
+                showScreenScraperDisambiguation = true
+            }
         }
     }
 
     private func runScreenScraperScrapeNow() {
-        Task { @MainActor in
-            let summary = await MetadataBackgroundFetcher.shared.scrapeAllNow(container: modelContext.container)
-            metadataFeedback = "ScreenScraper processed \(summary.processed) game(s). Updated \(summary.updated) game(s)."
-        }
+        MetadataBackgroundFetcher.shared.startLibraryScrape(container: modelContext.container)
     }
 
     private func performScan() {
@@ -603,7 +620,7 @@ private struct GameLibraryTile: View {
     var body: some View {
         ZStack {
             VStack(alignment: .leading, spacing: 8) {
-                CoverThumbnail(urlString: game.coverImageURLString)
+                CachedCoverThumbnail(urlString: game.coverImageURLString)
                     .aspectRatio(3 / 4, contentMode: .fill)
                     .frame(width: LibraryGridMetrics.cardWidth, height: LibraryGridMetrics.coverHeight)
                     .clipShape(RoundedRectangle(cornerRadius: 8))
@@ -664,6 +681,8 @@ private struct LibraryGameInspectorView: View {
     @Bindable var game: LibraryGame
     var onDismiss: () -> Void
 
+    @State private var showScreenScraperSearch = false
+
     var body: some View {
         Form {
             Section {
@@ -697,7 +716,7 @@ private struct LibraryGameInspectorView: View {
 
             Section("Cover art") {
                 HStack(alignment: .top, spacing: 16) {
-                    CoverThumbnail(urlString: game.coverImageURLString)
+                    CachedCoverThumbnail(urlString: game.coverImageURLString)
                         .frame(width: 120, height: 160)
                         .clipShape(RoundedRectangle(cornerRadius: 8))
                         .overlay {
@@ -708,6 +727,20 @@ private struct LibraryGameInspectorView: View {
                     VStack(alignment: .leading, spacing: 10) {
                         Button("Choose Image…", systemImage: "photo") {
                             pickCoverImage()
+                        }
+                        if MetadataCredentials.isConfigured {
+                            Button("Search ScreenScraper…", systemImage: "sparkle.magnifyingglass") {
+                                showScreenScraperSearch = true
+                            }
+                        }
+                        if game.screenScraperSelectionSkipped {
+                            Text("Automatic ScreenScraper matching skipped for this game.")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            Button("Allow auto-match again", systemImage: "arrow.counterclockwise") {
+                                game.screenScraperSelectionSkipped = false
+                                try? modelContext.save()
+                            }
                         }
                         if game.coverImageURLString != nil {
                             Button("Clear current cover", systemImage: "xmark.circle", role: .destructive) {
@@ -727,7 +760,7 @@ private struct LibraryGameInspectorView: View {
                     VStack(spacing: 8) {
                         ForEach(Array(game.coverImageOptions.enumerated()), id: \.offset) { index, option in
                             HStack(spacing: 10) {
-                                CoverThumbnail(urlString: option)
+                                CachedCoverThumbnail(urlString: option)
                                     .frame(width: 42, height: 56)
                                     .clipShape(RoundedRectangle(cornerRadius: 6))
                                 Text(URL(string: option)?.lastPathComponent ?? option)
@@ -789,6 +822,13 @@ private struct LibraryGameInspectorView: View {
                 }
                 .help("Hide game details")
             }
+        }
+        .sheet(isPresented: $showScreenScraperSearch) {
+            ScreenScraperManualSearchSheet(
+                libraryGameId: game.id,
+                initialTitle: game.libraryListTitle,
+                initialSystemId: EmulatorPlatformResolver.resolve(emulator: game.emulator)?.primarySystemId
+            )
         }
     }
 
@@ -892,86 +932,6 @@ private struct LibraryGameInspectorView: View {
         options.insert(item, at: target)
         game.coverImageOptions = options
         try? modelContext.save()
-    }
-}
-
-// MARK: - Cover art
-
-private struct CoverThumbnail: View {
-    let urlString: String?
-
-    var body: some View {
-        Group {
-            if let urlString, let url = Self.resolvedImageURL(from: urlString) {
-                AsyncImage(url: url) { phase in
-                    switch phase {
-                    case .empty:
-                        Color.secondary.opacity(0.2)
-                    case .success(let image):
-                        image.resizable().scaledToFill()
-                    case .failure:
-                        placeholder
-                    @unknown default:
-                        placeholder
-                    }
-                }
-            } else {
-                placeholder
-            }
-        }
-    }
-
-    private static func resolvedImageURL(from string: String) -> URL? {
-        let normalized = string.hasPrefix("//") ? "https:" + string : string
-        guard let url = URL(string: normalized),
-              url.isFileURL || url.scheme?.hasPrefix("http") == true else { return nil }
-        return url
-    }
-
-    private var placeholder: some View {
-        ZStack {
-            Color.secondary.opacity(0.15)
-            Image(systemName: "photo")
-                .foregroundStyle(.secondary)
-        }
-    }
-}
-
-private struct ScreenScraperLibrarySettingsView: View {
-    let isConfigured: Bool
-    let onOpenCredentials: () -> Void
-    let onScrapeNow: () -> Void
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            Text("Screen Scrapper")
-                .font(.title3.weight(.semibold))
-            Text("Manage ScreenScraper login credentials and run a full metadata scrape for your library.")
-                .foregroundStyle(.secondary)
-
-            HStack(spacing: 10) {
-                Button("Login / Credentials", systemImage: "person.badge.key") {
-                    onOpenCredentials()
-                }
-                Button("Scrape Library Now", systemImage: "sparkle.magnifyingglass") {
-                    onScrapeNow()
-                }
-                .disabled(!isConfigured)
-            }
-
-            if isConfigured {
-                Text("Credentials saved. Scrape will append ScreenScraper art to each game’s cover list and apply emulator cover-priority preference.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            } else {
-                Text("Set ScreenScraper credentials first, then run scrape.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-            Spacer()
-        }
-        .padding(20)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 }
 

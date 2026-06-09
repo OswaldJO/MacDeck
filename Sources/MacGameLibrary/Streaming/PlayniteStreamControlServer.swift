@@ -124,6 +124,10 @@ actor PlayniteStreamControlServer {
         pairedDevices.map(\.name)
     }
 
+    func pairedDeviceName(deviceID: String) -> String? {
+        pairedDevices.first { $0.deviceID == deviceID }?.name
+    }
+
     func baselineDeviceIDs() -> [String] {
         pairedDevices.map(\.deviceID)
     }
@@ -301,18 +305,24 @@ actor PlayniteStreamControlServer {
             let width = json?["width"] as? Int ?? 1920
             let height = json?["height"] as? Int ?? 1080
             let fps = json?["fps"] as? Int ?? 60
+            PlayniteStreamSessionLog.i(
+                "Companion POST stream/start deviceId=\(deviceID) \(width)x\(height) @ \(fps)fps"
+            )
             if let onStreamStartRequested {
                 Task { await onStreamStartRequested(deviceID, width, height, fps) }
             }
+            let lanHost = LocalNetworkAddress.primaryIPv4() ?? "127.0.0.1"
             return httpResponse(status: 200, body: [
                 "ok": true,
                 "videoPort": PlayniteStreamPorts.videoTCP,
                 "audioPort": PlayniteStreamPorts.audioUDP,
                 "audioTcpPort": PlayniteStreamPorts.audioTCP,
                 "inputPort": PlayniteStreamPorts.inputUDP,
-                "host": LocalNetworkAddress.primaryIPv4() ?? "127.0.0.1",
+                "host": lanHost,
+                "loopbackHost": "127.0.0.1",
             ])
         case ("POST", "/playnite/v1/stream/stop"):
+            PlayniteStreamSessionLog.i("Companion POST stream/stop")
             if let onStreamStopRequested {
                 Task { await onStreamStopRequested() }
             } else {

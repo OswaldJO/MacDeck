@@ -19,6 +19,12 @@ public final class LibraryGame {
     public var coverImageOptionsJSON: String?
     /// Optional platform/system hint for metadata search (e.g. "SNES", "PS2").
     public var platformHint: String?
+    /// User- or scrape-confirmed ScreenScraper game id (`jeuInfos` / `gameid`).
+    public var screenScraperGameId: Int?
+    /// User- or scrape-confirmed ScreenScraper system id (`systemeid`).
+    public var screenScraperSystemId: Int?
+    /// User skipped automatic ScreenScraper disambiguation for this game.
+    public var screenScraperSelectionSkipped: Bool = false
     /// Optional source identifier (e.g. "epic") for imported launcher ecosystems.
     public var librarySourceID: String?
     /// Epic app name used to launch via Epic Games Launcher URI protocol.
@@ -39,6 +45,9 @@ public final class LibraryGame {
         coverImageURLString: String? = nil,
         coverImageOptionsJSON: String? = nil,
         platformHint: String? = nil,
+        screenScraperGameId: Int? = nil,
+        screenScraperSystemId: Int? = nil,
+        screenScraperSelectionSkipped: Bool = false,
         librarySourceID: String? = nil,
         epicAppName: String? = nil,
         sortOrder: Int = 0,
@@ -55,6 +64,9 @@ public final class LibraryGame {
         self.coverImageURLString = coverImageURLString
         self.coverImageOptionsJSON = coverImageOptionsJSON
         self.platformHint = platformHint
+        self.screenScraperGameId = screenScraperGameId
+        self.screenScraperSystemId = screenScraperSystemId
+        self.screenScraperSelectionSkipped = screenScraperSelectionSkipped
         self.librarySourceID = librarySourceID
         self.epicAppName = epicAppName
         self.sortOrder = sortOrder

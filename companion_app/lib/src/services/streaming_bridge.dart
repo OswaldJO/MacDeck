@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/services.dart';
 
@@ -8,6 +9,7 @@ import 'pairing_cancellation.dart';
 import 'playnite_host_client.dart';
 import 'stream_controller_settings.dart';
 import 'stream_touch_settings.dart';
+import 'stream_debug_log.dart';
 import 'streaming_host_settings.dart';
 
 /// Discovery, consent pairing, and native video via Playnite protocol.
@@ -28,6 +30,34 @@ class StreamingBridge {
   final Future<StreamingHostSettings> _settingsFuture;
   final PlayniteHostClient? _hostClientOverride;
 
+  static const Duration _nativeCallTimeout = Duration(seconds: 15);
+
+  bool? _iosSimulatorCached;
+
+  Future<bool> _isIosSimulator() async {
+    if (!Platform.isIOS) return false;
+    _iosSimulatorCached ??= await _invokeNative<bool>('isSimulator') == true;
+    return _iosSimulatorCached!;
+  }
+
+  Future<String> _resolveVideoHost(StreamStartOutcome outcome) async {
+    if (await _isIosSimulator()) {
+      return outcome.loopbackHost ?? '127.0.0.1';
+    }
+    return outcome.host!;
+  }
+
+  Future<T?> _invokeNative<T>(String method, [Object? arguments]) {
+    return _channel
+        .invokeMethod<T>(method, arguments)
+        .timeout(_nativeCallTimeout, onTimeout: () {
+      throw PlatformException(
+        code: 'timeout',
+        message: 'Native streaming call "$method" timed out.',
+      );
+    });
+  }
+
   Future<PlayniteHostClient> _client() async {
     final override = _hostClientOverride;
     if (override != null) return override;
@@ -42,7 +72,7 @@ class StreamingBridge {
 
   Future<List<ConnectedControllerInfo>> listConnectedControllers() async {
     try {
-      final raw = await _channel.invokeMethod<List<dynamic>>('listConnectedControllers');
+      final raw = await _invokeNative<List<dynamic>>('listConnectedControllers');
       if (raw == null) return const [];
       return raw
           .whereType<Map>()
@@ -73,7 +103,7 @@ class StreamingBridge {
 
   Future<Map<String, dynamic>> getStreamSession() async {
     try {
-      final raw = await _channel.invokeMethod<Map<Object?, Object?>>('getStreamSession');
+      final raw = await _invokeNative<Map<Object?, Object?>>('getStreamSession');
       if (raw == null) return const {};
       return Map<String, dynamic>.from(raw);
     } catch (_) {
@@ -83,13 +113,13 @@ class StreamingBridge {
 
   Future<void> clearPendingExternalStopLog() async {
     try {
-      await _channel.invokeMethod<void>('clearPendingExternalStopLog');
+      await _invokeNative<void>('clearPendingExternalStopLog');
     } catch (_) {}
   }
 
   Future<bool> resumeStream() async {
     try {
-      final resumed = await _channel.invokeMethod<bool>('resumeStream');
+      final resumed = await _invokeNative<bool>('resumeStream');
       return resumed == true;
     } catch (_) {
       return false;
@@ -124,7 +154,7 @@ class StreamingBridge {
 
   Future<void> prepareForNewStream() async {
     try {
-      await _channel.invokeMethod<void>('prepareForNewStream');
+      await _invokeNative<void>('prepareForNewStream');
     } catch (_) {}
   }
 
@@ -137,17 +167,26 @@ class StreamingBridge {
     StreamTouchSettings? touchSettings,
     String? controllerBindingsJson,
   }) async {
+    playniteStreamDebug('prepareForNewStream…');
     await prepareForNewStream();
     final client = await _client();
+    playniteStreamDebug('POST Mac stream/start ${width}x$height @ ${fps}fps…');
     final outcome = await client.startStream(width: width, height: height, fps: fps);
     if (!outcome.ok || outcome.host == null || outcome.videoPort == null) {
+      playniteStreamDebug('Mac stream/start failed: ${outcome.message}');
       return outcome;
     }
+    final videoHost = await _resolveVideoHost(outcome);
+    playniteStreamDebug(
+      'Mac capture started; opening native player $videoHost:${outcome.videoPort}'
+      '${videoHost != outcome.host ? " (LAN ${outcome.host})" : ""}',
+    );
 
     try {
       final touch = touchSettings ?? await StreamTouchSettings.load();
-      final started = await _channel.invokeMethod<bool>('startStream', {
-        'host': outcome.host,
+      playniteStreamDebug('native startStream…');
+      final started = await _invokeNative<bool>('startStream', {
+        'host': videoHost,
         'videoPort': outcome.videoPort,
         'audioPort': outcome.audioPort ?? StreamingHostSettings.defaultAudioPort,
         'audioTcpPort': outcome.audioTcpPort ?? StreamingHostSettings.defaultAudioTcpPort,
@@ -158,11 +197,14 @@ class StreamingBridge {
         ...touch.toMethodChannelMap(),
       });
       if (started == true) {
+        playniteStreamDebug('native startStream ok');
         return outcome;
       }
+      playniteStreamDebug('native startStream returned false');
       await client.stopStreamOnHost();
       return StreamStartOutcome.failed('Native video player failed to start.');
     } on PlatformException catch (e) {
+      playniteStreamDebug('native startStream error: ${e.code} ${e.message}');
       await client.stopStreamOnHost();
       return StreamStartOutcome.failed(e.message ?? 'Native stream error');
     }
@@ -210,10 +252,10 @@ class StreamingBridge {
     });
   }
 
-  /// Stops the Mac host and native player. On Android, returns a log file path if one was written.
+  /// Stops the Mac host and native player. Returns a log file path when the native layer wrote one.
   Future<String?> stopStream() async {
     try {
-      final raw = await _channel.invokeMethod<Map<Object?, Object?>>('stopStream');
+      final raw = await _invokeNative<Map<Object?, Object?>>('stopStream');
       final path = raw?['logPath'];
       if (path is String && path.isNotEmpty) {
         return path;

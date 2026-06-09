@@ -1,5 +1,14 @@
 import Foundation
 
+struct ScreenScraperGameMatch: Sendable, Identifiable, Hashable {
+    var id: Int { gameId }
+    let gameId: Int
+    let systemId: Int
+    let systemName: String
+    let title: String
+    let coverURL: URL?
+}
+
 /// ScreenScraper API v2 client (https://www.screenscraper.fr/webapi2.php).
 enum ScreenScraperClient {
     enum ScreenScraperError: Error, LocalizedError {
@@ -25,138 +34,283 @@ enum ScreenScraperClient {
         }
     }
 
-    private static let baseURL = "https://api.screenscraper.fr/api2/jeuRecherche.php"
+    private static let searchURL = "https://api.screenscraper.fr/api2/jeuRecherche.php"
+    private static let gameInfoURL = "https://api.screenscraper.fr/api2/jeuInfos.php"
     private static let softName = "PlayniteMac"
 
-    static func fetchCoverAndTitle(searchQuery: String) async throws -> (title: String, coverURL: URL?) {
+    static func searchGames(
+        searchQuery: String,
+        systemId: Int? = nil,
+        coverRegion: String? = nil
+    ) async throws -> [ScreenScraperGameMatch] {
         let trimmed = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { throw ScreenScraperError.noResults }
+
+        let jsonObject = try await requestJSON(
+            baseURL: searchURL,
+            extraQueryItems: {
+                var items = [URLQueryItem(name: "recherche", value: trimmed)]
+                if let systemId {
+                    items.append(URLQueryItem(name: "systemeid", value: String(systemId)))
+                }
+                return items
+            }()
+        )
+        let games = allGames(in: jsonObject)
+        guard !games.isEmpty else { throw ScreenScraperError.noResults }
+        let preferredRegion = effectiveCoverRegion(coverRegion)
+        return games.compactMap { parseGameMatch(from: $0, preferredRegion: preferredRegion) }
+    }
+
+    static func fetchGame(
+        gameId: Int,
+        systemId: Int,
+        fallbackTitle: String,
+        coverRegion: String? = nil
+    ) async throws -> ScreenScraperGameMatch {
+        let jsonObject = try await requestJSON(
+            baseURL: gameInfoURL,
+            extraQueryItems: [
+                URLQueryItem(name: "gameid", value: String(gameId)),
+                URLQueryItem(name: "systemeid", value: String(systemId)),
+            ]
+        )
+        guard let game = firstGame(in: jsonObject) else { throw ScreenScraperError.noResults }
+        let preferredRegion = effectiveCoverRegion(coverRegion)
+        if let match = parseGameMatch(from: game, preferredRegion: preferredRegion) {
+            return match
+        }
+        let title = extractedTitle(from: game, preferredRegion: preferredRegion) ?? fallbackTitle
+        let cover = extractedCoverURL(from: game, preferredRegion: preferredRegion)
+        return ScreenScraperGameMatch(
+            gameId: gameId,
+            systemId: systemId,
+            systemName: ScreenScraperPlatformMap.displayName(forSystemId: systemId),
+            title: title,
+            coverURL: cover
+        )
+    }
+
+    static func fetchCoverAndTitle(
+        searchQuery: String,
+        systemId: Int? = nil
+    ) async throws -> (title: String, coverURL: URL?) {
+        let matches = try await searchGames(searchQuery: searchQuery, systemId: systemId)
+        guard let first = matches.first else { throw ScreenScraperError.noResults }
+        return (first.title, first.coverURL)
+    }
+
+    private static func effectiveCoverRegion(_ override: String?) -> String {
+        let trimmed = override?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        if let trimmed, !trimmed.isEmpty { return trimmed }
+        return MetadataCredentials.screenScraperPreferredRegion
+    }
+
+    // MARK: - Networking
+
+    private static func requestJSON(
+        baseURL: String,
+        extraQueryItems: [URLQueryItem]
+    ) async throws -> Any {
         guard let devID = MetadataCredentials.screenScraperDevID,
               let devPassword = MetadataCredentials.screenScraperDevPassword else {
             throw ScreenScraperError.missingCredentials
         }
 
         var components = URLComponents(string: baseURL)
-        components?.queryItems = buildQueryItems(
-            devID: devID,
-            devPassword: devPassword,
-            userID: MetadataCredentials.screenScraperUserID,
-            userPassword: MetadataCredentials.screenScraperUserPassword,
-            search: trimmed
-        )
+        var queryItems = buildBaseQueryItems(devID: devID, devPassword: devPassword)
+        queryItems.append(contentsOf: extraQueryItems)
+        components?.queryItems = queryItems
         guard let url = components?.url else { throw ScreenScraperError.invalidURL }
 
         let (data, response) = try await URLSession.shared.data(from: url)
         guard let http = response as? HTTPURLResponse else { throw ScreenScraperError.http(-1) }
         guard (200 ... 299).contains(http.statusCode) else { throw ScreenScraperError.http(http.statusCode) }
 
-        let jsonObject: Any
         do {
-            jsonObject = try JSONSerialization.jsonObject(with: data, options: [])
+            return try JSONSerialization.jsonObject(with: data, options: [])
         } catch {
             throw ScreenScraperError.decoding
         }
-
-        guard let game = firstGame(in: jsonObject) else { throw ScreenScraperError.noResults }
-        let title = extractedTitle(from: game) ?? searchQuery
-        let cover = extractedCoverURL(from: game)
-        return (title, cover)
     }
 
-    private static func buildQueryItems(
-        devID: String,
-        devPassword: String,
-        userID: String?,
-        userPassword: String?,
-        search: String
-    ) -> [URLQueryItem] {
+    private static func buildBaseQueryItems(devID: String, devPassword: String) -> [URLQueryItem] {
         var queryItems: [URLQueryItem] = [
             URLQueryItem(name: "devid", value: devID),
             URLQueryItem(name: "devpassword", value: devPassword),
             URLQueryItem(name: "softname", value: softName),
             URLQueryItem(name: "output", value: "json"),
-            URLQueryItem(name: "recherche", value: search)
         ]
-        if let userID = userID?.trimmingCharacters(in: .whitespacesAndNewlines), !userID.isEmpty {
+        if let userID = MetadataCredentials.screenScraperUserID?.trimmingCharacters(in: .whitespacesAndNewlines), !userID.isEmpty {
             queryItems.append(URLQueryItem(name: "ssid", value: userID))
         }
-        if let userPassword = userPassword?.trimmingCharacters(in: .whitespacesAndNewlines), !userPassword.isEmpty {
+        if let userPassword = MetadataCredentials.screenScraperUserPassword?.trimmingCharacters(in: .whitespacesAndNewlines), !userPassword.isEmpty {
             queryItems.append(URLQueryItem(name: "sspassword", value: userPassword))
         }
         return queryItems
     }
 
-    private static func firstGame(in json: Any) -> [String: Any]? {
-        guard let root = json as? [String: Any] else { return nil }
-        if let response = root["response"] as? [String: Any] {
-            if let jeux = response["jeux"] as? [[String: Any]], let first = jeux.first {
-                return first
-            }
-            if let jeu = response["jeu"] as? [String: Any] {
-                return jeu
-            }
+    // MARK: - Parsing
+
+    private static func parseGameMatch(from game: [String: Any], preferredRegion: String?) -> ScreenScraperGameMatch? {
+        let gameId = extractGameId(from: game)
+        let systemId = extractSystemId(from: game)
+        guard let gameId, let systemId else { return nil }
+        let title = extractedTitle(from: game, preferredRegion: preferredRegion) ?? "Unknown"
+        let cover = extractedCoverURL(from: game, preferredRegion: preferredRegion)
+        return ScreenScraperGameMatch(
+            gameId: gameId,
+            systemId: systemId,
+            systemName: ScreenScraperPlatformMap.displayName(forSystemId: systemId),
+            title: title,
+            coverURL: cover
+        )
+    }
+
+    private static func extractGameId(from game: [String: Any]) -> Int? {
+        intValue(game["id"]) ?? intValue(game["jeuid"]) ?? intValue(game["gameid"])
+    }
+
+    private static func extractSystemId(from game: [String: Any]) -> Int? {
+        if let direct = intValue(game["systemeid"]) { return direct }
+        if let systeme = game["systeme"] as? [String: Any] {
+            return intValue(systeme["id"])
         }
-        if let jeux = root["jeux"] as? [[String: Any]], let first = jeux.first {
-            return first
-        }
-        if let jeu = root["jeu"] as? [String: Any] {
-            return jeu
-        }
+        return intValue(game["systeme"])
+    }
+
+    private static func intValue(_ value: Any?) -> Int? {
+        if let int = value as? Int { return int }
+        if let text = value as? String { return Int(text.trimmingCharacters(in: .whitespacesAndNewlines)) }
         return nil
     }
 
-    private static func extractedTitle(from game: [String: Any]) -> String? {
-        if let nom = game["nom"] as? String, !nom.isEmpty { return nom }
+    private static func allGames(in json: Any) -> [[String: Any]] {
+        guard let root = json as? [String: Any] else { return [] }
+        if let response = root["response"] as? [String: Any] {
+            if let jeux = response["jeux"] as? [[String: Any]], !jeux.isEmpty {
+                return jeux
+            }
+            if let jeu = response["jeu"] as? [String: Any] {
+                return [jeu]
+            }
+        }
+        if let jeux = root["jeux"] as? [[String: Any]], !jeux.isEmpty {
+            return jeux
+        }
+        if let jeu = root["jeu"] as? [String: Any] {
+            return [jeu]
+        }
+        return []
+    }
+
+    private static func firstGame(in json: Any) -> [String: Any]? {
+        allGames(in: json).first
+    }
+
+    private static func extractedTitle(from game: [String: Any], preferredRegion: String?) -> String? {
+        let regionOrder = ScreenScraperRegionPreference.mediaRegionOrder(preferredCode: preferredRegion)
+
+        if let nameEntries = game["noms"] as? [[String: Any]] {
+            for region in regionOrder {
+                if let entry = nameEntries.first(where: { nameRegion($0) == region }),
+                   let text = nameText(entry), !text.isEmpty {
+                    return text
+                }
+            }
+            for entry in nameEntries {
+                if let text = nameText(entry), !text.isEmpty { return text }
+            }
+        }
+
         if let names = game["noms"] as? [String: Any] {
-            let preferred = ["nom_us", "nom_en", "nom_eu", "nom_wor", "nom_ss"]
-            for key in preferred {
+            for region in regionOrder {
+                let key = "nom_\(region)"
                 if let value = names[key] as? String, !value.isEmpty { return value }
             }
             for value in names.values {
                 if let text = value as? String, !text.isEmpty { return text }
             }
         }
+
+        if let nom = game["nom"] as? String, !nom.isEmpty { return nom }
         return nil
     }
 
-    private static func extractedCoverURL(from game: [String: Any]) -> URL? {
-        guard let medias = game["medias"] else { return nil }
-        let preferredKeyFragments = [
-            "media_box-2d",
-            "media_box-2d_",
-            "media_box2d",
-            "media_wheel",
-            "media_marquee",
-            "media_ss",
-            "media_sstitle",
-            "media_fanart"
-        ]
-        return firstURL(in: medias, keyFragmentsInPriority: preferredKeyFragments)
+    private static func nameRegion(_ entry: [String: Any]) -> String? {
+        (entry["region"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
     }
 
-    private static func firstURL(in object: Any, keyFragmentsInPriority fragments: [String]) -> URL? {
-        if let dict = object as? [String: Any] {
-            let sorted = dict.keys.sorted()
-            for fragment in fragments {
-                for key in sorted where key.lowercased().contains(fragment) {
-                    if let url = valueAsURL(dict[key]) {
-                        return url
-                    }
-                }
+    private static func nameText(_ entry: [String: Any]) -> String? {
+        if let text = entry["text"] as? String { return text }
+        if let text = entry["nom"] as? String { return text }
+        return nil
+    }
+
+    private static func extractedCoverURL(from game: [String: Any], preferredRegion: String?) -> URL? {
+        guard let medias = game["medias"] else { return nil }
+        let regionOrder = ScreenScraperRegionPreference.mediaRegionOrder(preferredCode: preferredRegion)
+        var ranked: [(regionRank: Int, typeRank: Int, url: URL)] = []
+
+        if let mediaEntries = medias as? [[String: Any]] {
+            for entry in mediaEntries {
+                guard let type = (entry["type"] as? String)?.lowercased(),
+                      let url = valueAsURL(entry["url"]) else { continue }
+                let typeRank = coverTypeRank(forKey: type)
+                guard typeRank < 90 else { continue }
+                let region = (entry["region"] as? String)?.lowercased() ?? ""
+                let regionRank = regionOrder.firstIndex(of: region) ?? regionOrder.count
+                ranked.append((regionRank, typeRank, url))
             }
-            for key in sorted {
-                if let url = firstURL(in: dict[key] as Any, keyFragmentsInPriority: fragments) {
-                    return url
+        } else {
+            collectNestedCoverCandidates(from: medias, regionOrder: regionOrder, ranked: &ranked)
+        }
+
+        return ranked.sorted {
+            if $0.regionRank != $1.regionRank { return $0.regionRank < $1.regionRank }
+            return $0.typeRank < $1.typeRank
+        }.first?.url
+    }
+
+    private static func collectNestedCoverCandidates(
+        from object: Any,
+        regionOrder: [String],
+        ranked: inout [(regionRank: Int, typeRank: Int, url: URL)]
+    ) {
+        if let dict = object as? [String: Any] {
+            for (key, value) in dict {
+                let lower = key.lowercased()
+                if let url = valueAsURL(value) {
+                    let typeRank = coverTypeRank(forKey: lower)
+                    guard typeRank < 90 else { continue }
+                    let regionRank = coverRegionRank(forKey: lower, regionOrder: regionOrder)
+                    ranked.append((regionRank, typeRank, url))
+                } else {
+                    collectNestedCoverCandidates(from: value, regionOrder: regionOrder, ranked: &ranked)
                 }
             }
         } else if let list = object as? [Any] {
             for item in list {
-                if let url = firstURL(in: item, keyFragmentsInPriority: fragments) {
-                    return url
-                }
+                collectNestedCoverCandidates(from: item, regionOrder: regionOrder, ranked: &ranked)
             }
         }
-        return nil
+    }
+
+    private static func coverTypeRank(forKey key: String) -> Int {
+        if key == "box-2d" || key.contains("boitier_2d") || key.contains("box2d") { return 0 }
+        if key.contains("wheel") && !key.contains("carbon") && !key.contains("steel") { return 1 }
+        if key.contains("marquee") || key.contains("screenmarquee") { return 2 }
+        if key == "ss" || key == "sstitle" { return 3 }
+        if key.contains("fanart") { return 4 }
+        if key.contains("screenshot") { return 5 }
+        return 90
+    }
+
+    private static func coverRegionRank(forKey key: String, regionOrder: [String]) -> Int {
+        for (index, region) in regionOrder.enumerated() where key.hasSuffix("_\(region)") || key.contains("_\(region)") {
+            return index
+        }
+        return regionOrder.count
     }
 
     private static func valueAsURL(_ value: Any?) -> URL? {

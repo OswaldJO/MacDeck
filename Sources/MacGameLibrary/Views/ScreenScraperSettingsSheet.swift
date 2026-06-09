@@ -1,54 +1,81 @@
 import SwiftUI
 
-/// ScreenScraper API credentials used by metadata background fetches.
+/// End-user ScreenScraper account credentials (developer API keys are embedded in the app).
 struct ScreenScraperSettingsSheet: View {
     @Environment(\.dismiss) private var dismiss
-    @State private var devID: String = MetadataCredentials.screenScraperDevID ?? ""
-    @State private var devPassword: String = MetadataCredentials.screenScraperDevPassword ?? ""
     @State private var userID: String = MetadataCredentials.screenScraperUserID ?? ""
     @State private var userPassword: String = MetadataCredentials.screenScraperUserPassword ?? ""
+    @State private var preferredRegion: String = MetadataCredentials.screenScraperPreferredRegion
+
+    private var isLoggedIn: Bool { MetadataCredentials.hasUserCredentials }
 
     var body: some View {
         NavigationStack {
             Form {
                 Section {
+                    HStack(spacing: 12) {
+                        Image(systemName: isLoggedIn ? "checkmark.circle.fill" : "circle")
+                            .font(.title2)
+                            .foregroundStyle(isLoggedIn ? .green : .secondary)
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(isLoggedIn ? "Currently signed in" : "Not signed in")
+                                .font(.headline)
+                            if let name = MetadataCredentials.screenScraperUserID, isLoggedIn {
+                                Text(name)
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                    .padding(.vertical, 2)
+                }
+
+                Section {
                     Text(
-                        "Enter ScreenScraper API credentials. `devid` and `devpassword` are required. `ssid` and `sspassword` are optional user credentials."
+                        "Sign in with your personal ScreenScraper account. These are sent as `ssid` and `sspassword` and may unlock higher API limits on your account."
                     )
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
-                    Link("ScreenScraper Web API v2", destination: URL(string: "https://www.screenscraper.fr/webapi2.php")!)
+                    Link("Create a ScreenScraper account", destination: URL(string: "https://www.screenscraper.fr/")!)
                 }
 
-                Section("Credentials") {
-                    TextField("Developer ID (devid)", text: $devID)
+                Section("Your ScreenScraper login") {
+                    TextField("Username (ssid)", text: $userID)
                         .textContentType(.username)
-                    SecureField("Developer Password (devpassword)", text: $devPassword)
+                    SecureField("Password (sspassword)", text: $userPassword)
                         .textContentType(.password)
-                    TextField("User ID (ssid, optional)", text: $userID)
-                        .textContentType(.username)
-                    SecureField("User Password (sspassword, optional)", text: $userPassword)
-                        .textContentType(.password)
+                }
+
+                Section("Default game region") {
+                    Picker("Cover region", selection: $preferredRegion) {
+                        ForEach(ScreenScraperRegionPreference.selectableRegions, id: \.code) { region in
+                            Text(region.label).tag(region.code)
+                        }
+                    }
+                    Text(
+                        "ScreenScraper cover art prefers this region. If a game has no art for that region, the app falls back to World, then other regions."
+                    )
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
                 }
             }
             .formStyle(.grouped)
-            .navigationTitle("Metadata (ScreenScraper)")
+            .navigationTitle("ScreenScraper Login")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Close") { dismiss() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") {
-                        MetadataCredentials.screenScraperDevID = devID.trimmingCharacters(in: .whitespacesAndNewlines)
-                        MetadataCredentials.screenScraperDevPassword = devPassword.trimmingCharacters(in: .whitespacesAndNewlines)
                         MetadataCredentials.screenScraperUserID = userID.trimmingCharacters(in: .whitespacesAndNewlines)
                         MetadataCredentials.screenScraperUserPassword = userPassword.trimmingCharacters(in: .whitespacesAndNewlines)
+                        MetadataCredentials.screenScraperPreferredRegion = preferredRegion
                         dismiss()
                     }
                 }
             }
         }
-        .frame(minWidth: 460, minHeight: 360)
+        .frame(minWidth: 420, minHeight: 360)
     }
 }
 
