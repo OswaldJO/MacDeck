@@ -23,6 +23,10 @@ final class ScreenScraperDisambiguationCoordinator {
         pending.removeAll { $0.libraryGameId == libraryGameId }
     }
 
+    func clearAllPending() {
+        pending.removeAll()
+    }
+
     func applySelection(
         libraryGameId: UUID,
         match: ScreenScraperGameMatch,
@@ -38,7 +42,15 @@ final class ScreenScraperDisambiguationCoordinator {
             game.screenScraperGameId = match.gameId
             game.screenScraperSystemId = match.systemId
             game.screenScraperSelectionSkipped = false
-            if !match.title.isEmpty {
+            if !match.title.isEmpty,
+               MetadataService.shouldApplyScrapedTitle(
+                   searchQuery: MetadataService.searchQuery(
+                       displayTitle: game.libraryListTitle,
+                       romFileNameStem: URL(fileURLWithPath: game.romPath).deletingPathExtension().lastPathComponent
+                   ),
+                   pickedTitle: match.title,
+                   matchMethod: .search
+               ) {
                 game.title = match.title
             }
             if let cover = match.coverURL?.absoluteString {
@@ -54,6 +66,7 @@ final class ScreenScraperDisambiguationCoordinator {
                 }
             }
             game.metadataLastFetchAt = Date()
+            DiscGroupService.propagateSharedState(from: game, context: context)
             try? context.save()
             remove(libraryGameId: libraryGameId)
         }

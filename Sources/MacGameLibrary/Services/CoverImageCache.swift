@@ -56,8 +56,14 @@ enum CoverImageCache {
             guard let http = response as? HTTPURLResponse, (200 ... 299).contains(http.statusCode), !data.isEmpty else {
                 return urlString
             }
-            try data.write(to: destination, options: .atomic)
-            return destination.absoluteString
+            guard NSImage(data: data) != nil else {
+                return urlString
+            }
+            let writeURL = destination.pathExtension.lowercased() == "php"
+                ? destination.deletingPathExtension().appendingPathExtension("jpg")
+                : destination
+            try data.write(to: writeURL, options: .atomic)
+            return writeURL.absoluteString
         } catch {
             return urlString
         }

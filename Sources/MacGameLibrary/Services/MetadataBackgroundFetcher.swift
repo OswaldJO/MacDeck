@@ -99,6 +99,35 @@ final class MetadataBackgroundFetcher {
         libraryScrapeTask?.cancel()
     }
 
+    /// Clears ScreenScraper cover art and match pins for every library game (for scrape testing).
+    func clearAllScrapedMetadata(container: ModelContainer) throws -> Int {
+        let context = container.mainContext
+        let games = try context.fetch(FetchDescriptor<LibraryGame>())
+        var cleared = 0
+        for game in games {
+            let hadData = game.coverImageURLString != nil
+                || game.coverImageOptionsJSON != nil
+                || game.screenScraperGameId != nil
+                || game.screenScraperSystemId != nil
+                || game.metadataLastFetchAt != nil
+                || game.screenScraperSelectionSkipped
+            guard hadData else { continue }
+            game.coverImageURLString = nil
+            game.coverImageOptionsJSON = nil
+            game.screenScraperGameId = nil
+            game.screenScraperSystemId = nil
+            game.screenScraperSelectionSkipped = false
+            game.metadataLastFetchAt = nil
+            cleared += 1
+        }
+        try context.save()
+        ScreenScraperDisambiguationCoordinator.shared.clearAllPending()
+        lastLibraryScrapeSummary = nil
+        lastLibraryScrapeFinishedAt = nil
+        lastLibraryScrapeLogPath = nil
+        return cleared
+    }
+
     /// Legacy await API — prefer [startLibraryScrape] for UI progress.
     func scrapeAllNow(container: ModelContainer) async -> ScrapeSummary {
         self.container = container
@@ -146,6 +175,7 @@ final class MetadataBackgroundFetcher {
         }
 
         if reportLibraryProgress {
+            relinkEmulators(in: selectedCandidates, context: context)
             libraryScrapeTotal = selectedCandidates.count
             libraryScrapeProcessed = 0
             libraryScrapeUpdated = 0
@@ -183,8 +213,9 @@ final class MetadataBackgroundFetcher {
 
         let romStem = URL(fileURLWithPath: game.romPath).deletingPathExtension().lastPathComponent
         let searchTitle = game.libraryListTitle
-        let preferScreenScraper = game.emulator?.preferScreenScraperCovers == true
-        let emulatorSystemId = EmulatorPlatformResolver.resolve(emulator: game.emulator)?.primarySystemId
+        let emulator = EmulatorProfileLookup.resolve(for: game, context: context)
+        let preferScreenScraper = emulator?.preferScreenScraperCovers == true
+        let emulatorSystemId = MetadataSystemResolver.systemId(for: game, emulator: emulator)
         let localCoverURL = localCoverForGame(path: game.romPath, title: searchTitle, romStem: romStem)
         var remoteResult: MetadataResult?
         if MetadataCredentials.isConfigured {
@@ -193,6 +224,7 @@ final class MetadataBackgroundFetcher {
                     libraryGameId: game.id,
                     displayTitle: searchTitle,
                     romFileNameStem: romStem,
+                    romPath: game.romPath,
                     emulatorSystemId: emulatorSystemId,
                     pinnedGameId: game.screenScraperGameId,
                     pinnedSystemId: game.screenScraperSystemId,
@@ -205,7 +237,9 @@ final class MetadataBackgroundFetcher {
                             let coverNote = result.coverImageURL?.absoluteString ?? "none"
                             let mode = result.autoResolvedAmbiguity ? "auto_ambiguous" : "resolved"
                             MetadataScrapeSessionLog.i(
-                                "\(mode) title=\(searchTitle) query=\(MetadataService.searchQuery(displayTitle: searchTitle, romFileNameStem: romStem)) " +
+                                "\(mode) method=\(result.matchMethod.rawValue) title=\(searchTitle) " +
+                                    "query=\(MetadataService.searchQuery(displayTitle: searchTitle, romFileNameStem: romStem)) " +
+                                    "emulatorSystemeid=\(emulatorSystemId.map(String.init) ?? "nil") " +
                                     "systemeid=\(result.screenScraperSystemId.map(String.init) ?? "nil") pick=\(result.normalizedTitle) cover=\(coverNote)"
                             )
                         }
@@ -213,7 +247,8 @@ final class MetadataBackgroundFetcher {
                         ScreenScraperDisambiguationCoordinator.shared.enqueue(request)
                         if logToSession {
                             MetadataScrapeSessionLog.w(
-                                "ambiguous title=\(searchTitle) candidates=\(request.candidates.count) " +
+                                "ambiguous title=\(searchTitle) emulatorSystemeid=\(emulatorSystemId.map(String.init) ?? "nil") " +
+                                    "candidates=\(request.candidates.count) " +
                                     "systems=\(Set(request.candidates.map(\.systemName)).sorted().joined(separator: ", "))"
                             )
                         }
@@ -253,7 +288,12 @@ final class MetadataBackgroundFetcher {
 
         if let normalized = remoteResult?.normalizedTitle.trimmingCharacters(in: .whitespacesAndNewlines),
            !normalized.isEmpty,
-           game.title != normalized {
+           game.title != normalized,
+           MetadataService.shouldApplyScrapedTitle(
+               searchQuery: MetadataService.searchQuery(displayTitle: searchTitle, romFileNameStem: romStem),
+               pickedTitle: normalized,
+               matchMethod: remoteResult?.matchMethod ?? .search
+           ) {
             game.title = normalized
             didChange = true
         }
@@ -304,11 +344,19 @@ final class MetadataBackgroundFetcher {
             didChange = true
         }
         if didChange {
+            DiscGroupService.propagateSharedState(from: game, context: context)
             try? context.save()
         } else {
             try? context.save()
         }
         return didChange
+    }
+
+    private func relinkEmulators(in games: [LibraryGame], context: ModelContext) {
+        for game in games {
+            _ = EmulatorProfileLookup.resolve(for: game, context: context)
+        }
+        try? context.save()
     }
 
     private func localCoverForGame(path: String, title: String, romStem: String) -> URL? {

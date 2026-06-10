@@ -33,9 +33,13 @@ This document describes **how the app behaves today** and **where implementation
 
 ### Inspector (Info)
 
-- `LibraryGameInspectorView`: display name, file path (editable for **Mac** entries with no emulator), cover art list (choose file, reorder, set primary, remove).
+- `LibraryGameInspectorView`: display name; for emulator-linked games — **File** (basename) and **Path** (full `romPath`, link-styled; tap opens **Finder** via `NSWorkspace.activateFileViewerSelecting`); for **Mac** entries with no emulator — editable game path + **Choose Game…**.
+- **Multi-disc set:** link with suggestions or **Link with other discs…** sheet (`DiscGroupLinkSheet`); list linked discs with ▲/▼ reorder; **Reset order from filenames**; **Unlink this disc**. Linked discs share cover art and ScreenScraper `gameid`/`systemeid`; changes propagate via `DiscGroupService.propagateSharedState`.
+- Cover art: choose file, ScreenScraper manual search, reorder detected covers, set primary, clear.
 
-**Key types:** `RootView.swift`, `LibraryGame.swift`.
+Grid tiles show a **Disc N** badge when the game is in a linked set and a disc number is parsed from the path/title.
+
+**Key types:** `RootView.swift`, `LibraryGame.swift`, `DiscGroupService.swift`, `DiscGroupLinkSheet.swift`.
 
 ---
 
@@ -56,8 +60,9 @@ Per **selected emulator**:
 - **Cover folders** — local images matched to ROM names on scan.
 - **Exclude folders** — skipped during scan.
 - **Toggle:** *Prioritize ScreenScraper art over local covers* — stored on `EmulatorProfile.preferScreenScraperCovers` (default `false`). Affects **auto-selected primary** cover after a metadata pass; all sources still accumulate in `coverImageOptions`.
+- **Toggle:** *Auto-link multi-disc games on scan* — `EmulatorProfile.autoLinkMultiDiscGames` (default `false`). After each **Scan Paths**, `DiscGroupService.autoLinkAllEnabledEmulators` clusters games on that emulator with the same normalized base title (same logic as manual link suggestions) and links sets of 2+; `ScanSummary.autoLinkedDiscSets` reports count.
 
-**Key types:** `PathsView.swift`, `GameFolderPath.swift`, `GamePathScanner.swift`.
+**Key types:** `PathsView.swift`, `GameFolderPath.swift`, `GamePathScanner.swift`, `DiscGroupService.swift`.
 
 ### RPCS3 / PS3 folder scanning
 
@@ -85,12 +90,20 @@ When a configured **game folder** belongs to an RPCS3 (or PS3-style) emulator, `
 
 ## Metadata and ScreenScraper
 
-- **IGDB removed.** Remote metadata uses **ScreenScraper API v2** (`https://api.screenscraper.fr/api2/…`), currently **name search** via `jeuRecherche.php` in `ScreenScraperClient`.
+- **IGDB removed.** Remote metadata uses **ScreenScraper API v2** (`https://api.screenscraper.fr/api2/…`).
 - **Credentials:** `MetadataCredentials` — `devid` / `devpassword` required; `ssid` / `sspassword` optional. Persisted in `UserDefaults` (see `docs/metadata-setup.md`).
-- **Background fetcher:** `MetadataBackgroundFetcher` — periodic small batches; can **schedule extra** after scans. Full pass: `scrapeAllNow` (used from Screen Scrapper sidebar).
-- **Flow per game (simplified):** resolve local cover candidates when possible; if configured, fetch ScreenScraper result; merge **local + remote** URLs into `coverImageOptions`; set **primary** `coverImageURLString` using emulator’s `preferScreenScraperCovers` vs. local-first default; update title from scraper when useful; throttle via `metadataLastFetchAt`.
+- **Matching waterfall** (`MetadataService`, per game):
+  1. Pinned `screenScraperGameId` + `screenScraperSystemId` on `LibraryGame` (if set).
+  2. **`jeuInfos.php`** hash lookup (`RomFingerprint`: MD5/CRC32/SHA1, `.cue`/`.m3u` payload, PS3 folder `dossier`) — requires resolved **`systemeid`**.
+  3. **`jeuInfos.php`** exact filename (`romnom` + size + `romtype`).
+  4. **`jeuRecherche.php`** fuzzy search with query variants (`RomTitleNormalizer`, `.hack` `//` forms, roman → arabic numerals).
+  5. Auto-select from ambiguous set (user toggle) or `ScreenScraperDisambiguationCoordinator` sheet.
+- **Platform resolution** before scrape: `EmulatorProfileLookup` (SwiftData relationship or `emulatorIDString`) → `EmulatorPlatformResolver`; fallback `MetadataSystemResolver` (`platformHint`, Epic → PC **135**); fallback **`RomPathPlatformResolver`** (longest matching **Paths** game-folder root). Scrape logs include `emulatorSystemeid=`.
+- **Title safety:** `pickTitleIsCompatible` blocks wrong-platform fuzzy picks; Part/Vol numbers optional when subtitle matches (`.hack Part 1` ↔ `.hack//Infection`). Scraped title applied only when compatible (hash/exact always apply).
+- **Background fetcher:** `MetadataBackgroundFetcher` — periodic batches; **schedule extra** after scans; full library scrape from Screen Scrapper sidebar (`scrapeAllNow`). Session logs: `playnite-scrape-*.log` in Downloads. **`clearAllScrapedMetadata`** wipes covers, ScreenScraper IDs, disambiguation queue.
+- **Covers:** `CoverImageCache` disk cache; validates decoded `NSImage` before save. Local folder discovery first; remote appended to `coverImageOptions`; primary respects `preferScreenScraperCovers`. **Multi-disc:** cover + ScreenScraper IDs propagate to siblings in the same `discGroupIDString`.
 
-**Key types:** `MetadataService.swift`, `ScreenScraperClient.swift`, `MetadataBackgroundFetcher.swift`, `ScreenScraperSettingsSheet.swift`.
+**Key types:** `MetadataService.swift`, `ScreenScraperClient.swift`, `RomFingerprint.swift`, `RomTitleNormalizer.swift`, `MetadataSystemResolver.swift`, `RomPathPlatformResolver.swift`, `MetadataBackgroundFetcher.swift`, `ScreenScraperLibraryView.swift`, `ScreenScraperDisambiguationCoordinator.swift`, `CoverImageCache.swift`.
 
 ---
 
@@ -219,8 +232,8 @@ Legacy bindings that used **Alt** (`0x12`) still map to left Option on the Mac.
 
 ## Data model (SwiftData)
 
-- **`EmulatorProfile`** — name, paths, launch template, extensions, `preferScreenScraperCovers` (default `false` for migration).
-- **`LibraryGame`** — title, `romPath`, optional emulator link, cover URLs/options JSON, `platformHint`, `librarySourceID`, `epicAppName`, sort order, play/metadata timestamps.
+- **`EmulatorProfile`** — name, paths, launch template, extensions, `preferScreenScraperCovers`, `autoLinkMultiDiscGames` (both default `false` for migration).
+- **`LibraryGame`** — title, `libraryDisplayName`, `romPath`, optional emulator link (`emulatorIDString` + relationship), cover URLs/options JSON, `platformHint`, `screenScraperGameId` / `screenScraperSystemId`, `screenScraperSelectionSkipped`, `discGroupIDString`, `discGroupOrder`, `librarySourceID`, `epicAppName`, `sortOrder`, play/metadata timestamps.
 - **`GameFolderPath`** — folder path, purpose (games / covers / excludes), linked emulator.
 
 ---
@@ -234,7 +247,8 @@ Legacy bindings that used **Alt** (`0x12`) still map to left Option on the Mac.
 ## Known constraints / pitfalls
 
 - **RPCS3 `dev_hdd0/game`:** Assign the folder to the **RPCS3** emulator profile (not a generic multi-system profile) so folder import and ISO-only file rules apply. After scanner fixes, run **Scan Paths** to rename stale **EBOOT** entries. PSN/HDD (**HG**) installs need `USRDIR/EBOOT.BIN`; disc **GD** data folders without EBOOT are not launchable from this path alone.
-- **ScreenScraper** quotas, threading, and API shape can change; search-by-name without `systemeid` may mismatch platforms.
+- **ScreenScraper** quotas, threading, and API shape can change. Without resolved **`systemeid`**, hash lookup is skipped and fuzzy search may pick wrong consoles (DS/Xbox/NES) or return `no_match`. Run **Scan Paths** so `RomPathPlatformResolver` can infer platform from folder roots; check scrape log for `emulatorSystemeid=nil`.
+- **Multi-disc auto-link** uses normalized base titles — enable per emulator on **Paths**; manual link/unlink still available in inspector.
 - **SwiftData migration:** new non-optional attributes need defaults or optional types; a prior crash on `preferScreenScraperCovers` was fixed with `= false` on the property.
 - **Full-library scrape** is synchronous per game with delays; large libraries take time and network.
 - **Native streaming (Android)** is verified: video over TCP **28766** (~99% rendered vs. received); audio over TCP **28769** with Mac output muted during stream; touch over UDP **28768** with Accessibility granted.

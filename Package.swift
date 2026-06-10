@@ -15,6 +15,9 @@ let package = Package(
             path: "Sources/MacGameLibrary",
             resources: [
                 .copy("Resources/BuiltinEmulatorCatalog.json")
+            ],
+            linkerSettings: [
+                .linkedLibrary("z"),
             ]
         )
     ]

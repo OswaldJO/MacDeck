@@ -101,6 +101,18 @@ struct PathsView: View {
                                 pasteGameFolder()
                             }
                         }
+                        if let emulator = selectedEmulator {
+                            Toggle("Auto-link multi-disc games on scan", isOn: Binding(
+                                get: { emulator.autoLinkMultiDiscGames },
+                                set: { newValue in
+                                    emulator.autoLinkMultiDiscGames = newValue
+                                    try? modelContext.save()
+                                }
+                            ))
+                            Text("When enabled, scanning the library links discs with matching titles (e.g. Final Fantasy IX Disc 1–4) so cover art and ScreenScraper metadata stay in sync.")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
                     }
 
                     Section("Covers for this emulator") {

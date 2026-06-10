@@ -174,6 +174,34 @@ enum ScreenScraperPlatformMap {
         return slug.replacingOccurrences(of: "_", with: " ").capitalized
     }
 
+    /// Maps a stored platform hint (from scan) to a ScreenScraper system id.
+    static func systemId(forPlatformHint hint: String) -> Int? {
+        let normalized = hint.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !normalized.isEmpty else { return nil }
+
+        for (id, name) in systemIdToDisplayName where name.lowercased() == normalized {
+            return id
+        }
+
+        let aliases: [String: Int] = [
+            "ps1": 57, "psx": 57, "playstation 1": 57, "playstation": 57,
+            "ps2": 58, "playstation 2": 58,
+            "ps3": 59, "playstation 3": 59,
+            "psp": 61, "ps vita": 62, "vita": 62,
+            "switch": 225, "nintendo switch": 225,
+            "wii u": 18, "wii": 16, "gamecube": 13, "n64": 14,
+            "gba": 12, "gbc": 10, "gb": 9, "nds": 15,
+            "dreamcast": 23, "saturn": 22, "genesis": 1, "mega drive": 1,
+            "xbox 360": 33, "xbox": 32,
+            "pc": 135, "windows": 135, "mac": 135,
+        ]
+        if let id = aliases[normalized] { return id }
+        for (needle, id) in aliases where normalized.contains(needle) {
+            return id
+        }
+        return nil
+    }
+
     /// Sorted ScreenScraper consoles for platform pickers (manual search, filters).
     static var selectableSystems: [(id: Int, name: String)] {
         systemIdToDisplayName

@@ -53,15 +53,7 @@ public struct RootView: View {
     }
 
     private var filteredGames: [LibraryGame] {
-        let sortedVisible = visibleLibraryGames.sorted {
-            let lhs = $0.libraryListTitle
-            let rhs = $1.libraryListTitle
-            let cmp = lhs.localizedStandardCompare(rhs)
-            if cmp == .orderedSame {
-                return $0.sortOrder < $1.sortOrder
-            }
-            return cmp == .orderedAscending
-        }
+        let sortedVisible = visibleLibraryGames.sorted { DiscGroupService.librarySort(lhs: $0, rhs: $1) }
         switch sidebarSelection {
         case .all:
             return sortedVisible
@@ -96,7 +88,8 @@ public struct RootView: View {
                 credentialsRevision: screenScraperCredentialsRevision,
                 onOpenCredentials: { showScreenScraperSettings = true },
                 onScrapeNow: { runScreenScraperScrapeNow() },
-                onResolveAmbiguous: { showScreenScraperDisambiguation = true }
+                onResolveAmbiguous: { showScreenScraperDisambiguation = true },
+                onClearScrapedCovers: { clearAllScrapedCovers() }
             )
         case .all, .macGames, .emulator:
             HStack(spacing: 0) {
@@ -114,7 +107,7 @@ public struct RootView: View {
                    let game = filteredGames.first(where: { $0.id == id }) {
                     Divider()
                     NavigationStack {
-                        LibraryGameInspectorView(game: game) {
+                        LibraryGameInspectorView(game: game, allGames: games) {
                             inspectorGameID = nil
                         }
                     }
@@ -326,6 +319,10 @@ public struct RootView: View {
         MetadataBackgroundFetcher.shared.startLibraryScrape(container: modelContext.container)
     }
 
+    private func clearAllScrapedCovers() -> Int {
+        (try? MetadataBackgroundFetcher.shared.clearAllScrapedMetadata(container: modelContext.container)) ?? 0
+    }
+
     private func performScan() {
         do {
             let summary = try GamePathScanner.scan(modelContext: modelContext)
@@ -340,6 +337,9 @@ public struct RootView: View {
                 }
                 if summary.linkedCovers > 0 {
                     parts.append("Linked \(summary.linkedCovers) cover image(s)")
+                }
+                if summary.autoLinkedDiscSets > 0 {
+                    parts.append("Auto-linked \(summary.autoLinkedDiscSets) multi-disc set(s)")
                 }
                 if epicSummary.added > 0 {
                     parts.append("Imported \(epicSummary.added) Epic game(s)")
@@ -628,6 +628,17 @@ private struct GameLibraryTile: View {
                         RoundedRectangle(cornerRadius: 8)
                             .strokeBorder(.quaternary, lineWidth: 1)
                     }
+                    .overlay(alignment: .topTrailing) {
+                        if let label = DiscGroupService.discLabel(for: game), game.discGroupIDString != nil {
+                            Text(label)
+                                .font(.caption2.weight(.bold))
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 3)
+                                .background(.black.opacity(0.65), in: Capsule())
+                                .foregroundStyle(.white)
+                                .padding(6)
+                        }
+                    }
 
                 Text(game.libraryListTitle)
                     .font(.subheadline.weight(.medium))
@@ -679,9 +690,11 @@ private struct GameLibraryTile: View {
 private struct LibraryGameInspectorView: View {
     @Environment(\.modelContext) private var modelContext
     @Bindable var game: LibraryGame
+    let allGames: [LibraryGame]
     var onDismiss: () -> Void
 
     @State private var showScreenScraperSearch = false
+    @State private var showDiscGroupLinkSheet = false
 
     var body: some View {
         Form {
@@ -710,6 +723,95 @@ private struct LibraryGameInspectorView: View {
                             .foregroundStyle(.secondary)
                             .textSelection(.enabled)
                             .multilineTextAlignment(.trailing)
+                    }
+                    LabeledContent("Path") {
+                        Button {
+                            revealROMInFinder()
+                        } label: {
+                            Text((game.romPath as NSString).standardizingPath)
+                                .font(.caption)
+                                .foregroundStyle(Color(nsColor: .linkColor))
+                                .multilineTextAlignment(.trailing)
+                                .frame(maxWidth: .infinity, alignment: .trailing)
+                        }
+                        .buttonStyle(.plain)
+                        .help("Show in Finder")
+                    }
+                }
+            }
+
+            Section("Multi-disc set") {
+                let linked = DiscGroupService.linkedGames(for: game, context: modelContext)
+                if linked.isEmpty {
+                    Text("Link multiple disc files (e.g. Final Fantasy IX Disc 1–4) so cover art and ScreenScraper metadata stay in sync.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Button("Link with other discs…", systemImage: "link") {
+                        showDiscGroupLinkSheet = true
+                    }
+                    let suggestedCount = DiscGroupService.suggestedLinkCandidates(for: game, among: allGames).count
+                    if suggestedCount > 0 {
+                        Button("Link \(suggestedCount) suggested disc\(suggestedCount == 1 ? "" : "s")", systemImage: "sparkles") {
+                            var toLink = [game]
+                            toLink.append(contentsOf: DiscGroupService.suggestedLinkCandidates(for: game, among: allGames))
+                            DiscGroupService.link(toLink, context: modelContext)
+                        }
+                    }
+                } else {
+                    Text("\(linked.count) discs share cover art and metadata.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Text("Use the arrows to set disc order in the library.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+
+                    ForEach(Array(linked.enumerated()), id: \.element.id) { index, linkedGame in
+                        HStack(spacing: 8) {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(linkedGame.libraryListTitle)
+                                Text(URL(fileURLWithPath: linkedGame.romPath).lastPathComponent)
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(1)
+                            }
+                            Spacer()
+                            if let label = DiscGroupService.discLabel(for: linkedGame) {
+                                Text(label)
+                                    .font(.caption.weight(.semibold))
+                                    .foregroundStyle(.secondary)
+                            }
+                            VStack(spacing: 2) {
+                                Button {
+                                    moveLinkedDisc(at: index, direction: -1, in: linked)
+                                } label: {
+                                    Image(systemName: "chevron.up")
+                                }
+                                .buttonStyle(.plain)
+                                .disabled(index == 0)
+                                .help("Move earlier in library")
+
+                                Button {
+                                    moveLinkedDisc(at: index, direction: 1, in: linked)
+                                } label: {
+                                    Image(systemName: "chevron.down")
+                                }
+                                .buttonStyle(.plain)
+                                .disabled(index >= linked.count - 1)
+                                .help("Move later in library")
+                            }
+                        }
+                        .padding(.vertical, 2)
+                    }
+                    Button("Reset order from filenames", systemImage: "arrow.counterclockwise") {
+                        guard game.discGroupIDString != nil else { return }
+                        let discs = DiscGroupService.linkedGames(for: game, context: modelContext)
+                        DiscGroupService.normalizeDiscOrderFromFilenames(discs, context: modelContext)
+                    }
+                    Button("Add or change linked discs…", systemImage: "link") {
+                        showDiscGroupLinkSheet = true
+                    }
+                    Button("Unlink this disc", systemImage: "link.slash", role: .destructive) {
+                        DiscGroupService.unlink(game, context: modelContext)
                     }
                 }
             }
@@ -744,8 +846,9 @@ private struct LibraryGameInspectorView: View {
                         }
                         if game.coverImageURLString != nil {
                             Button("Clear current cover", systemImage: "xmark.circle", role: .destructive) {
-                                game.coverImageURLString = nil
-                                try? modelContext.save()
+                                applyCoverMutation {
+                                    game.coverImageURLString = nil
+                                }
                             }
                         }
                     }
@@ -827,8 +930,42 @@ private struct LibraryGameInspectorView: View {
             ScreenScraperManualSearchSheet(
                 libraryGameId: game.id,
                 initialTitle: game.libraryListTitle,
-                initialSystemId: EmulatorPlatformResolver.resolve(emulator: game.emulator)?.primarySystemId
+                initialSystemId: MetadataSystemResolver.systemId(
+                    for: game,
+                    emulator: EmulatorProfileLookup.resolve(for: game, context: modelContext)
+                )
             )
+        }
+        .sheet(isPresented: $showDiscGroupLinkSheet) {
+            DiscGroupLinkSheet(anchorGame: game, allGames: allGames)
+        }
+    }
+
+    private func applyCoverMutation(_ mutation: () -> Void) {
+        mutation()
+        DiscGroupService.propagateSharedState(from: game, context: modelContext)
+        try? modelContext.save()
+    }
+
+    private func moveLinkedDisc(at index: Int, direction: Int, in linked: [LibraryGame]) {
+        guard let groupID = game.discGroupIDString else { return }
+        DiscGroupService.moveDisc(in: groupID, from: index, direction: direction, context: modelContext)
+    }
+
+    private func revealROMInFinder() {
+        let path = (game.romPath as NSString).standardizingPath
+        let url = URL(fileURLWithPath: path)
+        var isDirectory: ObjCBool = false
+        guard FileManager.default.fileExists(atPath: path, isDirectory: &isDirectory) else {
+            let parent = url.deletingLastPathComponent().path
+            guard FileManager.default.fileExists(atPath: parent) else { return }
+            NSWorkspace.shared.open(URL(fileURLWithPath: parent))
+            return
+        }
+        if isDirectory.boolValue {
+            NSWorkspace.shared.open(url)
+        } else {
+            NSWorkspace.shared.activateFileViewerSelecting([url])
         }
     }
 
@@ -877,14 +1014,15 @@ private struct LibraryGameInspectorView: View {
             let path = (url.path as NSString).standardizingPath
             let fileURL = URL(fileURLWithPath: path)
             DispatchQueue.main.async {
-                var options = game.coverImageOptions
-                let candidate = fileURL.absoluteString
-                if !options.contains(candidate) {
-                    options.insert(candidate, at: 0)
+                applyCoverMutation {
+                    var options = game.coverImageOptions
+                    let candidate = fileURL.absoluteString
+                    if !options.contains(candidate) {
+                        options.insert(candidate, at: 0)
+                    }
+                    game.coverImageOptions = options
+                    game.coverImageURLString = candidate
                 }
-                game.coverImageOptions = options
-                game.coverImageURLString = candidate
-                try? modelContext.save()
             }
         }
     }
@@ -908,19 +1046,21 @@ private struct LibraryGameInspectorView: View {
     private func setPrimaryCover(index: Int) {
         let options = game.coverImageOptions
         guard options.indices.contains(index) else { return }
-        game.coverImageURLString = options[index]
-        try? modelContext.save()
+        applyCoverMutation {
+            game.coverImageURLString = options[index]
+        }
     }
 
     private func removeCover(at index: Int) {
         var options = game.coverImageOptions
         guard options.indices.contains(index) else { return }
-        let removed = options.remove(at: index)
-        game.coverImageOptions = options
-        if game.coverImageURLString == removed {
-            game.coverImageURLString = options.first
+        applyCoverMutation {
+            let removed = options.remove(at: index)
+            game.coverImageOptions = options
+            if game.coverImageURLString == removed {
+                game.coverImageURLString = options.first
+            }
         }
-        try? modelContext.save()
     }
 
     private func moveCover(from index: Int, direction: Int) {
@@ -928,10 +1068,11 @@ private struct LibraryGameInspectorView: View {
         guard options.indices.contains(index) else { return }
         let target = index + direction
         guard options.indices.contains(target) else { return }
-        let item = options.remove(at: index)
-        options.insert(item, at: target)
-        game.coverImageOptions = options
-        try? modelContext.save()
+        applyCoverMutation {
+            let item = options.remove(at: index)
+            options.insert(item, at: target)
+            game.coverImageOptions = options
+        }
     }
 }
 

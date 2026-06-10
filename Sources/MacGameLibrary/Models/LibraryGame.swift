@@ -34,6 +34,10 @@ public final class LibraryGame {
     public var lastPlayed: Date?
     /// When remote metadata was last requested; used to throttle background retries.
     public var metadataLastFetchAt: Date?
+    /// Shared id for multi-disc sets; discs with the same value share cover art and ScreenScraper metadata.
+    public var discGroupIDString: String?
+    /// Display order within a multi-disc set (0 = first). Also drives library grid order for grouped discs.
+    public var discGroupOrder: Int?
 
     public init(
         id: UUID = UUID(),
@@ -53,7 +57,9 @@ public final class LibraryGame {
         sortOrder: Int = 0,
         dateAdded: Date = Date(),
         lastPlayed: Date? = nil,
-        metadataLastFetchAt: Date? = nil
+        metadataLastFetchAt: Date? = nil,
+        discGroupIDString: String? = nil,
+        discGroupOrder: Int? = nil
     ) {
         self.id = id
         self.title = title
@@ -73,6 +79,8 @@ public final class LibraryGame {
         self.dateAdded = dateAdded
         self.lastPlayed = lastPlayed
         self.metadataLastFetchAt = metadataLastFetchAt
+        self.discGroupIDString = discGroupIDString
+        self.discGroupOrder = discGroupOrder
     }
 
     /// Title shown in the library UI (user override or `title`).

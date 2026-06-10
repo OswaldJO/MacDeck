@@ -14,6 +14,8 @@ public final class EmulatorProfile {
     public var supportedFileTypesCSV: String?
     /// When true, auto-selected cover defaults to ScreenScraper art over local cover candidates.
     public var preferScreenScraperCovers: Bool = false
+    /// When true, library scan auto-links multi-disc sets using the same title matching as manual link suggestions.
+    public var autoLinkMultiDiscGames: Bool = false
     public var sortOrder: Int
     public var dateCreated: Date
 
@@ -27,6 +29,7 @@ public final class EmulatorProfile {
         launchArgumentTemplate: String = "\"{ImagePath}\"",
         supportedFileTypesCSV: String? = nil,
         preferScreenScraperCovers: Bool = false,
+        autoLinkMultiDiscGames: Bool = false,
         sortOrder: Int = 0,
         dateCreated: Date = Date()
     ) {
@@ -36,6 +39,7 @@ public final class EmulatorProfile {
         self.launchArgumentTemplate = launchArgumentTemplate
         self.supportedFileTypesCSV = supportedFileTypesCSV
         self.preferScreenScraperCovers = preferScreenScraperCovers
+        self.autoLinkMultiDiscGames = autoLinkMultiDiscGames
         self.sortOrder = sortOrder
         self.dateCreated = dateCreated
     }

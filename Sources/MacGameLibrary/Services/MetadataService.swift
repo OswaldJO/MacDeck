@@ -1,10 +1,19 @@
 import Foundation
 
+enum ScreenScraperMatchMethod: String, Sendable {
+    case pinned
+    case hash
+    case exactFilename
+    case search
+    case autoAmbiguousSearch
+}
+
 struct MetadataResult: Sendable {
     var normalizedTitle: String
     var coverImageURL: URL?
     var screenScraperGameId: Int?
     var screenScraperSystemId: Int?
+    var matchMethod: ScreenScraperMatchMethod = .search
     /// True when the match was chosen algorithmically from an otherwise ambiguous result set.
     var autoResolvedAmbiguity: Bool = false
 }
@@ -38,6 +47,7 @@ enum MetadataService {
         libraryGameId: UUID,
         displayTitle: String,
         romFileNameStem: String,
+        romPath: String,
         emulatorSystemId: Int?,
         pinnedGameId: Int?,
         pinnedSystemId: Int?,
@@ -47,52 +57,84 @@ enum MetadataService {
         if selectionSkipped { return .unavailable }
 
         let query = searchQuery(displayTitle: displayTitle, romFileNameStem: romFileNameStem)
+        let coverRegion = RomTitleNormalizer.regionCode(fromFileNameStem: romFileNameStem)
+            ?? RomTitleNormalizer.regionCode(fromFileNameStem: displayTitle)
 
         if let pinnedGameId, let pinnedSystemId {
             let match = try await ScreenScraperClient.fetchGame(
                 gameId: pinnedGameId,
                 systemId: pinnedSystemId,
-                fallbackTitle: displayTitle
+                fallbackTitle: displayTitle,
+                coverRegion: coverRegion
             )
-            return .resolved(metadataResult(from: match))
+            return .resolved(metadataResult(from: match, method: .pinned))
         }
 
-        var candidates: [ScreenScraperGameMatch] = []
-        if let emulatorSystemId {
-            candidates = (try? await ScreenScraperClient.searchGames(searchQuery: query, systemId: emulatorSystemId)) ?? []
+        if let emulatorSystemId, let fingerprint = await RomFingerprint.build(forRomPath: romPath) {
+            let hasChecksums = fingerprint.md5Hash != nil || fingerprint.crc32Hash != nil || fingerprint.sha1Hash != nil
+            if hasChecksums {
+                for hashCandidate in fingerprint.hashLookupCandidates {
+                    if let hashMatch = try? await ScreenScraperClient.lookupByRom(
+                        fingerprint: hashCandidate,
+                        systemId: emulatorSystemId,
+                        coverRegion: coverRegion
+                    ) {
+                        return .resolved(metadataResult(from: hashMatch, method: .hash))
+                    }
+                }
+            }
+
+            for exactCandidate in fingerprint.exactFilenameCandidates {
+                if let exactMatch = try? await ScreenScraperClient.lookupByRom(
+                    fingerprint: exactCandidate,
+                    systemId: emulatorSystemId,
+                    coverRegion: coverRegion
+                ) {
+                    return .resolved(metadataResult(from: exactMatch, method: .exactFilename))
+                }
+            }
         }
-        if candidates.isEmpty {
-            candidates = (try? await ScreenScraperClient.searchGames(searchQuery: query, systemId: nil)) ?? []
-        }
+
+        let candidates = await searchCandidates(
+            queries: searchQueryVariants(displayTitle: displayTitle, romFileNameStem: romFileNameStem),
+            canonicalSearchQuery: query,
+            emulatorSystemId: emulatorSystemId,
+            coverRegion: coverRegion
+        )
 
         guard !candidates.isEmpty else { return .unavailable }
 
         let deduped = deduplicatedCandidates(candidates)
-        if let auto = autoSelectedMatch(from: deduped, emulatorSystemId: emulatorSystemId, searchQuery: query) {
+        let compatible = compatibleCandidates(searchQuery: query, in: deduped)
+        if let auto = autoSelectedMatch(from: compatible, emulatorSystemId: emulatorSystemId, searchQuery: query) {
             let enriched = try await ScreenScraperClient.fetchGame(
                 gameId: auto.gameId,
                 systemId: auto.systemId,
-                fallbackTitle: auto.title
+                fallbackTitle: auto.title,
+                coverRegion: coverRegion
             )
-            return .resolved(metadataResult(from: enriched))
+            return .resolved(metadataResult(from: enriched, method: .search))
         }
 
         let promptCandidates: [ScreenScraperGameMatch]
         if let emulatorSystemId {
-            let onEmulator = deduped.filter { $0.systemId == emulatorSystemId }
-            promptCandidates = onEmulator.isEmpty ? deduped : onEmulator
+            let onEmulator = compatible.filter { $0.systemId == emulatorSystemId }
+            promptCandidates = onEmulator.isEmpty ? compatible : onEmulator
         } else {
-            promptCandidates = deduped
+            promptCandidates = compatible
         }
+
+        guard !promptCandidates.isEmpty else { return .unavailable }
 
         if MetadataCredentials.screenScraperAutoSelectAmbiguousMatches,
            let pick = algorithmicPick(from: promptCandidates, emulatorSystemId: emulatorSystemId, searchQuery: query) {
             let enriched = try await ScreenScraperClient.fetchGame(
                 gameId: pick.gameId,
                 systemId: pick.systemId,
-                fallbackTitle: pick.title
+                fallbackTitle: pick.title,
+                coverRegion: coverRegion
             )
-            var result = metadataResult(from: enriched)
+            var result = metadataResult(from: enriched, method: .autoAmbiguousSearch)
             result.autoResolvedAmbiguity = true
             return .resolved(result)
         }
@@ -109,16 +151,166 @@ enum MetadataService {
     static func searchQuery(displayTitle: String, romFileNameStem: String) -> String {
         let fromRom = RomTitleNormalizer.searchQuery(fromFileNameStem: romFileNameStem)
         let fromDisplay = RomTitleNormalizer.searchQuery(fromFileNameStem: displayTitle)
-        return [fromRom, fromDisplay].first(where: { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }) ?? displayTitle
+        let candidates = [fromRom, fromDisplay].filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+        return candidates.max(by: { $0.count < $1.count }) ?? displayTitle
     }
 
-    private static func metadataResult(from match: ScreenScraperGameMatch) -> MetadataResult {
+    /// Whether a scraped title should replace the library filename title.
+    static func shouldApplyScrapedTitle(
+        searchQuery: String,
+        pickedTitle: String,
+        matchMethod: ScreenScraperMatchMethod
+    ) -> Bool {
+        switch matchMethod {
+        case .pinned, .hash, .exactFilename:
+            return true
+        case .search, .autoAmbiguousSearch:
+            return pickTitleIsCompatible(searchQuery: searchQuery, pickTitle: pickedTitle)
+        }
+    }
+
+    static func pickTitleIsCompatible(searchQuery: String, pickTitle: String) -> Bool {
+        let query = searchQuery.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
+        let pick = pickTitle.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !query.isEmpty, !pick.isEmpty else { return false }
+
+        let queryDistinct = distinguishingTokens(from: query)
+        let pickDistinct = distinguishingTokens(from: pick)
+        let requiredDistinct = queryDistinct.subtracting(optionalPartVolumeTokens(in: query))
+        if !requiredDistinct.isSubset(of: pickDistinct), !subtitleAnchorMatches(query: query, pick: pick) {
+            return false
+        }
+
+        let queryWords = wordTokens(from: query)
+        let pickWords = wordTokens(from: pick)
+        let extraPickWords = pickWords.subtracting(queryWords)
+        if queryWords.count <= 2, !extraPickWords.isEmpty, requiredDistinct.isEmpty, !subtitleAnchorMatches(query: query, pick: pick) {
+            return false
+        }
+
+        return true
+    }
+
+    /// Part/Vol numbers in ROM filenames (e.g. "Part 1") are often absent from ScreenScraper titles (e.g. ".hack//Infection").
+    private static func optionalPartVolumeTokens(in query: String) -> Set<String> {
+        var optional = Set<String>()
+        let patterns = [#"(?i)part\s+(\d+)"#, #"(?i)vol\.?\s*(\d+)"#]
+        let nsRange = NSRange(query.startIndex..., in: query)
+        for pattern in patterns {
+            guard let regex = try? NSRegularExpression(pattern: pattern),
+                  let match = regex.firstMatch(in: query, options: [], range: nsRange),
+                  match.numberOfRanges > 1,
+                  let range = Range(match.range(at: 1), in: query) else { continue }
+            optional.insert(String(query[range]))
+        }
+        return optional
+    }
+
+    /// Matches franchise subtitles after `:` or G.U. volume suffixes (Reminisce, Infection, etc.).
+    private static func subtitleAnchorMatches(query: String, pick: String) -> Bool {
+        for anchor in subtitleAnchors(from: query) where pick.contains(anchor) {
+            return true
+        }
+        return false
+    }
+
+    private static func subtitleAnchors(from query: String) -> [String] {
+        var anchors: [String] = []
+        func add(_ value: String) {
+            let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            guard trimmed.count >= 4, !anchors.contains(trimmed) else { return }
+            anchors.append(trimmed)
+        }
+
+        if let colon = query.lastIndex(of: ":") {
+            add(String(query[query.index(after: colon)...]))
+        }
+        let nsRange = NSRange(query.startIndex..., in: query)
+        if let regex = try? NSRegularExpression(pattern: #"(?i)vol\.?\s*\d+\s*[-:]\s*(.+)$"#, options: []),
+           let match = regex.firstMatch(in: query, options: [], range: nsRange),
+           match.numberOfRanges > 1,
+           let range = Range(match.range(at: 1), in: query) {
+            add(String(query[range]))
+        }
+        return anchors
+    }
+
+    static func searchQueryVariants(displayTitle: String, romFileNameStem: String) -> [String] {
+        let fromRom = RomTitleNormalizer.searchQuery(fromFileNameStem: romFileNameStem)
+        let fromDisplay = RomTitleNormalizer.searchQuery(fromFileNameStem: displayTitle)
+        var variants: [String] = []
+
+        func append(_ value: String) {
+            let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty, !variants.contains(trimmed) else { return }
+            variants.append(trimmed)
+        }
+
+        append(fromRom)
+        append(fromDisplay)
+        append(searchQuery(displayTitle: displayTitle, romFileNameStem: romFileNameStem))
+        append(RomTitleNormalizer.withArabicNumerals(fromRom))
+        append(RomTitleNormalizer.withArabicNumerals(fromDisplay))
+        for base in [fromRom, fromDisplay] {
+            for alt in RomTitleNormalizer.screenscraperTitleVariants(for: base) {
+                append(alt)
+                append(RomTitleNormalizer.withArabicNumerals(alt))
+            }
+        }
+        return variants
+    }
+
+    private static func searchCandidates(
+        queries: [String],
+        canonicalSearchQuery: String,
+        emulatorSystemId: Int?,
+        coverRegion: String?
+    ) async -> [ScreenScraperGameMatch] {
+        var collected: [ScreenScraperGameMatch] = []
+
+        func hasCompatibleMatch(in batch: [ScreenScraperGameMatch]) -> Bool {
+            batch.contains { pickTitleIsCompatible(searchQuery: canonicalSearchQuery, pickTitle: $0.title) }
+        }
+
+        if let emulatorSystemId {
+            for query in queries {
+                let batch = (try? await ScreenScraperClient.searchGames(
+                    searchQuery: query,
+                    systemId: emulatorSystemId,
+                    coverRegion: coverRegion
+                )) ?? []
+                collected.append(contentsOf: batch)
+                if hasCompatibleMatch(in: batch) { return collected }
+            }
+        }
+
+        if !hasCompatibleMatch(in: collected) {
+            for query in queries {
+                let batch = (try? await ScreenScraperClient.searchGames(
+                    searchQuery: query,
+                    systemId: nil,
+                    coverRegion: coverRegion
+                )) ?? []
+                collected.append(contentsOf: batch)
+                if hasCompatibleMatch(in: batch) { return collected }
+            }
+        }
+
+        return collected
+    }
+
+    private static func metadataResult(from match: ScreenScraperGameMatch, method: ScreenScraperMatchMethod) -> MetadataResult {
         MetadataResult(
             normalizedTitle: match.title,
             coverImageURL: match.coverURL,
             screenScraperGameId: match.gameId,
-            screenScraperSystemId: match.systemId
+            screenScraperSystemId: match.systemId,
+            matchMethod: method
         )
+    }
+
+    private static func compatibleCandidates(searchQuery: String, in candidates: [ScreenScraperGameMatch]) -> [ScreenScraperGameMatch] {
+        candidates.filter { pickTitleIsCompatible(searchQuery: searchQuery, pickTitle: $0.title) }
     }
 
     private static func deduplicatedCandidates(_ candidates: [ScreenScraperGameMatch]) -> [ScreenScraperGameMatch] {
@@ -139,7 +331,8 @@ enum MetadataService {
         searchQuery: String
     ) -> ScreenScraperGameMatch? {
         if candidates.count == 1 {
-            return candidates[0]
+            let only = candidates[0]
+            return pickTitleIsCompatible(searchQuery: searchQuery, pickTitle: only.title) ? only : nil
         }
 
         if let emulatorSystemId {
@@ -157,7 +350,7 @@ enum MetadataService {
             if let best = bestTitleMatch(searchQuery: searchQuery, in: candidates) {
                 return best
             }
-            return candidates[0]
+            return nil
         }
 
         if let best = bestTitleMatch(searchQuery: searchQuery, in: candidates) {
@@ -168,27 +361,7 @@ enum MetadataService {
     }
 
     private static func bestTitleMatch(searchQuery: String, in candidates: [ScreenScraperGameMatch]) -> ScreenScraperGameMatch? {
-        let query = searchQuery.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !query.isEmpty, !candidates.isEmpty else { return nil }
-
-        let queryTokens = Set(
-            query.split(whereSeparator: { !$0.isLetter && !$0.isNumber }).map(String.init).filter { $0.count >= 2 }
-        )
-
-        let scored = candidates.map { candidate -> (ScreenScraperGameMatch, Int) in
-            let title = candidate.title.lowercased()
-            var score = 0
-            if title == query { score += 200 }
-            if title.hasPrefix(query) || query.hasPrefix(title) { score += 120 }
-            if title.contains(query) { score += 80 }
-            if query.contains(title) && !title.isEmpty { score += 60 }
-
-            let titleTokens = Set(
-                title.split(whereSeparator: { !$0.isLetter && !$0.isNumber }).map(String.init).filter { $0.count >= 2 }
-            )
-            score += queryTokens.intersection(titleTokens).count * 15
-            return (candidate, score)
-        }.sorted { $0.1 > $1.1 }
+        let scored = scoreCandidates(searchQuery: searchQuery, in: candidates).sorted { $0.1 > $1.1 }
 
         guard let top = scored.first, top.1 > 0 else { return nil }
         if scored.count == 1 { return top.0 }
@@ -218,37 +391,99 @@ enum MetadataService {
             return pool[0]
         }
 
-        if let best = bestTitleMatchRelaxed(searchQuery: searchQuery, in: pool) {
-            return best
+        if let clearWinner = bestTitleMatchWithMargin(searchQuery: searchQuery, in: pool, minimumMargin: 80) {
+            return clearWinner
         }
 
-        return pool[0]
+        // User opted into auto-select: pick the best-scoring candidate even when scores are close.
+        return bestTitleMatchRelaxed(searchQuery: searchQuery, in: pool)
     }
 
-    /// Like [bestTitleMatch] but always returns the top-scoring candidate (ScreenScraper relevance order breaks ties).
+    /// Like [bestTitleMatch] but always returns the top-scoring candidate.
     private static func bestTitleMatchRelaxed(searchQuery: String, in candidates: [ScreenScraperGameMatch]) -> ScreenScraperGameMatch? {
-        let query = searchQuery.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !query.isEmpty else { return candidates.first }
+        scoreCandidates(searchQuery: searchQuery, in: candidates)
+            .sorted { $0.1 > $1.1 }
+            .first?
+            .0
+    }
 
-        let queryTokens = Set(
-            query.split(whereSeparator: { !$0.isLetter && !$0.isNumber }).map(String.init).filter { $0.count >= 2 }
+    /// Requires a clear score winner before auto-picking (avoids guessing on close matches).
+    private static func bestTitleMatchWithMargin(
+        searchQuery: String,
+        in candidates: [ScreenScraperGameMatch],
+        minimumMargin: Int
+    ) -> ScreenScraperGameMatch? {
+        let scored = scoreCandidates(searchQuery: searchQuery, in: candidates).sorted { $0.1 > $1.1 }
+        guard let top = scored.first, top.1 > 0 else { return nil }
+        if scored.count == 1 { return top.0 }
+        guard let second = scored.dropFirst().first else { return top.0 }
+        if top.1 - second.1 >= minimumMargin {
+            return top.0
+        }
+        return nil
+    }
+
+    private static func scoreCandidates(searchQuery: String, in candidates: [ScreenScraperGameMatch]) -> [(ScreenScraperGameMatch, Int)] {
+        candidates.map { candidate in
+            (candidate, titleMatchScore(query: searchQuery, candidateTitle: candidate.title))
+        }
+    }
+
+    private static func titleMatchScore(query: String, candidateTitle: String) -> Int {
+        let query = query.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
+        let title = candidateTitle.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !query.isEmpty, !title.isEmpty else { return 0 }
+
+        var score = 0
+        if title == query { score += 200 }
+        if title.hasPrefix(query) || query.hasPrefix(title) { score += 120 }
+        if title.contains(query) { score += 80 }
+
+        let queryWordTokens = wordTokens(from: query)
+        let titleWordTokens = wordTokens(from: title)
+
+        if !title.isEmpty, query.contains(title) {
+            if titleWordTokens.isSubset(of: queryWordTokens) {
+                score += 60
+            } else {
+                score += 15
+            }
+        }
+
+        score += queryWordTokens.intersection(titleWordTokens).count * 15
+
+        let queryDistinct = distinguishingTokens(from: query)
+        let titleDistinct = distinguishingTokens(from: title)
+        let matchedDistinct = queryDistinct.intersection(titleDistinct)
+        score += matchedDistinct.count * 40
+
+        let missingDistinct = queryDistinct.subtracting(titleDistinct)
+        score -= missingDistinct.count * 120
+
+        let extraTitleWords = titleWordTokens.subtracting(queryWordTokens)
+        if !extraTitleWords.isEmpty, queryWordTokens.count <= 2 {
+            score -= extraTitleWords.count * 55
+        }
+
+        return score
+    }
+
+    private static func wordTokens(from text: String) -> Set<String> {
+        Set(
+            text.split(whereSeparator: { !$0.isLetter && !$0.isNumber })
+                .map { String($0).lowercased() }
+                .filter { $0.count >= 2 }
         )
+    }
 
-        let scored = candidates.map { candidate -> (ScreenScraperGameMatch, Int) in
-            let title = candidate.title.lowercased()
-            var score = 0
-            if title == query { score += 200 }
-            if title.hasPrefix(query) || query.hasPrefix(title) { score += 120 }
-            if title.contains(query) { score += 80 }
-            if query.contains(title) && !title.isEmpty { score += 60 }
-
-            let titleTokens = Set(
-                title.split(whereSeparator: { !$0.isLetter && !$0.isNumber }).map(String.init).filter { $0.count >= 2 }
-            )
-            score += queryTokens.intersection(titleTokens).count * 15
-            return (candidate, score)
-        }.sorted { $0.1 > $1.1 }
-
-        return scored.first?.0
+    private static func distinguishingTokens(from text: String) -> Set<String> {
+        var tokens = Set<String>()
+        for raw in text.split(whereSeparator: { !$0.isLetter && !$0.isNumber }) {
+            let word = String(raw).lowercased()
+            if let canonical = RomTitleNormalizer.canonicalDistinguishingToken(word) {
+                tokens.insert(canonical)
+            }
+        }
+        return tokens
     }
 }

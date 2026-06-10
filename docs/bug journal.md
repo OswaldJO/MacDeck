@@ -62,11 +62,47 @@ For release notes style summaries, see `source control log.md`. For architecture
 | **Fix** | `GamePathScanner`: category filter **`GD` \| `HG`**; on PS3 folder match for an existing `EBOOT.BIN` path, refresh `LibraryGame.title` from `PARAM.SFO`; include `.isDirectoryKey` in scan enumerator `includingPropertiesForKeys`. User action: assign `dev_hdd0/game` to RPCS3 profile, rebuild, **Scan Paths**. |
 | **Commit** | (pending) |
 
+### BJ-007 — ScreenScraper scrape with `emulatorSystemeid=nil` (wrong/missing covers)
+| | |
+|---|---|
+| **When** | Jun 9, 2026 (**in progress**) |
+| **Symptom** | Most games in scrape logs show `emulatorSystemeid=nil`; hash lookup never runs; fuzzy search picks wrong platform (e.g. Prince of Persia → DS, Obscure → Xbox, FF IX → NES) or `no_match`. |
+| **Cause** | `LibraryGame` rows missing live `emulator` relationship, `emulatorIDString`, and `platformHint` despite ROMs living under configured **Paths** folders. |
+| **Fix** | `EmulatorProfileLookup` + `MetadataSystemResolver` + `RomPathPlatformResolver` (longest path-root match, including walk of `EmulatorProfile.folderPaths`); scrape-start `relinkEmulators`; **Scan Paths** refreshes nil emulator links. User: rebuild → **Scan Paths** → **Clear scraped covers** → re-scrape. |
+| **Commit** | *Not committed yet* |
+
+### BJ-008 — `.hack` PS2 games `no_match` after title-compatibility guard
+| | |
+|---|---|
+| **When** | Jun 9, 2026 (**in progress**) |
+| **Symptom** | All `.hack` / Dot Hack entries `no_match` in scrape log though older builds had covers; inspector showed empty covers after clear + re-scrape. |
+| **Cause** | (1) `pickTitleIsCompatible` required Part/Vol digit in ScreenScraper title (e.g. `1` from “Part 1” missing in `.hack//Infection`). (2) Search stopped at first API hit even when no compatible candidate. (3) Often combined with BJ-007 (`systemeid` nil). |
+| **Fix** | Optional Part/Vol tokens + subtitle anchor match; search tries variants until a compatible hit; `RomTitleNormalizer` `.hack//G.U. Vol.N//Name` variants. |
+| **Commit** | *Not committed yet* |
+
+### BJ-009 — Multi-disc duplicates out of order in library grid
+| | |
+|---|---|
+| **When** | Jun 9, 2026 (**fixed**, in progress) |
+| **Symptom** | Four FF IX discs linked but grid showed Disc 2, 3, 4, then Disc 1; same display title sorted by scan `sortOrder`. |
+| **Cause** | Library sort used title then `sortOrder`; no per-group disc ordering. |
+| **Fix** | `discGroupOrder` on `LibraryGame`; `DiscGroupService.librarySort`; inspector ▲/▼ + **Reset order from filenames**; auto-assign order on link / auto-link scan. |
+| **Commit** | *Not committed yet* |
+
+### BJ-010 — Corrupt cover tiles (“UNUNLLLE” / garbage text on grid)
+| | |
+|---|---|
+| **When** | Jun 9, 2026 (**in progress**) |
+| **Symptom** | Some grid cells showed garbled large text instead of box art after scrape. |
+| **Cause** | Invalid or non-image bytes cached as cover; wheel/PHP URLs saved without validation. |
+| **Fix** | `CoverImageCache` validates `NSImage` before persisting; `.php` URLs stored with `.jpg` extension where needed. Clear bad entries via **Clear scraped covers**. |
+| **Commit** | *Not committed yet* |
+
 ---
 
 ## Streaming — architecture (Sunshine → native Playnite)
 
-### BJ-010 — Sunshine/Moonlight path fragile (ports, PIN, dual instances)
+### BJ-011 — Sunshine/Moonlight path fragile (ports, PIN, dual instances)
 | | |
 |---|---|
 | **When** | Jun 2–3, 2026 (Sunshine era: `f373265`, `cead3f0`, `a0a1ee1`; removed `df1f254`) |
@@ -293,6 +329,8 @@ For release notes style summaries, see `source control log.md`. For architecture
 
 | ID | Issue | Notes |
 |----|--------|--------|
+| BJ-007 | Scrape log still mostly `emulatorSystemeid=nil` on some libraries | Confirm **Scan Paths** after rebuild; verify ROM paths match configured folder roots (symlinks / external drives). |
+| BJ-008 | Residual `no_match` for short/obscure titles | *rain*, *Hannah*, *ChokoNana* may need manual ScreenScraper pick even with platform set. |
 | — | Some OEMs still collapse custom notification layout | `addAction` fallback present; may need in-app stream control panel. |
 | — | iOS native video/audio receiver stub | Android is reference client. |
 | — | `stream/start` returns before capture is running | Phone connects to TCP **28766** immediately; first frames may lag until SCK starts (expected). |

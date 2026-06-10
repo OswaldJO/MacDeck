@@ -10,9 +10,12 @@ struct ScreenScraperLibrarySettingsView: View {
     let onOpenCredentials: () -> Void
     let onScrapeNow: () -> Void
     let onResolveAmbiguous: () -> Void
+    let onClearScrapedCovers: () -> Int
 
     @State private var preferredRegion: String = MetadataCredentials.screenScraperPreferredRegion
     @State private var autoSelectAmbiguous = MetadataCredentials.screenScraperAutoSelectAmbiguousMatches
+    @State private var showClearCoversConfirmation = false
+    @State private var clearCoversStatus: String?
 
     private var isLoggedIn: Bool { MetadataCredentials.hasUserCredentials }
     private var username: String? { MetadataCredentials.screenScraperUserID }
@@ -43,6 +46,22 @@ struct ScreenScraperLibrarySettingsView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .id(credentialsRevision)
+        .confirmationDialog(
+            "Clear all scraped covers?",
+            isPresented: $showClearCoversConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button("Clear scraped covers", role: .destructive) {
+                let count = onClearScrapedCovers()
+                clearCoversStatus = "Cleared cover and ScreenScraper data for \(count) game(s). Run Scrape library to fetch fresh art."
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text(
+                "Removes cover images and ScreenScraper match pins from every library game. " +
+                    "File titles on disk are unchanged. Per-game display names are kept."
+            )
+        }
     }
 
     private var header: some View {
@@ -178,29 +197,43 @@ struct ScreenScraperLibrarySettingsView: View {
 
     private var actionsCard: some View {
         GroupBox {
-            HStack(spacing: 10) {
-                Button {
-                    onOpenCredentials()
-                } label: {
-                    Label(isLoggedIn ? "Change login" : "Sign in", systemImage: "person.badge.key")
-                }
-                .buttonStyle(.bordered)
-
-                if isLoggedIn {
-                    Button("Sign out", role: .destructive) {
-                        MetadataCredentials.screenScraperUserID = nil
-                        MetadataCredentials.screenScraperUserPassword = nil
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(spacing: 10) {
+                    Button {
+                        onOpenCredentials()
+                    } label: {
+                        Label(isLoggedIn ? "Change login" : "Sign in", systemImage: "person.badge.key")
                     }
                     .buttonStyle(.bordered)
+
+                    if isLoggedIn {
+                        Button("Sign out", role: .destructive) {
+                            MetadataCredentials.screenScraperUserID = nil
+                            MetadataCredentials.screenScraperUserPassword = nil
+                        }
+                        .buttonStyle(.bordered)
+                    }
+
+                    Button {
+                        onScrapeNow()
+                    } label: {
+                        Label("Scrape library", systemImage: "sparkle.magnifyingglass")
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(!isConfigured || fetcher.libraryScrapeInProgress || fetcher.libraryScrapeWaitingForBackground)
                 }
 
-                Button {
-                    onScrapeNow()
-                } label: {
-                    Label("Scrape library", systemImage: "sparkle.magnifyingglass")
+                Button("Clear scraped covers…", role: .destructive) {
+                    showClearCoversConfirmation = true
                 }
-                .buttonStyle(.borderedProminent)
-                .disabled(!isConfigured || fetcher.libraryScrapeInProgress || fetcher.libraryScrapeWaitingForBackground)
+                .buttonStyle(.bordered)
+                .disabled(fetcher.libraryScrapeInProgress || fetcher.libraryScrapeWaitingForBackground)
+
+                if let clearCoversStatus {
+                    Text(clearCoversStatus)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
             }
             .padding(.vertical, 4)
         } label: {

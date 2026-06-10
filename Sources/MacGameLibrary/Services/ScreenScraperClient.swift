@@ -59,7 +59,43 @@ enum ScreenScraperClient {
         let games = allGames(in: jsonObject)
         guard !games.isEmpty else { throw ScreenScraperError.noResults }
         let preferredRegion = effectiveCoverRegion(coverRegion)
-        return games.compactMap { parseGameMatch(from: $0, preferredRegion: preferredRegion) }
+        let matches = games.compactMap { game -> ScreenScraperGameMatch? in
+            guard !isNotGame(game) else { return nil }
+            return parseGameMatch(from: game, preferredRegion: preferredRegion)
+        }
+        guard !matches.isEmpty else { throw ScreenScraperError.noResults }
+        return matches
+    }
+
+    /// Checksum / exact-filename lookup via `jeuInfos.php` (highest-accuracy ScreenScraper match path).
+    static func lookupByRom(
+        fingerprint: RomFingerprint,
+        systemId: Int,
+        coverRegion: String? = nil
+    ) async throws -> ScreenScraperGameMatch? {
+        var items: [URLQueryItem] = [
+            URLQueryItem(name: "systemeid", value: String(systemId)),
+            URLQueryItem(name: "romnom", value: fingerprint.romFileName),
+            URLQueryItem(name: "romtaille", value: String(fingerprint.fileSize)),
+            URLQueryItem(name: "romtype", value: fingerprint.romType),
+        ]
+        if let md5 = fingerprint.md5Hash {
+            items.append(URLQueryItem(name: "md5", value: md5))
+        }
+        if let crc32 = fingerprint.crc32Hash {
+            items.append(URLQueryItem(name: "crc", value: crc32))
+        }
+        if let sha1 = fingerprint.sha1Hash {
+            items.append(URLQueryItem(name: "sha1", value: sha1))
+        }
+
+        let jsonObject = try await requestJSON(baseURL: gameInfoURL, extraQueryItems: items)
+        let preferredRegion = effectiveCoverRegion(coverRegion)
+        for game in allGames(in: jsonObject) {
+            guard !isNotGame(game), let match = parseGameMatch(from: game, preferredRegion: preferredRegion) else { continue }
+            return match
+        }
+        return nil
     }
 
     static func fetchGame(
@@ -152,11 +188,28 @@ enum ScreenScraperClient {
 
     // MARK: - Parsing
 
+    private static func isNotGame(_ game: [String: Any]) -> Bool {
+        if let flag = game["notgame"] as? Bool, flag { return true }
+        if let flag = game["notgame"] as? String, flag.lowercased() == "true" { return true }
+        let candidates = [
+            game["nom"] as? String,
+            extractedTitle(from: game, preferredRegion: nil),
+        ]
+        for raw in candidates {
+            guard let raw else { continue }
+            let upper = raw.uppercased()
+            if upper.contains("ZZZ(NOTGAME)") || upper.contains("ZZZNOTGAME") {
+                return true
+            }
+        }
+        return false
+    }
+
     private static func parseGameMatch(from game: [String: Any], preferredRegion: String?) -> ScreenScraperGameMatch? {
         let gameId = extractGameId(from: game)
         let systemId = extractSystemId(from: game)
         guard let gameId, let systemId else { return nil }
-        let title = extractedTitle(from: game, preferredRegion: preferredRegion) ?? "Unknown"
+        let title = decodeHTMLEntities(extractedTitle(from: game, preferredRegion: preferredRegion) ?? "Unknown")
         let cover = extractedCoverURL(from: game, preferredRegion: preferredRegion)
         return ScreenScraperGameMatch(
             gameId: gameId,
@@ -311,6 +364,17 @@ enum ScreenScraperClient {
             return index
         }
         return regionOrder.count
+    }
+
+    private static func decodeHTMLEntities(_ text: String) -> String {
+        text
+            .replacingOccurrences(of: "&amp;", with: "&")
+            .replacingOccurrences(of: "&apos;", with: "'")
+            .replacingOccurrences(of: "&#39;", with: "'")
+            .replacingOccurrences(of: "&quot;", with: "\"")
+            .replacingOccurrences(of: "&lt;", with: "<")
+            .replacingOccurrences(of: "&gt;", with: ">")
+            .replacingOccurrences(of: "&nbsp;", with: " ")
     }
 
     private static func valueAsURL(_ value: Any?) -> URL? {

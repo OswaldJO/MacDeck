@@ -7,15 +7,17 @@ public enum GamePathScanner {
         public var added: Int
         public var reassigned: Int
         public var linkedCovers: Int
+        public var autoLinkedDiscSets: Int
 
-        public init(added: Int, reassigned: Int, linkedCovers: Int) {
+        public init(added: Int, reassigned: Int, linkedCovers: Int, autoLinkedDiscSets: Int = 0) {
             self.added = added
             self.reassigned = reassigned
             self.linkedCovers = linkedCovers
+            self.autoLinkedDiscSets = autoLinkedDiscSets
         }
 
         public var hasAnyChanges: Bool {
-            added > 0 || reassigned > 0 || linkedCovers > 0
+            added > 0 || reassigned > 0 || linkedCovers > 0 || autoLinkedDiscSets > 0
         }
     }
 
@@ -409,7 +411,10 @@ public enum GamePathScanner {
                     let title = ps3DisplayTitle(for: item)
                     if existingPaths.contains(comparisonPath) {
                         if let existing = existingByPath[comparisonPath] {
-                            if existing.emulatorUUID != emulator.id {
+                            if existing.emulator == nil
+                                || existing.emulatorUUID == nil
+                                || existing.emulatorUUID != emulator.id
+                                || existing.platformHint == nil {
                                 existing.emulator = emulator
                                 existing.emulatorIDString = emulator.id.uuidString
                                 existing.platformHint = EmulatorPlatformResolver.resolve(emulator: emulator)?.primaryPlatformHint
@@ -480,12 +485,19 @@ public enum GamePathScanner {
 
                 let standardized = itemPath
                 guard !existingPaths.contains(comparisonItemPath) else {
-                    if let existing = existingByPath[comparisonItemPath], existing.emulatorUUID != emulator.id {
-                        existing.emulator = emulator
-                        existing.emulatorIDString = emulator.id.uuidString
-                        existing.platformHint = EmulatorPlatformResolver.resolve(emulator: emulator)?.primaryPlatformHint
-                        reassignedExisting += 1
-                        reassignedTotal += 1
+                    if let existing = existingByPath[comparisonItemPath] {
+                        if existing.emulator == nil
+                            || existing.emulatorUUID == nil
+                            || existing.emulatorUUID != emulator.id
+                            || existing.platformHint == nil {
+                            existing.emulator = emulator
+                            existing.emulatorIDString = emulator.id.uuidString
+                            existing.platformHint = EmulatorPlatformResolver.resolve(emulator: emulator)?.primaryPlatformHint
+                            reassignedExisting += 1
+                            reassignedTotal += 1
+                        } else {
+                            skippedAsExisting += 1
+                        }
                     } else {
                         skippedAsExisting += 1
                     }
@@ -533,10 +545,19 @@ public enum GamePathScanner {
             linkedCovers += max(0, game.coverImageOptions.count - before)
         }
 
-        if added > 0 || reassignedTotal > 0 || linkedCovers > 0 {
+        let autoLinkedDiscSets = DiscGroupService.autoLinkAllEnabledEmulators(context: modelContext)
+
+        if added > 0 || reassignedTotal > 0 || linkedCovers > 0 || autoLinkedDiscSets > 0 {
             try modelContext.save()
         }
-        DebugLog.log("Scan result: added=\(added) reassigned=\(reassignedTotal) linkedCovers=\(linkedCovers)")
-        return ScanSummary(added: added, reassigned: reassignedTotal, linkedCovers: linkedCovers)
+        DebugLog.log(
+            "Scan result: added=\(added) reassigned=\(reassignedTotal) linkedCovers=\(linkedCovers) autoLinkedDiscSets=\(autoLinkedDiscSets)"
+        )
+        return ScanSummary(
+            added: added,
+            reassigned: reassignedTotal,
+            linkedCovers: linkedCovers,
+            autoLinkedDiscSets: autoLinkedDiscSets
+        )
     }
 }
