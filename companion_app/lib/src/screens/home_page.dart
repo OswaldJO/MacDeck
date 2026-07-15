@@ -590,7 +590,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Playnite Companion')),
+      appBar: AppBar(title: const Text('GBear')),
       body: ValueListenableBuilder<int>(
         valueListenable: _tabIndex,
         builder: (context, index, _) {

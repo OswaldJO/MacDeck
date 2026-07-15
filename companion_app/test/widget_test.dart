@@ -12,6 +12,6 @@ import 'package:companion_app/main.dart';
 void main() {
   testWidgets('Companion app boots', (WidgetTester tester) async {
     await tester.pumpWidget(const CompanionApp());
-    expect(find.text('Playnite Companion'), findsOneWidget);
+    expect(find.text('GBear'), findsOneWidget);
   });
 }

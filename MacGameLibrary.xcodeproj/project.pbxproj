@@ -16,7 +16,7 @@
 		0185917D8DBCFCD687823ED0 /* Playnite Mac */ = {isa = PBXFileReference; lastKnownFileType = folder; name = "Playnite Mac"; path = .; sourceTree = SOURCE_ROOT; };
 		3ADA88B61EF842D279B6BBBB /* MacGameLibraryApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacGameLibraryApp.swift; sourceTree = "<group>"; };
 		CBBBA7CF96D4DC4AE6070A14 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
-		F32A48C480B07A01B18FACEC /* MacGameLibraryApp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = MacGameLibraryApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		F32A48C480B07A01B18FACEC /* GBear.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = GBear.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -44,7 +44,7 @@
 		821C1DE27E84D1B784DD82C1 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				F32A48C480B07A01B18FACEC /* MacGameLibraryApp.app */,
+				F32A48C480B07A01B18FACEC /* GBear.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -93,7 +93,7 @@
 				56D82AD326518A1F77B9C0B7 /* MacGameLibrary */,
 			);
 			productName = MacGameLibraryApp;
-			productReference = F32A48C480B07A01B18FACEC /* MacGameLibraryApp.app */;
+			productReference = F32A48C480B07A01B18FACEC /* GBear.app */;
 			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
@@ -104,8 +104,6 @@
 			attributes = {
 				BuildIndependentTargetsInParallel = YES;
 				LastUpgradeCheck = 1430;
-				TargetAttributes = {
-				};
 			};
 			buildConfigurationList = 6B25221E1F37E397151AEC1C /* Build configuration list for PBXProject "MacGameLibrary" */;
 			developmentRegion = en;
@@ -215,20 +213,21 @@
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
+				"DEVELOPMENT_TEAM[sdk=macosx*]" = AFYV687T82;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_CFBundleDisplayName = "Mac Game Library";
+				INFOPLIST_KEY_CFBundleDisplayName = GBear;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.games";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
-				INFOPLIST_KEY_NSScreenCaptureUsageDescription = "Mac Game Library streams your desktop to your phone using an embedded streaming host.";
+				INFOPLIST_KEY_NSScreenCaptureUsageDescription = "GBear streams your desktop to your phone using an embedded streaming host.";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.local.MacGameLibraryApp;
+				PRODUCT_BUNDLE_IDENTIFIER = com.funnybearapps.gbear;
 				PRODUCT_MODULE_NAME = MacGameLibraryApp;
-				PRODUCT_NAME = MacGameLibrary;
+				PRODUCT_NAME = GBear;
 				SDKROOT = macosx;
 			};
 			name = Debug;
@@ -240,20 +239,21 @@
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
+				"DEVELOPMENT_TEAM[sdk=macosx*]" = AFYV687T82;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_CFBundleDisplayName = "Mac Game Library";
+				INFOPLIST_KEY_CFBundleDisplayName = GBear;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.games";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
-				INFOPLIST_KEY_NSScreenCaptureUsageDescription = "Mac Game Library streams your desktop to your phone using an embedded streaming host.";
+				INFOPLIST_KEY_NSScreenCaptureUsageDescription = "GBear streams your desktop to your phone using an embedded streaming host.";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.local.MacGameLibraryApp;
+				PRODUCT_BUNDLE_IDENTIFIER = com.funnybearapps.gbear;
 				PRODUCT_MODULE_NAME = MacGameLibraryApp;
-				PRODUCT_NAME = MacGameLibrary;
+				PRODUCT_NAME = GBear;
 				SDKROOT = macosx;
 			};
 			name = Release;

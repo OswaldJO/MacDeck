@@ -5,7 +5,7 @@ import Foundation
 /// macOS Accessibility trust for synthetic pointer events (phone touch → Mac cursor).
 enum AccessibilityPermission {
     /// Human-readable name shown in System Settings (matches `CFBundleDisplayName`).
-    static let settingsAppName = "Mac Game Library"
+    static let settingsAppName = "GBear"
 
     static var isGranted: Bool { AXIsProcessTrusted() }
 

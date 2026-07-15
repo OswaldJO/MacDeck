@@ -6,7 +6,7 @@ import Foundation
 import ScreenCaptureKit
 #endif
 
-/// In-process screen capture permission (Mac Game Library only).
+/// In-process screen capture permission (GBear only).
 @MainActor
 final class PlayniteScreenCapturePipeline {
     private(set) var isReady = false
@@ -37,7 +37,7 @@ final class PlayniteScreenCapturePipeline {
             if preflight {
                 lastError = "\(error.localizedDescription) Restart the streaming host."
             } else {
-                lastError = "Screen Recording is not enabled for Mac Game Library."
+                lastError = "Screen Recording is not enabled for GBear."
             }
             return
         }
@@ -46,7 +46,7 @@ final class PlayniteScreenCapturePipeline {
         if hasSystemAuthorization {
             isReady = true
         } else {
-            lastError = "Screen Recording is not enabled for Mac Game Library."
+            lastError = "Screen Recording is not enabled for GBear."
         }
         #endif
     }

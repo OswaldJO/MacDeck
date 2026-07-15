@@ -77,7 +77,7 @@ struct StreamingView: View {
                     Text("Stream to your phone")
                         .font(.headline)
                     Text(
-                        "On the companion app: Discover your Mac, then tap Pair. Approve or deny the request here — no PINs. Grant Screen Recording for Mac Game Library once."
+                        "On the companion app: Discover your Mac, then tap Pair. Approve or deny the request here — no PINs. Grant Screen Recording for GBear once."
                     )
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
@@ -201,7 +201,7 @@ struct StreamingView: View {
     @ViewBuilder
     private var screenRecordingPermissionBlock: some View {
         if hostManager.isCaptureReady {
-            Label("Screen Recording enabled for Mac Game Library", systemImage: "checkmark.circle.fill")
+            Label("Screen Recording enabled for GBear", systemImage: "checkmark.circle.fill")
                 .font(.caption)
                 .foregroundStyle(.green)
         } else if case .running = hostManager.state {

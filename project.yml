@@ -30,12 +30,12 @@ targets:
         product: MacGameLibrary
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.local.MacGameLibraryApp
-        PRODUCT_NAME: MacGameLibrary
+        PRODUCT_BUNDLE_IDENTIFIER: com.funnybearapps.gbear
+        PRODUCT_NAME: GBear
         # Must differ from the SPM module "MacGameLibrary" or Xcode emits duplicate swiftmodules.
         PRODUCT_MODULE_NAME: MacGameLibraryApp
         GENERATE_INFOPLIST_FILE: YES
-        INFOPLIST_KEY_CFBundleDisplayName: Mac Game Library
+        INFOPLIST_KEY_CFBundleDisplayName: GBear
         INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.games
         INFOPLIST_KEY_NSHumanReadableCopyright: ""
         MARKETING_VERSION: "1.0"

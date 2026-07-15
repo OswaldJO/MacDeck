@@ -42,7 +42,7 @@ class _CompanionAppState extends State<CompanionApp> {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Playnite Companion',
+      title: 'GBear',
       debugShowCheckedModeBanner: false,
       theme: CompanionTheme.dark(primaryText: _primaryText),
       themeMode: ThemeMode.dark,

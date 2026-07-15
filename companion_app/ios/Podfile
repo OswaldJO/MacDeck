@@ -1,7 +1,13 @@
-platform :ios, '12.0'
+platform :ios, '13.0'
 
 # CocoaPods analytics sends network stats synchronously affecting flutter build latency.
 ENV['COCOAPODS_DISABLE_STATS'] = 'true'
+
+# GBear companion only uses file_picker for JSON controller profiles (documents).
+# Keep media/audio pickers off so DKImagePickerController is not linked — that SDK
+# triggers ITMS-90683 (NSPhotoLibraryUsageDescription) even when unused.
+Pod::PICKER_MEDIA = false
+Pod::PICKER_AUDIO = false
 
 project 'Runner', {
   'Debug' => :debug,

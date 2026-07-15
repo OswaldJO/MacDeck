@@ -8,7 +8,7 @@ void main() {
   final privateKey = keyPair.privateKey as RSAPrivateKey;
   final publicKey = keyPair.publicKey as RSAPublicKey;
   final csr = X509Utils.generateRsaCsrPem(
-    {'CN': 'PlayniteCompanion'},
+    {'CN': 'GBear'},
     privateKey,
     publicKey,
   );
