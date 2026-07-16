@@ -40,7 +40,7 @@ SCREENSCRAPER_DEV_ID=... SCREENSCRAPER_DEV_PASSWORD=... \
   swift Scripts/obfuscate-screenscraper-credential.swift
 ```
 
-Paste the printed arrays into `Sources/MacGameLibrary/Services/ScreenScraperBuiltInCredentials.swift`, then rebuild.
+Paste the printed arrays into `Sources/GBearKit/Services/ScreenScraperBuiltInCredentials.swift`, then rebuild.
 
 This is **obfuscation**, not encryption — it keeps secrets out of git and casual string search. Optional user `ssid` / `sspassword` stay in UserDefaults only.
 

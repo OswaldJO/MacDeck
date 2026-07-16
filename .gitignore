@@ -1,21 +1,20 @@
 .build/
 .swiftpm/
 DerivedData/
-*.xcodeproj/xcuserdata/
-*.xcworkspace/xcuserdata/
+build/DerivedData/
+**/xcuserdata/
+**/*.xcuserstate
+.DS_Store
 
 # Local clones of streaming upstreams (see Vendor/streaming-repos/README.md)
 Vendor/streaming-repos/Sunshine/
 Vendor/streaming-repos/Apollo/
 Vendor/streaming-repos/moonlight-ios/
 Vendor/streaming-repos/moonlight-android/
-.DS_Store
-build/DerivedData/
-.build/
 
 # Staged streaming host (see Scripts/stage-sunshine-for-mac-app.sh)
-MacGameLibraryApp/Host/PlayniteSunshine
-MacGameLibraryApp/Resources/Sunshine/sunshine
+GBear/Host/PlayniteSunshine
+GBear/Resources/Sunshine/sunshine
 
 # Generated Moonlight companion iOS pod artifacts
 companion_app/ios/MoonlightStream/Sources/

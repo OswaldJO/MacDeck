@@ -14,11 +14,11 @@ pkill -f "MacOS/PlayniteSunshine" 2>/dev/null || true
 pkill -f "/sunshine" 2>/dev/null || true
 sleep 0.5
 
-APP_SUPPORT="${HOME}/Library/Application Support/MacGameLibrary"
+APP_SUPPORT="${HOME}/Library/Application Support/GBear"
 if [[ -d "${APP_SUPPORT}" ]]; then
   rm -rf "${APP_SUPPORT}/sunshine" "${APP_SUPPORT}/Sunshine"
   rm -rf "${APP_SUPPORT}/playnite-stream"
-  echo "Cleared MacGameLibrary streaming data under Application Support"
+  echo "Cleared GBear streaming data under Application Support"
 fi
 
 if [[ -d "${HOME}/.config/sunshine" ]]; then
@@ -28,7 +28,7 @@ fi
 
 if [[ "${DERIVED}" -eq 1 ]]; then
   removed=0
-  for dir in "${HOME}/Library/Developer/Xcode/DerivedData"/MacGameLibrary-*; do
+  for dir in "${HOME}/Library/Developer/Xcode/DerivedData"/GBear-*; do
     if [[ -d "${dir}" ]]; then
       rm -rf "${dir}"
       echo "Removed ${dir}"
@@ -36,7 +36,7 @@ if [[ "${DERIVED}" -eq 1 ]]; then
     fi
   done
   if [[ "${removed}" -eq 0 ]]; then
-    echo "No DerivedData folder matching MacGameLibrary-*"
+    echo "No DerivedData folder matching GBear-*"
   fi
 fi
 
@@ -44,8 +44,8 @@ cat <<'EOF'
 
 Next steps:
   1. In Xcode: Product → Clean Build Folder (Shift+Cmd+K)
-  2. Product → Run (Cmd+R) on MacGameLibraryApp
-  3. System Settings → Screen Recording → enable Mac Game Library
+  2. Product → Run (Cmd+R) on GBear
+  3. System Settings → Screen Recording → enable GBear
   4. Mac → Streaming → Restart streaming host
   5. Companion → Settings → Mac LAN IP → pair again
 

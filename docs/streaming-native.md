@@ -1,6 +1,6 @@
 # Playnite native streaming
 
-Mac Game Library implements its own LAN streaming stack. **Sunshine and Moonlight are not used.**
+GBear implements its own LAN streaming stack. **Sunshine and Moonlight are not used.**
 
 ## Mac host (in-process)
 
@@ -23,7 +23,7 @@ Mac Game Library implements its own LAN streaming stack. **Sunshine and Moonligh
 
 Paired devices persist under:
 
-`~/Library/Application Support/MacGameLibrary/playnite-stream/paired-devices.json`
+`~/Library/Application Support/GBear/playnite-stream/paired-devices.json`
 
 ### Pairing flow (no PIN)
 
@@ -44,7 +44,7 @@ Paired devices persist under:
 ### Touch input (v1)
 
 - Phone: touch on video surface → UDP port **28768** (`PNI1` packets, normalized coordinates).
-- Mac: `CGEvent` mouse move / click (requires **Accessibility** for Mac Game Library).
+- Mac: `CGEvent` mouse move / click (requires **Accessibility** for GBear).
 
 | Port | Protocol |
 |------|----------|

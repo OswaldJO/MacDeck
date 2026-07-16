@@ -7,6 +7,7 @@ import Foundation
 /// Or (no secrets in shell history):
 ///   SCREENSCRAPER_DEV_ID=... SCREENSCRAPER_DEV_PASSWORD=... swift Scripts/obfuscate-screenscraper-credential.swift
 
+# Seed must stay stable so ScreenScraperBuiltInCredentials keep decoding.
 private let seed = Array("com.local.MacGameLibraryApp.ScreenScraper".utf8)
 
 func encode(_ plaintext: String) -> [UInt8] {
@@ -33,7 +34,7 @@ guard let devID, let devPassword, !devID.isEmpty, !devPassword.isEmpty else {
 
         Or set SCREENSCRAPER_DEV_ID and SCREENSCRAPER_DEV_PASSWORD in the environment.
 
-        Paste the printed arrays into Sources/MacGameLibrary/Services/ScreenScraperBuiltInCredentials.swift
+        Paste the printed arrays into Sources/GBearKit/Services/ScreenScraperBuiltInCredentials.swift
 
         """,
         stderr

@@ -1,6 +1,6 @@
 # Streaming setup
 
-Playnite Mac uses a **native** LAN streaming host built into Mac Game Library.
+Playnite Mac uses a **native** LAN streaming host built into GBear.
 
 - **No Sunshine / Moonlight / Homebrew / vendor clones**
 - Control plane: HTTP port **28765**, protocol `playnite-stream/1`
@@ -13,7 +13,7 @@ Playnite Mac uses a **native** LAN streaming host built into Mac Game Library.
 
 ## macOS permission
 
-Grant **Screen Recording** via the system prompt: Mac → Streaming → **Allow Screen Recording** (or start a stream from the phone once). macOS adds **Mac Game Library** to the list automatically — you should not need the manual **+** button.
+Grant **Screen Recording** via the system prompt: Mac → Streaming → **Allow Screen Recording** (or start a stream from the phone once). macOS adds **GBear** to the list automatically — you should not need the manual **+** button.
 
 Routine checks use `CGPreflightScreenCaptureAccess()` only (no dialog). The consent dialog appears only when you tap **Allow** or start video without permission yet.
 

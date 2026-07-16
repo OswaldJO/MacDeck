@@ -83,7 +83,7 @@ android {
     defaultConfig {
         minSdk = 21
         buildConfigField("boolean", "ROOT_BUILD", "false")
-        buildConfigField("String", "APPLICATION_ID", "\"com.funnybearapps.macdeckcompanion\"")
+        buildConfigField("String", "APPLICATION_ID", "\"com.funnybearapps.gbearcompanion\"")
         externalNativeBuild {
             ndkBuild {
                 arguments(

@@ -2,17 +2,17 @@
 import PackageDescription
 
 let package = Package(
-    name: "MacGameLibrary",
+    name: "GBear",
     platforms: [
         .macOS(.v14)
     ],
     products: [
-        .library(name: "MacGameLibrary", targets: ["MacGameLibrary"])
+        .library(name: "GBearKit", targets: ["GBearKit"])
     ],
     targets: [
         .target(
-            name: "MacGameLibrary",
-            path: "Sources/MacGameLibrary",
+            name: "GBearKit",
+            path: "Sources/GBearKit",
             resources: [
                 .copy("Resources/BuiltinEmulatorCatalog.json")
             ],

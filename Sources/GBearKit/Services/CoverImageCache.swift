@@ -9,7 +9,7 @@ enum CoverImageCache {
 
     static func cacheDirectory() -> URL {
         let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first?
-            .appending(path: "MacGameLibrary", directoryHint: .isDirectory)
+            .appending(path: "GBear", directoryHint: .isDirectory)
             .appending(path: folderName, directoryHint: .isDirectory)
         let directory = base ?? URL(fileURLWithPath: NSTemporaryDirectory()).appending(path: folderName)
         try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)

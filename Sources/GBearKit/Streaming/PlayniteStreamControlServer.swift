@@ -32,7 +32,7 @@ actor PlayniteStreamControlServer {
     init() {
         let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
         storeURL = base
-            .appending(path: "MacGameLibrary", directoryHint: .isDirectory)
+            .appending(path: "GBear", directoryHint: .isDirectory)
             .appending(path: "playnite-stream", directoryHint: .isDirectory)
             .appending(path: "paired-devices.json")
         pairedDevices = (try? Self.loadPaired(from: storeURL)) ?? []

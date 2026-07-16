@@ -17,6 +17,6 @@ public enum DebugLog {
 
     public static func log(_ message: @autoclosure () -> String) {
         guard isEnabled else { return }
-        NSLog("[MacGameLibrary] \(message())")
+        NSLog("[GBear] \(message())")
     }
 }

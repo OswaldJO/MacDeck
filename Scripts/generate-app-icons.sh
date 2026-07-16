@@ -14,7 +14,7 @@ resize() {
   sips -z "$1" "$1" "$MASTER" --out "$2" >/dev/null
 }
 
-MAC_ICON="$ROOT/MacGameLibraryApp/Assets.xcassets/AppIcon.appiconset"
+MAC_ICON="$ROOT/GBear/Assets.xcassets/AppIcon.appiconset"
 mkdir -p "$MAC_ICON"
 resize 16 "$MAC_ICON/icon_16x16.png"
 resize 32 "$MAC_ICON/icon_16x16@2x.png"

@@ -1,6 +1,6 @@
 # Companion app (Flutter)
 
-iOS and Android companion for pairing with Mac Game Library’s native stream host.
+iOS and Android companion for pairing with GBear’s native stream host.
 
 ## Responsibilities
 

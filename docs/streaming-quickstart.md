@@ -2,8 +2,8 @@
 
 ## Mac
 
-1. Run **MacGameLibraryApp** in Xcode (⌘R).
-2. **Streaming** → grant Screen Recording for **Mac Game Library** → **Restart streaming host**.
+1. Run **GBear** in Xcode (⌘R).
+2. **Streaming** → grant Screen Recording for **GBear** → **Restart streaming host**.
 3. Note **LAN IP** and keep this tab open for pairing approvals.
 
 ## Companion

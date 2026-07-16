@@ -90,7 +90,7 @@ enum PlayniteStreamSessionLog {
 
     private static func logFileURL() -> URL? {
         let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first?
-            .appending(path: "MacGameLibrary", directoryHint: .isDirectory)
+            .appending(path: "GBear", directoryHint: .isDirectory)
             .appending(path: "playnite-stream", directoryHint: .isDirectory)
         guard let base else { return nil }
         try? FileManager.default.createDirectory(at: base, withIntermediateDirectories: true)

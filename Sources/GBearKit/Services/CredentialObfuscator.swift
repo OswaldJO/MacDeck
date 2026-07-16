@@ -2,6 +2,7 @@ import Foundation
 
 /// Reversible obfuscation for embedded API secrets (not encryption — keeps plaintext out of source/git).
 enum CredentialObfuscator {
+    // Seed must stay stable so ScreenScraperBuiltInCredentials keep decoding.
     private static let seed = Array("com.local.MacGameLibraryApp.ScreenScraper".utf8)
 
     static func decode(_ obfuscated: [UInt8]) -> String? {

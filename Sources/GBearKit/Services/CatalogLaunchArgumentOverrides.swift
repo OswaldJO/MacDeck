@@ -2,9 +2,11 @@ import Foundation
 
 /// Persists user-edited launch argument templates for built-in catalog profiles (bundle JSON is read-only).
 public enum CatalogLaunchArgumentOverrides {
-    private static let userDefaultsKey = "MacGameLibrary.CatalogLaunchArgumentOverrides.v1"
+    private static let userDefaultsKey = "GBear.CatalogLaunchArgumentOverrides.v1"
+    private static let legacyUserDefaultsKey = "MacGameLibrary.CatalogLaunchArgumentOverrides.v1"
 
     private static func loadMap() -> [Int: String] {
+        migrateLegacyUserDefaultsIfNeeded()
         guard let data = UserDefaults.standard.data(forKey: userDefaultsKey),
               let raw = try? JSONDecoder().decode([String: String].self, from: data) else {
             return [:]
@@ -20,6 +22,14 @@ public enum CatalogLaunchArgumentOverrides {
         if let data = try? JSONEncoder().encode(raw) {
             UserDefaults.standard.set(data, forKey: userDefaultsKey)
         }
+    }
+
+    private static func migrateLegacyUserDefaultsIfNeeded() {
+        let defaults = UserDefaults.standard
+        guard defaults.data(forKey: userDefaultsKey) == nil,
+              let legacy = defaults.data(forKey: legacyUserDefaultsKey) else { return }
+        defaults.set(legacy, forKey: userDefaultsKey)
+        defaults.removeObject(forKey: legacyUserDefaultsKey)
     }
 
     /// Effective template: user override when present, otherwise the catalog default.

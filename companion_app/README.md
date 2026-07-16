@@ -48,7 +48,7 @@ Prerequisites:
 
 1. **Apple Developer Program** membership (team `AFYV687T82` is already set in Xcode).
 2. **Free disk space** — keep at least ~5 GB free; Xcode archives fail when the disk is full.
-3. **Bundle ID** `com.funnybearapps.macdeckcompanion` registered in [Certificates, Identifiers & Profiles](https://developer.apple.com/account/resources/identifiers/list) and an app record in App Store Connect with the same ID.
+3. **Bundle ID** `com.funnybearapps.gbearcompanion` registered in [Certificates, Identifiers & Profiles](https://developer.apple.com/account/resources/identifiers/list) and an app record in App Store Connect with the same ID.
 
 From the repo:
 

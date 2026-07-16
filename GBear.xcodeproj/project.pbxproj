@@ -7,213 +7,174 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		06BB2CA6AD7B85797075F8E7 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = CBBBA7CF96D4DC4AE6070A14 /* Assets.xcassets */; };
-		B823262E21D64FB91F3B2A77 /* MacGameLibraryApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3ADA88B61EF842D279B6BBBB /* MacGameLibraryApp.swift */; };
-		E8AE9F32BAC4BD6BB78D8C94 /* MacGameLibrary in Frameworks */ = {isa = PBXBuildFile; productRef = 56D82AD326518A1F77B9C0B7 /* MacGameLibrary */; };
+		883B2092911CFC882674D1AC /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 10C3AA2557B37272C7FDB562 /* Assets.xcassets */; };
+		CB96B5BDDBFD898724627789 /* GBear.swift in Sources */ = {isa = PBXBuildFile; fileRef = B089173BCBB61DA76080BAF5 /* GBear.swift */; };
+		FB96139D30E504D7AB4D6C97 /* GBearKit in Frameworks */ = {isa = PBXBuildFile; productRef = 7E0D5EAC7A5FE8C51012F5BB /* GBearKit */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
-		0185917D8DBCFCD687823ED0 /* Playnite Mac */ = {isa = PBXFileReference; lastKnownFileType = folder; name = "Playnite Mac"; path = .; sourceTree = SOURCE_ROOT; };
-		3ADA88B61EF842D279B6BBBB /* MacGameLibraryApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacGameLibraryApp.swift; sourceTree = "<group>"; };
-		CBBBA7CF96D4DC4AE6070A14 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
-		F32A48C480B07A01B18FACEC /* GBear.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = GBear.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		10C3AA2557B37272C7FDB562 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		32C85FB0A33055460574C629 /* PlayniteSunshine */ = {isa = PBXFileReference; path = PlayniteSunshine; sourceTree = "<group>"; };
+		450C297B863D8802D1A78F26 /* GBear */ = {isa = PBXFileReference; lastKnownFileType = folder; name = GBear; path = .; sourceTree = SOURCE_ROOT; };
+		B089173BCBB61DA76080BAF5 /* GBear.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GBear.swift; sourceTree = "<group>"; };
+		D470DD124A24174A6D6EC1D2 /* GBear.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = GBear.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
-		E3E7193EC43DF3712CC77C2B /* Frameworks */ = {
+		F06D16D4E2D0290C45E25E3D /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				E8AE9F32BAC4BD6BB78D8C94 /* MacGameLibrary in Frameworks */,
+				FB96139D30E504D7AB4D6C97 /* GBearKit in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
-		2A0213C4B2E92078BB02EE1A /* MacGameLibraryApp */ = {
+		44D9817E29570973C8AF21D6 /* Host */ = {
 			isa = PBXGroup;
 			children = (
-				CBBBA7CF96D4DC4AE6070A14 /* Assets.xcassets */,
-				3ADA88B61EF842D279B6BBBB /* MacGameLibraryApp.swift */,
-				8E9E70AACAE4B7967D8956B5 /* Resources */,
+				32C85FB0A33055460574C629 /* PlayniteSunshine */,
 			);
-			path = MacGameLibraryApp;
+			path = Host;
 			sourceTree = "<group>";
 		};
-		821C1DE27E84D1B784DD82C1 /* Products */ = {
+		768F767BBCE03C7E3D1FEBBB = {
 			isa = PBXGroup;
 			children = (
-				F32A48C480B07A01B18FACEC /* GBear.app */,
+				CB7193F7A88A788FE130D107 /* GBear */,
+				AA52F546FCF946A335492495 /* Packages */,
+				9D8B46D3AA863D85B8906597 /* Products */,
 			);
-			name = Products;
 			sourceTree = "<group>";
 		};
-		8E9E70AACAE4B7967D8956B5 /* Resources */ = {
+		9767C1F5A2919049DDE67337 /* Resources */ = {
 			isa = PBXGroup;
 			children = (
 			);
 			path = Resources;
 			sourceTree = "<group>";
 		};
-		B7492C1ECDE0347B916947A6 /* Packages */ = {
+		9D8B46D3AA863D85B8906597 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				0185917D8DBCFCD687823ED0 /* Playnite Mac */,
+				D470DD124A24174A6D6EC1D2 /* GBear.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		AA52F546FCF946A335492495 /* Packages */ = {
+			isa = PBXGroup;
+			children = (
+				450C297B863D8802D1A78F26 /* GBear */,
 			);
 			name = Packages;
 			sourceTree = "<group>";
 		};
-		F7BE821B00C91B170FB055C5 = {
+		CB7193F7A88A788FE130D107 /* GBear */ = {
 			isa = PBXGroup;
 			children = (
-				2A0213C4B2E92078BB02EE1A /* MacGameLibraryApp */,
-				B7492C1ECDE0347B916947A6 /* Packages */,
-				821C1DE27E84D1B784DD82C1 /* Products */,
+				10C3AA2557B37272C7FDB562 /* Assets.xcassets */,
+				B089173BCBB61DA76080BAF5 /* GBear.swift */,
+				44D9817E29570973C8AF21D6 /* Host */,
+				9767C1F5A2919049DDE67337 /* Resources */,
 			);
+			path = GBear;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		83DA71753B93711BABFA93FC /* MacGameLibraryApp */ = {
+		3778E8F60D47B41202C52FF6 /* GBear */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = 0D2F94E1395E1B94C96471B7 /* Build configuration list for PBXNativeTarget "MacGameLibraryApp" */;
+			buildConfigurationList = 0F222832F486FCAA13C8DA19 /* Build configuration list for PBXNativeTarget "GBear" */;
 			buildPhases = (
-				5BFACBB3AF83450171037AD0 /* Sources */,
-				0DB39CA9040F4281DCFFF6A9 /* Resources */,
-				E3E7193EC43DF3712CC77C2B /* Frameworks */,
+				3B420F69ED51DBACC34DF980 /* Sources */,
+				061ABD6D657638D5B1D93FEF /* Resources */,
+				F06D16D4E2D0290C45E25E3D /* Frameworks */,
 			);
 			buildRules = (
 			);
 			dependencies = (
 			);
-			name = MacGameLibraryApp;
+			name = GBear;
 			packageProductDependencies = (
-				56D82AD326518A1F77B9C0B7 /* MacGameLibrary */,
+				7E0D5EAC7A5FE8C51012F5BB /* GBearKit */,
 			);
-			productName = MacGameLibraryApp;
-			productReference = F32A48C480B07A01B18FACEC /* GBear.app */;
+			productName = GBear;
+			productReference = D470DD124A24174A6D6EC1D2 /* GBear.app */;
 			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
-		043A5785913EE353C899F69D /* Project object */ = {
+		35CF9884F77E566CF28388CA /* Project object */ = {
 			isa = PBXProject;
 			attributes = {
 				BuildIndependentTargetsInParallel = YES;
 				LastUpgradeCheck = 1430;
+				TargetAttributes = {
+					3778E8F60D47B41202C52FF6 = {
+						DevelopmentTeam = AFYV687T82;
+					};
+				};
 			};
-			buildConfigurationList = 6B25221E1F37E397151AEC1C /* Build configuration list for PBXProject "MacGameLibrary" */;
+			buildConfigurationList = D6F75A3C296EBD3624B1D812 /* Build configuration list for PBXProject "GBear" */;
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
 			knownRegions = (
 				Base,
 				en,
 			);
-			mainGroup = F7BE821B00C91B170FB055C5;
+			mainGroup = 768F767BBCE03C7E3D1FEBBB;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
-				DF5DA203E5099E78DAF97F71 /* XCLocalSwiftPackageReference "." */,
+				307D546CCCFB6F5CD5028FE0 /* XCLocalSwiftPackageReference "." */,
 			);
 			preferredProjectObjectVersion = 77;
-			productRefGroup = 821C1DE27E84D1B784DD82C1 /* Products */;
+			productRefGroup = 9D8B46D3AA863D85B8906597 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
-				83DA71753B93711BABFA93FC /* MacGameLibraryApp */,
+				3778E8F60D47B41202C52FF6 /* GBear */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
-		0DB39CA9040F4281DCFFF6A9 /* Resources */ = {
+		061ABD6D657638D5B1D93FEF /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				06BB2CA6AD7B85797075F8E7 /* Assets.xcassets in Resources */,
+				883B2092911CFC882674D1AC /* Assets.xcassets in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
-		5BFACBB3AF83450171037AD0 /* Sources */ = {
+		3B420F69ED51DBACC34DF980 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				B823262E21D64FB91F3B2A77 /* MacGameLibraryApp.swift in Sources */,
+				CB96B5BDDBFD898724627789 /* GBear.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin XCBuildConfiguration section */
-		A2EAAB34EE80B727FBC4F390 /* Release */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				ALWAYS_SEARCH_USER_PATHS = NO;
-				CLANG_ANALYZER_NONNULL = YES;
-				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
-				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
-				CLANG_CXX_LIBRARY = "libc++";
-				CLANG_ENABLE_MODULES = YES;
-				CLANG_ENABLE_OBJC_ARC = YES;
-				CLANG_ENABLE_OBJC_WEAK = YES;
-				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
-				CLANG_WARN_BOOL_CONVERSION = YES;
-				CLANG_WARN_COMMA = YES;
-				CLANG_WARN_CONSTANT_CONVERSION = YES;
-				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
-				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
-				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
-				CLANG_WARN_EMPTY_BODY = YES;
-				CLANG_WARN_ENUM_CONVERSION = YES;
-				CLANG_WARN_INFINITE_RECURSION = YES;
-				CLANG_WARN_INT_CONVERSION = YES;
-				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
-				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
-				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
-				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
-				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
-				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
-				CLANG_WARN_STRICT_PROTOTYPES = YES;
-				CLANG_WARN_SUSPICIOUS_MOVE = YES;
-				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
-				CLANG_WARN_UNREACHABLE_CODE = YES;
-				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
-				COPY_PHASE_STRIP = NO;
-				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
-				ENABLE_NS_ASSERTIONS = NO;
-				ENABLE_STRICT_OBJC_MSGSEND = YES;
-				GCC_C_LANGUAGE_STANDARD = gnu11;
-				GCC_NO_COMMON_BLOCKS = YES;
-				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
-				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
-				GCC_WARN_UNDECLARED_SELECTOR = YES;
-				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
-				GCC_WARN_UNUSED_FUNCTION = YES;
-				GCC_WARN_UNUSED_VARIABLE = YES;
-				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				MTL_ENABLE_DEBUG_INFO = NO;
-				MTL_FAST_MATH = YES;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				SDKROOT = macosx;
-				SWIFT_COMPILATION_MODE = wholemodule;
-				SWIFT_OPTIMIZATION_LEVEL = "-O";
-				SWIFT_VERSION = 6.0;
-			};
-			name = Release;
-		};
-		A988F48079D6EC99FB99A4A3 /* Debug */ = {
+		608EAD01949884C05A1AC39B /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CODE_SIGN_ENTITLEMENTS = GBear/GBear.entitlements;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
-				"DEVELOPMENT_TEAM[sdk=macosx*]" = AFYV687T82;
+				DEVELOPMENT_TEAM = AFYV687T82;
+				ENABLE_HARDENED_RUNTIME = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = GBear;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.games";
@@ -226,39 +187,39 @@
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.funnybearapps.gbear;
-				PRODUCT_MODULE_NAME = MacGameLibraryApp;
+				PRODUCT_NAME = GBear;
+				SDKROOT = macosx;
+			};
+			name = Release;
+		};
+		76B7555474D7607C6753B336 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CODE_SIGN_ENTITLEMENTS = GBear/GBear.entitlements;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = AFYV687T82;
+				ENABLE_HARDENED_RUNTIME = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = GBear;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.games";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				INFOPLIST_KEY_NSScreenCaptureUsageDescription = "GBear streams your desktop to your phone using an embedded streaming host.";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.funnybearapps.gbear;
 				PRODUCT_NAME = GBear;
 				SDKROOT = macosx;
 			};
 			name = Debug;
 		};
-		B913F9E2BFF46B50E3D32E3A /* Release */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
-				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 1;
-				"DEVELOPMENT_TEAM[sdk=macosx*]" = AFYV687T82;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_CFBundleDisplayName = GBear;
-				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.games";
-				INFOPLIST_KEY_NSHumanReadableCopyright = "";
-				INFOPLIST_KEY_NSScreenCaptureUsageDescription = "GBear streams your desktop to your phone using an embedded streaming host.";
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/../Frameworks",
-				);
-				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.funnybearapps.gbear;
-				PRODUCT_MODULE_NAME = MacGameLibraryApp;
-				PRODUCT_NAME = GBear;
-				SDKROOT = macosx;
-			};
-			name = Release;
-		};
-		F653AB875683400EADDD05E7 /* Debug */ = {
+		B5F29C16716E955437F1ACAA /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
@@ -321,23 +282,79 @@
 			};
 			name = Debug;
 		};
+		F4F5CFD14EF5824C7F7A3998 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 6.0;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		0D2F94E1395E1B94C96471B7 /* Build configuration list for PBXNativeTarget "MacGameLibraryApp" */ = {
+		0F222832F486FCAA13C8DA19 /* Build configuration list for PBXNativeTarget "GBear" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
-				A988F48079D6EC99FB99A4A3 /* Debug */,
-				B913F9E2BFF46B50E3D32E3A /* Release */,
+				76B7555474D7607C6753B336 /* Debug */,
+				608EAD01949884C05A1AC39B /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;
 		};
-		6B25221E1F37E397151AEC1C /* Build configuration list for PBXProject "MacGameLibrary" */ = {
+		D6F75A3C296EBD3624B1D812 /* Build configuration list for PBXProject "GBear" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
-				F653AB875683400EADDD05E7 /* Debug */,
-				A2EAAB34EE80B727FBC4F390 /* Release */,
+				B5F29C16716E955437F1ACAA /* Debug */,
+				F4F5CFD14EF5824C7F7A3998 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;
@@ -345,18 +362,18 @@
 /* End XCConfigurationList section */
 
 /* Begin XCLocalSwiftPackageReference section */
-		DF5DA203E5099E78DAF97F71 /* XCLocalSwiftPackageReference "." */ = {
+		307D546CCCFB6F5CD5028FE0 /* XCLocalSwiftPackageReference "." */ = {
 			isa = XCLocalSwiftPackageReference;
 			relativePath = .;
 		};
 /* End XCLocalSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
-		56D82AD326518A1F77B9C0B7 /* MacGameLibrary */ = {
+		7E0D5EAC7A5FE8C51012F5BB /* GBearKit */ = {
 			isa = XCSwiftPackageProductDependency;
-			productName = MacGameLibrary;
+			productName = GBearKit;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};
-	rootObject = 043A5785913EE353C899F69D /* Project object */;
+	rootObject = 35CF9884F77E566CF28388CA /* Project object */;
 }

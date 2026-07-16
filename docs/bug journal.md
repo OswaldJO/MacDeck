@@ -194,7 +194,7 @@ For release notes style summaries, see `source control log.md`. For architecture
 | | |
 |---|---|
 | **When** | Jun 3, 2026 (**in progress**, working tree) |
-| **Symptom** | Opening Mac Game Library → Streaming muted Mac and felt like “stream always on” without companion starting a session. |
+| **Symptom** | Opening GBear → Streaming muted Mac and felt like “stream always on” without companion starting a session. |
 | **Cause** | `PlayniteStreamHostManager.ensureReady()` started video/audio/input listeners and implied active streaming. |
 | **Fix** | `ensureReady()` starts **HTTP 28765 only**; `beginVideoStream` on `POST /playnite/v1/stream/start`; `endVideoStream` on `stream/stop`; UI copy distinguishes pairing host vs active stream. |
 | **Commit** | *Not committed yet* |

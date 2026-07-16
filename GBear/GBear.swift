@@ -1,10 +1,10 @@
 import AppKit
-import MacGameLibrary
+import GBearKit
 import SwiftData
 import SwiftUI
 
 @main
-struct MacGameLibraryApp: App {
+struct GBear: App {
     init() {
         DebugLog.log("App init")
         let center = NotificationCenter.default

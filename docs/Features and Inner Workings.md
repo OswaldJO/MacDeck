@@ -1,4 +1,4 @@
-# Mac Game Library — Features and Inner Workings
+# GBear — Features and Inner Workings
 
 This document describes **how the app behaves today** and **where implementation lives**. For a short, commit-adjacent summary of recent changes, see `source control log.md`.
 
@@ -145,8 +145,8 @@ The Mac app embeds its own **Playnite stream host** (ScreenCaptureKit → H.264,
 
 | Permission | Purpose | UI name |
 |------------|---------|---------|
-| **Screen Recording** | Desktop video + system audio capture | Mac Game Library |
-| **Accessibility** | Synthetic mouse move/click from phone touch | Mac Game Library (same list entry; not a separate “touch” item) |
+| **Screen Recording** | Desktop video + system audio capture | GBear |
+| **Accessibility** | Synthetic mouse move/click from phone touch | GBear (same list entry; not a separate “touch” item) |
 
 Restart the Mac app after toggling Accessibility. Stream audio is **not** a separate item in **System Settings → Sound → Output**; it is captured and sent to the phone. While a stream is active, the Mac’s default output is **muted** so speakers stay quiet and the phone is the playback device (use phone **media** volume during a stream).
 
@@ -240,7 +240,7 @@ Legacy bindings that used **Alt** (`0x12`) still map to left Option on the Mac.
 
 ## Help menu (app target)
 
-- Replaces default Help group with topic buttons (RetroArch, RPCS3, orphan cleanup, **Keystrokes permission**). Implemented in `MacGameLibraryApp.swift`.
+- Replaces default Help group with topic buttons (RetroArch, RPCS3, orphan cleanup, **Keystrokes permission**). Implemented in `GBear.swift`.
 
 ---
 
@@ -253,7 +253,7 @@ Legacy bindings that used **Alt** (`0x12`) still map to left Option on the Mac.
 - **Full-library scrape** is synchronous per game with delays; large libraries take time and network.
 - **Native streaming (Android)** is verified: video over TCP **28766** (~99% rendered vs. received); audio over TCP **28769** with Mac output muted during stream; touch over UDP **28768** with Accessibility granted.
 - **Audio troubleshooting:** expect `Audio TCP connected`, then `Audio packet #1` and `AudioTrack started` with a modest buffer size. Mac console: `[PlayniteAudio] phone connected (TCP audio)`, `muted Mac default output`, `sent TCP audio frame #N`. If silent, check phone **media** volume and Mac firewall for **28767** / **28769**.
-- **Touch** requires Mac **Accessibility** for **Mac Game Library**; phone should log `Input UDP #1`. Rebuild Mac app after input-mapping changes.
+- **Touch** requires Mac **Accessibility** for **GBear**; phone should log `Input UDP #1`. Rebuild Mac app after input-mapping changes.
 - **Keyboard shortcuts** require the same **Accessibility** grant; phone logs `Keyboard PNK1`; Mac Console shows `[PlayniteInput] PNK1` / `keyboard`. Rebuild Mac app after `PlayniteKeyboardPlayback` changes.
 - **Stream notification** on some OEMs may still collapse custom layouts; two-row inline buttons + `addAction` fallback are both present. Do not rely on `CLOSE_SYSTEM_DIALOGS` from the app (blocked on modern Android).
 - **Swap stick sensitivity** is independent of touchpad **Cursor speed**; raise Swap stick speed in **Settings** if the cursor feels too slow after fixing inversion (stick up = cursor up on Mac).

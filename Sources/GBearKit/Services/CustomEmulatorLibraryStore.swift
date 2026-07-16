@@ -31,9 +31,11 @@ public struct CustomEmulatorLibraryEntry: Codable, Identifiable, Hashable, Senda
 }
 
 public enum CustomEmulatorLibraryStore {
-    private static let udKey = "MacGameLibrary.CustomEmulatorLibraryEntries.v1"
+    private static let udKey = "GBear.CustomEmulatorLibraryEntries.v1"
+    private static let legacyUdKey = "MacGameLibrary.CustomEmulatorLibraryEntries.v1"
 
     public static func allEntries() -> [CustomEmulatorLibraryEntry] {
+        migrateLegacyUserDefaultsIfNeeded()
         guard let data = UserDefaults.standard.data(forKey: udKey),
               let decoded = try? JSONDecoder().decode([CustomEmulatorLibraryEntry].self, from: data) else {
             return []
@@ -71,5 +73,13 @@ public enum CustomEmulatorLibraryStore {
 
     public static func remove(id: UUID) {
         save(allEntries().filter { $0.id != id })
+    }
+
+    private static func migrateLegacyUserDefaultsIfNeeded() {
+        let defaults = UserDefaults.standard
+        guard defaults.data(forKey: udKey) == nil,
+              let legacy = defaults.data(forKey: legacyUdKey) else { return }
+        defaults.set(legacy, forKey: udKey)
+        defaults.removeObject(forKey: legacyUdKey)
     }
 }

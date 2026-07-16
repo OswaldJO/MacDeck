@@ -1,4 +1,4 @@
-name: MacGameLibrary
+name: GBear
 options:
   bundleIdPrefix: com.local
   deploymentTarget:
@@ -11,33 +11,49 @@ settings:
     MACOSX_DEPLOYMENT_TARGET: "14.0"
 
 packages:
-  MacGameLibrarySPM:
+  GBearSPM:
     path: .
 
 targets:
-  MacGameLibraryApp:
+  GBear:
     type: application
     platform: macOS
     deploymentTarget: "14.0"
+    entitlements:
+      path: GBear/GBear.entitlements
+      properties:
+        com.apple.security.app-sandbox: true
+        com.apple.security.network.client: true
+        com.apple.security.network.server: true
+        com.apple.security.files.user-selected.read-write: true
     sources:
-      - path: MacGameLibraryApp
+      - path: GBear
+        excludes:
+          - "**/*.md"
+          - Resources/Sunshine/**
+          - "*.entitlements"
     resources:
-      - path: MacGameLibraryApp/Resources/Sunshine
+      - path: GBear/Resources/Sunshine
         buildPhase: resources
         optional: true
+        excludes:
+          - "**/*.md"
     dependencies:
-      - package: MacGameLibrarySPM
-        product: MacGameLibrary
+      - package: GBearSPM
+        product: GBearKit
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.funnybearapps.gbear
         PRODUCT_NAME: GBear
-        # Must differ from the SPM module "MacGameLibrary" or Xcode emits duplicate swiftmodules.
-        PRODUCT_MODULE_NAME: MacGameLibraryApp
+        DEVELOPMENT_TEAM: AFYV687T82
+        CODE_SIGN_ENTITLEMENTS: GBear/GBear.entitlements
+        ENABLE_HARDENED_RUNTIME: YES
         GENERATE_INFOPLIST_FILE: YES
         INFOPLIST_KEY_CFBundleDisplayName: GBear
         INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.games
         INFOPLIST_KEY_NSHumanReadableCopyright: ""
+        INFOPLIST_KEY_NSScreenCaptureUsageDescription: GBear streams your desktop to your phone using an embedded streaming host.
         MARKETING_VERSION: "1.0"
         CURRENT_PROJECT_VERSION: "1"
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS: YES

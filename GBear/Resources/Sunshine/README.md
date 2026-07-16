@@ -10,7 +10,7 @@ From the repo root:
 ./Scripts/stage-sunshine-for-mac-app.sh
 ```
 
-That places an executable `sunshine` in this folder. Rebuild **MacGameLibraryApp** in Xcode so `Resources/Sunshine` is copied into the `.app` bundle.
+That places an executable `sunshine` in this folder. Rebuild **GBear** in Xcode so `Resources/Sunshine` is copied into the `.app` bundle.
 
 Homebrew is only used by the staging script to **obtain** a binary for bundling—not for end-user streaming.
 

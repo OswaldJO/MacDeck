@@ -29,7 +29,7 @@ def fix_mac_launch_arguments(args_str: str) -> str:
 def main() -> None:
     root = Path(sys.argv[1] if len(sys.argv) > 1 else "/tmp/Playnite")
     emu_dir = root / "source" / "Playnite" / "Emulation" / "Emulators"
-    out = Path(__file__).resolve().parent.parent / "Sources" / "MacGameLibrary" / "Resources" / "BuiltinEmulatorCatalog.json"
+    out = Path(__file__).resolve().parent.parent / "Sources" / "GBearKit" / "Resources" / "BuiltinEmulatorCatalog.json"
     if not emu_dir.is_dir():
         print(f"Missing Playnite emulators dir: {emu_dir}", file=sys.stderr)
         sys.exit(1)
