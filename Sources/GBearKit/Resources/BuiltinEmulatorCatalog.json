@@ -11419,29 +11419,6 @@
     "startupExecutableHint": "^yuzu\\.exe$"
   },
   {
-    "catalogId": 559,
-    "emulatorId": "aethersx2",
-    "emulatorName": "AetherSX2",
-    "website": "https://www.aethersx2.com/",
-    "profileName": "Default",
-    "startupArguments": "-batch -fullscreen \"{ImagePath}\"",
-    "platforms": [
-      "sony_playstation2"
-    ],
-    "imageExtensions": [
-      "iso",
-      "bin",
-      "mdf",
-      "nrg",
-      "img",
-      "gz",
-      "cso",
-      "chd",
-      "m3u"
-    ],
-    "startupExecutableHint": null
-  },
-  {
     "catalogId": 560,
     "emulatorId": "ppssppsdl",
     "emulatorName": "PPSSPPSDL",
@@ -11456,6 +11433,29 @@
       "cso",
       "pbp",
       "chd"
+    ],
+    "startupExecutableHint": null
+  },
+  {
+    "catalogId": 561,
+    "emulatorId": "armsx2",
+    "emulatorName": "ARMSX2",
+    "website": "https://github.com/ARMSX2/ARMSX2",
+    "profileName": "Default",
+    "startupArguments": "-fastboot -- \"{ImagePath}\"",
+    "platforms": [
+      "sony_playstation2"
+    ],
+    "imageExtensions": [
+      "iso",
+      "bin",
+      "mdf",
+      "nrg",
+      "img",
+      "gz",
+      "cso",
+      "chd",
+      "m3u"
     ],
     "startupExecutableHint": null
   }

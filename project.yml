@@ -22,10 +22,9 @@ targets:
     entitlements:
       path: GBear/GBear.entitlements
       properties:
-        com.apple.security.app-sandbox: true
+        # Do not enable com.apple.security.app-sandbox — it strips emulator launch argv.
         com.apple.security.network.client: true
         com.apple.security.network.server: true
-        com.apple.security.files.user-selected.read-write: true
     sources:
       - path: GBear
         excludes:

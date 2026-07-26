@@ -713,7 +713,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
           ),
           const SizedBox(height: 8),
           const Text(
-            'Streams your Mac desktop via Playnite H.264 (port ${StreamingHostSettings.defaultVideoPort}). '
+            'Streams your Mac desktop via GBear on Mac H.264 (port ${StreamingHostSettings.defaultVideoPort}). '
             'Connect a gamepad first (Controller tab), then start Desktop stream. '
             'While streaming, use the notification Stop, Swap, Controller, or Shortcuts buttons (Stop matches the Session tab). '
             'To start a fresh stream after leaving the video with Back, tap Stop here first, then Start.',
@@ -781,7 +781,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         const SizedBox(height: 8),
         const Text(
           'Pair a telescopic or Bluetooth gamepad to this phone (not the Mac). '
-          'During a stream, Moonlight forwards pad input to your Mac as an Xbox-style controller.',
+          'During a stream, GBear sends your mapped buttons and sticks to the Mac as keyboard chords '
+          '(and Swap mouse mode when enabled).',
         ),
         const SizedBox(height: 12),
         Text(
@@ -973,7 +974,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
             if (isAndroid) ...[
               SwitchListTile(
                 title: const Text('USB driver'),
-                subtitle: const Text('Support USB-C telescopic controllers via Moonlight USB driver.'),
+                subtitle: const Text('Support USB-C telescopic controllers.'),
                 value: settings.usbDriver,
                 onChanged: (value) => _saveControllerSettings(usbDriver: value),
               ),
@@ -1005,7 +1006,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         ),
         const SizedBox(height: 8),
         Text(
-          'While a stream is running, open the Playnite stream notification and tap Swap, or map '
+          'While a stream is running, open the stream notification and tap Swap, or map '
           'Swap to another controller button on the Controller tab (not A, B, or X). Tap again '
           'to return to your normal keyboard mappings.',
           style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),

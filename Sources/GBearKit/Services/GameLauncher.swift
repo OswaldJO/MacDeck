@@ -20,6 +20,7 @@ enum GameLaunchError: LocalizedError {
 /// Launches a ROM using the emulator’s argument template.
 /// Playnite uses **`{ImagePath}`** for the game/disc file in profiles ([cmdline arguments](https://github.com/JosefNemec/Playnite/wiki/Cmdline-arguments)).
 /// We accept `{ImagePath}` (same as Playnite), `{rom}`, and `{ROM}` interchangeably.
+/// `{user_name}` expands to the current macOS account short name; leading `~` in argv tokens is expanded.
 @MainActor
 enum GameLauncher {
     /// Running emulator PIDs we are currently tracking for auto-hide/restore.
@@ -56,22 +57,32 @@ enum GameLauncher {
             throw GameLaunchError.invalidExecutable
         }
 
-        let substituted = substituteTemplate(emulator.launchArgumentTemplate, gameFilePath: standardizedPath)
-        let parts = parseArguments(substituted)
-        let resolvedExe = resolvedExecutableURL(exe)
-        DebugLog.log("Resolved emulator=\(resolvedExe.path)")
+        let substituted = LaunchArgumentTemplate.expandPlaceholders(
+            emulator.launchArgumentTemplate,
+            gameFilePath: standardizedPath
+        )
+        let parts = parseArguments(substituted).map(LaunchArgumentTemplate.expandTildeInArgument)
+        let appOrBinary = resolvedExecutableURL(exe)
+        DebugLog.log("Resolved emulator=\(appOrBinary.path)")
         DebugLog.log("Launch template=\(emulator.launchArgumentTemplate)")
         DebugLog.log("Launch substituted=\(substituted)")
         DebugLog.log("Launch args=\(parts.joined(separator: " | "))")
 
-        // For already-running .app emulators (e.g. RPCS3), launching a second process can fail
-        // with single-instance locks. Send an "open document" event to the running app instead.
-        if resolvedExe.pathExtension.lowercased() == "app",
-           let runningApp = runningApplication(forBundlePath: resolvedExe.path) {
+        // When we have CLI args (game path + flags), always launch via argv.
+        // Do NOT use Launch Services "open documents" for that case — ARMSX2/PCSX2-family
+        // can SIGSEGV in MainWindow::startFile while the setup wizard / MainWindow is not ready.
+        if !parts.isEmpty {
+            try launchWithCLIArguments(appOrBinary: appOrBinary, arguments: parts)
+            return
+        }
+
+        // No CLI template: for an already-running .app, ask it to open the game file.
+        if appOrBinary.pathExtension.lowercased() == "app",
+           let runningApp = runningApplication(forBundlePath: appOrBinary.path) {
             DebugLog.log("Emulator already running (pid=\(runningApp.processIdentifier)); using open document event")
             registerLaunchedApplication(runningApp)
             let config = NSWorkspace.OpenConfiguration()
-            NSWorkspace.shared.open([URL(fileURLWithPath: standardizedPath)], withApplicationAt: resolvedExe, configuration: config) { _, error in
+            NSWorkspace.shared.open([URL(fileURLWithPath: standardizedPath)], withApplicationAt: appOrBinary, configuration: config) { _, error in
                 if let error {
                     NSLog("Launch error: \(error.localizedDescription)")
                     DebugLog.log("Open document callback error: \(error.localizedDescription)")
@@ -83,10 +94,8 @@ enum GameLauncher {
         }
 
         let configuration = NSWorkspace.OpenConfiguration()
-        configuration.arguments = parts
-
         NSWorkspace.shared.openApplication(
-            at: resolvedExe,
+            at: appOrBinary,
             configuration: configuration
         ) { runningApp, error in
             Task { @MainActor in
@@ -102,6 +111,120 @@ enum GameLauncher {
                 DebugLog.log("openApplication callback success pid=\(runningApp.processIdentifier)")
                 registerLaunchedApplication(runningApp)
             }
+        }
+    }
+
+    /// Launches with argv via `NSWorkspace.OpenConfiguration.arguments`.
+    ///
+    /// Requires a **non-sandboxed** GBear (App Sandbox makes the system ignore `arguments`, so the
+    /// emulator opens to an empty game list). Also quits existing instances first — otherwise macOS
+    /// may only activate the already-open window and drop argv.
+    private static func launchWithCLIArguments(appOrBinary: URL, arguments: [String]) throws {
+        if appOrBinary.pathExtension.lowercased() == "app" {
+            terminateRunningInstances(ofAppAt: appOrBinary)
+
+            let configuration = NSWorkspace.OpenConfiguration()
+            configuration.arguments = arguments
+            configuration.activates = true
+            configuration.createsNewApplicationInstance = true
+            DebugLog.log(
+                "NSWorkspace openApplication app=\(appOrBinary.path) args=\(arguments.joined(separator: " | "))"
+            )
+
+            NSWorkspace.shared.openApplication(at: appOrBinary, configuration: configuration) { runningApp, error in
+                Task { @MainActor in
+                    if let error {
+                        NSLog("Launch error: \(error.localizedDescription)")
+                        DebugLog.log("NSWorkspace openApplication error: \(error.localizedDescription)")
+                        return
+                    }
+                    guard let runningApp else {
+                        DebugLog.log("NSWorkspace openApplication returned nil app; polling…")
+                        scheduleRegisterRunningApp(bundlePath: appOrBinary.path, attemptsRemaining: 20)
+                        return
+                    }
+                    DebugLog.log(
+                        "NSWorkspace openApplication success pid=\(runningApp.processIdentifier) argsExpected=\(arguments.count)"
+                    )
+                    registerLaunchedApplication(runningApp)
+                }
+            }
+            return
+        }
+
+        guard FileManager.default.isExecutableFile(atPath: appOrBinary.path) else {
+            DebugLog.log("Launch failed: executable missing at \(appOrBinary.path)")
+            throw GameLaunchError.invalidExecutable
+        }
+
+        let process = Process()
+        process.executableURL = appOrBinary
+        process.arguments = arguments
+        process.currentDirectoryURL = appOrBinary.deletingLastPathComponent()
+        DebugLog.log("Process launch binary=\(appOrBinary.path) args=\(arguments.joined(separator: " | "))")
+
+        do {
+            try process.run()
+        } catch {
+            DebugLog.log("Process launch failed: \(error.localizedDescription)")
+            throw GameLaunchError.invalidExecutable
+        }
+
+        if let running = NSRunningApplication(processIdentifier: process.processIdentifier) {
+            DebugLog.log("Process launch success pid=\(process.processIdentifier)")
+            registerLaunchedApplication(running)
+        } else {
+            DebugLog.log("Process started pid=\(process.processIdentifier) but NSRunningApplication lookup missed")
+        }
+    }
+
+    /// Politely quits every running copy of this `.app` so the next `open --args` is not discarded.
+    private static func terminateRunningInstances(ofAppAt appURL: URL) {
+        let target = (appURL.path as NSString).standardizingPath
+        let running = NSWorkspace.shared.runningApplications.filter { app in
+            guard let bundleURL = app.bundleURL else { return false }
+            return (bundleURL.path as NSString).standardizingPath == target
+        }
+        guard !running.isEmpty else { return }
+
+        DebugLog.log("Terminating \(running.count) existing instance(s) of \(appURL.lastPathComponent) before CLI launch")
+        for app in running {
+            trackedLaunchPIDs.remove(app.processIdentifier)
+            app.terminate()
+        }
+
+        let deadline = Date().addingTimeInterval(0.4)
+        while Date() < deadline {
+            let stillThere = NSWorkspace.shared.runningApplications.contains { app in
+                guard let bundleURL = app.bundleURL else { return false }
+                return (bundleURL.path as NSString).standardizingPath == target
+            }
+            if !stillThere { break }
+            Thread.sleep(forTimeInterval: 0.05)
+        }
+
+        // Last resort if the app ignores terminate (e.g. modal dialog).
+        for app in NSWorkspace.shared.runningApplications {
+            guard let bundleURL = app.bundleURL else { continue }
+            guard (bundleURL.path as NSString).standardizingPath == target else { continue }
+            DebugLog.log("Force-terminating stubborn instance pid=\(app.processIdentifier)")
+            app.forceTerminate()
+        }
+    }
+
+    /// `open` returns before the target app is running; poll briefly then track it.
+    private static func scheduleRegisterRunningApp(bundlePath: String, attemptsRemaining: Int) {
+        guard attemptsRemaining > 0 else {
+            DebugLog.log("Timed out waiting for app to appear: \(bundlePath)")
+            return
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+            if let running = runningApplication(forBundlePath: bundlePath) {
+                DebugLog.log("Registered launched app pid=\(running.processIdentifier) path=\(bundlePath)")
+                registerLaunchedApplication(running)
+                return
+            }
+            scheduleRegisterRunningApp(bundlePath: bundlePath, attemptsRemaining: attemptsRemaining - 1)
         }
     }
 
@@ -164,31 +287,6 @@ enum GameLauncher {
             }
             terminationObservers.append(observer)
         }
-    }
-
-    /// Normalizes Playnite’s `{ImagePath}` and common aliases to an internal token, then substitutes the file path.
-    /// Quoting rules match Playnite: use `"{ImagePath}"` in the profile when the path can contain spaces.
-    private static func substituteTemplate(_ template: String, gameFilePath: String) -> String {
-        let trimmed = expandPlayniteStylePlaceholders(template.trimmingCharacters(in: .whitespacesAndNewlines))
-        if trimmed.isEmpty {
-            return "\"\(gameFilePath)\""
-        }
-        guard trimmed.contains("{rom}") else {
-            return trimmed
-        }
-        let userQuotedPlaceholder = trimmed.contains("\"{rom}\"")
-        let pathNeedsQuoting = gameFilePath.contains(where: \.isWhitespace)
-        if pathNeedsQuoting && !userQuotedPlaceholder {
-            return trimmed.replacingOccurrences(of: "{rom}", with: "\"\(gameFilePath)\"")
-        }
-        return trimmed.replacingOccurrences(of: "{rom}", with: gameFilePath)
-    }
-
-    /// Maps Playnite’s `{ImagePath}` and `{ROM}` to the same internal `{rom}` token before path substitution.
-    private static func expandPlayniteStylePlaceholders(_ s: String) -> String {
-        s
-            .replacingOccurrences(of: "{ImagePath}", with: "{rom}")
-            .replacingOccurrences(of: "{ROM}", with: "{rom}")
     }
 
     /// Splits like a minimal shell: spaces separate tokens; text inside `"` is one token (no quotes in argv).

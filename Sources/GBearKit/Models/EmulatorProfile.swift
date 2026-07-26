@@ -9,6 +9,7 @@ public final class EmulatorProfile {
     /// Path to the emulator executable (.app bundle or binary).
     public var executablePath: String
     /// Playnite-style `{ImagePath}` (and `{rom}` / `{ROM}` aliases) is replaced with the game file path when launching.
+    /// Use `{user_name}` for the current macOS account in absolute paths (e.g. RetroArch cores under Application Support).
     public var launchArgumentTemplate: String
     /// Comma-separated extensions (no dots) used by path scans for this emulator. Empty/nil = global defaults.
     public var supportedFileTypesCSV: String?

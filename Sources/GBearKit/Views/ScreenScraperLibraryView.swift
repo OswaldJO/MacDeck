@@ -76,7 +76,7 @@ struct ScreenScraperLibrarySettingsView: View {
 
     private var loginStatusCard: some View {
         GroupBox {
-            HStack(alignment: .top, spacing: 14) {
+            HStack(alignment: .center, spacing: 14) {
                 Image(systemName: isLoggedIn ? "person.crop.circle.fill.badge.checkmark" : "person.crop.circle.badge.plus")
                     .font(.system(size: 32))
                     .symbolRenderingMode(.hierarchical)
@@ -89,10 +89,6 @@ struct ScreenScraperLibrarySettingsView: View {
                         Label(username, systemImage: "person")
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
-                    } else {
-                        Text("Optional: link your personal ScreenScraper account for account-based API limits.")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
                     }
                     if !isConfigured {
                         Label("ScreenScraper unavailable in this build", systemImage: "exclamationmark.triangle")
@@ -100,7 +96,25 @@ struct ScreenScraperLibrarySettingsView: View {
                             .foregroundStyle(.orange)
                     }
                 }
-                Spacer(minLength: 0)
+
+                Spacer(minLength: 8)
+
+                HStack(spacing: 8) {
+                    Button {
+                        onOpenCredentials()
+                    } label: {
+                        Label(isLoggedIn ? "Change login" : "Sign in", systemImage: "person.badge.key")
+                    }
+                    .buttonStyle(.bordered)
+
+                    if isLoggedIn {
+                        Button("Sign out", role: .destructive) {
+                            MetadataCredentials.screenScraperUserID = nil
+                            MetadataCredentials.screenScraperUserPassword = nil
+                        }
+                        .buttonStyle(.bordered)
+                    }
+                }
             }
             .padding(.vertical, 4)
         } label: {
@@ -198,30 +212,13 @@ struct ScreenScraperLibrarySettingsView: View {
     private var actionsCard: some View {
         GroupBox {
             VStack(alignment: .leading, spacing: 10) {
-                HStack(spacing: 10) {
-                    Button {
-                        onOpenCredentials()
-                    } label: {
-                        Label(isLoggedIn ? "Change login" : "Sign in", systemImage: "person.badge.key")
-                    }
-                    .buttonStyle(.bordered)
-
-                    if isLoggedIn {
-                        Button("Sign out", role: .destructive) {
-                            MetadataCredentials.screenScraperUserID = nil
-                            MetadataCredentials.screenScraperUserPassword = nil
-                        }
-                        .buttonStyle(.bordered)
-                    }
-
-                    Button {
-                        onScrapeNow()
-                    } label: {
-                        Label("Scrape library", systemImage: "sparkle.magnifyingglass")
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .disabled(!isConfigured || fetcher.libraryScrapeInProgress || fetcher.libraryScrapeWaitingForBackground)
+                Button {
+                    onScrapeNow()
+                } label: {
+                    Label("Scrape library", systemImage: "sparkle.magnifyingglass")
                 }
+                .buttonStyle(.borderedProminent)
+                .disabled(!isConfigured || fetcher.libraryScrapeInProgress || fetcher.libraryScrapeWaitingForBackground)
 
                 Button("Clear scraped covers…", role: .destructive) {
                     showClearCoversConfirmation = true

@@ -185,7 +185,7 @@ struct EmulatorsView: View {
                         .textFieldStyle(.roundedBorder)
 
                     if addEmulatorLibrarySearch.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                        Text("Type an emulator or profile name to filter. Tap a row to set display name and launch arguments.")
+                        Text("Type an emulator or profile name to filter. Tap a row to set launch arguments (display name is filled only if empty).")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     } else {
@@ -524,7 +524,9 @@ struct EmulatorsView: View {
         case .builtin(let record):
             applyCatalogProfile(record)
         case .custom(let entry):
-            name = entry.displayTitle
+            if name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                name = entry.displayTitle
+            }
             argumentTemplate = entry.startupArguments
             supportedFileTypesInput = entry.supportedFileTypesCSV
             addEmulatorLibrarySearch = ""
@@ -532,7 +534,9 @@ struct EmulatorsView: View {
     }
 
     private func applyCatalogProfile(_ record: BuiltinEmulatorProfileRecord) {
-        name = record.displayTitle
+        if name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            name = record.displayTitle
+        }
         argumentTemplate = CatalogLaunchArgumentOverrides.effectiveStartupArguments(for: record)
         supportedFileTypesInput = record.supportedFileTypesCSV
         addEmulatorLibrarySearch = ""
@@ -542,7 +546,9 @@ struct EmulatorsView: View {
         let profile = EmulatorProfile(
             name: name.trimmingCharacters(in: .whitespacesAndNewlines),
             executablePath: executablePath.trimmingCharacters(in: .whitespacesAndNewlines),
-            launchArgumentTemplate: argumentTemplate,
+            launchArgumentTemplate: LaunchArgumentTemplate.normalizePCSX2StyleBootSeparator(
+                LaunchArgumentTemplate.normalizeHomePaths(argumentTemplate)
+            ),
             supportedFileTypesCSV: normalizeFileTypesCSV(supportedFileTypesInput),
             sortOrder: emulators.count
         )
@@ -620,7 +626,9 @@ struct EmulatorsView: View {
                 let profile = EmulatorProfile(
                     name: record.name.trimmingCharacters(in: .whitespacesAndNewlines),
                     executablePath: record.executablePath.trimmingCharacters(in: .whitespacesAndNewlines),
-                    launchArgumentTemplate: record.launchArgumentTemplate.trimmingCharacters(in: .whitespacesAndNewlines),
+                    launchArgumentTemplate: LaunchArgumentTemplate.normalizeHomePaths(
+                        record.launchArgumentTemplate.trimmingCharacters(in: .whitespacesAndNewlines)
+                    ),
                     supportedFileTypesCSV: cleanOptionalCSV(record.supportedFileTypesCSV),
                     sortOrder: emulators.count + insertedCount
                 )
@@ -729,7 +737,9 @@ struct EmulatorsView: View {
         guard let existing = emulators.first(where: { $0.id == existingID }) else { return }
         existing.name = record.name.trimmingCharacters(in: .whitespacesAndNewlines)
         existing.executablePath = record.executablePath.trimmingCharacters(in: .whitespacesAndNewlines)
-        existing.launchArgumentTemplate = record.launchArgumentTemplate.trimmingCharacters(in: .whitespacesAndNewlines)
+        existing.launchArgumentTemplate = LaunchArgumentTemplate.normalizeHomePaths(
+            record.launchArgumentTemplate.trimmingCharacters(in: .whitespacesAndNewlines)
+        )
         existing.supportedFileTypesCSV = cleanOptionalCSV(record.supportedFileTypesCSV)
     }
 
@@ -1192,7 +1202,9 @@ private struct EditEmulatorSheet: View {
         }
         profile.name = name.trimmingCharacters(in: .whitespacesAndNewlines)
         profile.executablePath = executablePath.trimmingCharacters(in: .whitespacesAndNewlines)
-        profile.launchArgumentTemplate = launchArgumentTemplate
+        profile.launchArgumentTemplate = LaunchArgumentTemplate.normalizePCSX2StyleBootSeparator(
+            LaunchArgumentTemplate.normalizeHomePaths(launchArgumentTemplate)
+        )
         let normalized = supportedFileTypesCSV.trimmingCharacters(in: .whitespacesAndNewlines)
         profile.supportedFileTypesCSV = normalized.isEmpty ? nil : normalized
         try? modelContext.save()

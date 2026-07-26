@@ -46,9 +46,13 @@ Grid tiles show a **Disc N** badge when the game is in a linked set and a disc n
 ## Emulators tab
 
 - Add/configure `EmulatorProfile`: executable path, Playnite-style `{ImagePath}` / `{rom}` template, optional per-emulator ROM extensions.
+- **`{user_name}`** expands to the current macOS account short name at launch (for paths under `/Users/{user_name}/Library/...`). Leading **`~`** in an argv token is expanded. Absolute home paths in stored templates are normalized to `/Users/{user_name}/...` on save/startup (`LaunchArgumentTemplate`).
 - Export/import configured profiles. Bundled catalog + custom launch-argument presets live in `BuiltinEmulatorCatalog` / `CustomEmulatorLibraryStore`.
+- **PS2:** catalog preset **ARMSX2** (`emulatorId: armsx2`); default startup **`-fastboot -- "{ImagePath}"`**. **AetherSX2** is not in the catalog; startup may retarget existing `AetherSX2.app` profiles to `/Applications/ARMSX2.app`.
+- **Add emulator:** choosing a catalog/custom row fills launch args (and file types); **display name** is filled only when that field is empty.
+- **App Sandbox is off** for the Mac app (`GBear.entitlements`). Sandboxed callers cannot pass `NSWorkspace.OpenConfiguration.arguments` (system ignores them).
 
-**Key types:** `EmulatorsView.swift`, `EmulatorProfile.swift`.
+**Key types:** `EmulatorsView.swift`, `EmulatorProfile.swift`, `LaunchArgumentTemplate.swift`, `BuiltinEmulatorCatalog.json`.
 
 ---
 
@@ -119,10 +123,13 @@ When a configured **game folder** belongs to an RPCS3 (or PS3-style) emulator, `
 
 ## Launch pipeline
 
-- **Emulator games:** resolve `EmulatorProfile`, substitute `{ImagePath}` / `{rom}`, `NSWorkspace` open; handles some “already running .app” cases.
+- **Emulator games:** resolve `EmulatorProfile`; expand `{user_name}`, `{ImagePath}` / `{rom}` / `{ROM}`, and `~` (`LaunchArgumentTemplate` + `GameLauncher.parseArguments`).
+- **With non-empty argv:** quit any running copy of that `.app` (so macOS does not merely activate an existing window and drop args), then **`NSWorkspace.openApplication`** with `OpenConfiguration.arguments` and **`createsNewApplicationInstance = true`**.
+- **Already-running + empty template:** optional “open document” Apple Event path (avoid for PCSX2/ARMSX2 boot — see bug journal).
 - **Standalone / no emulator:** Epic URI path above, else open `.app` or file URL.
+- **Do not** rely on `/usr/bin/open --args` from a sandboxed process, or on `OpenConfiguration.arguments` while App Sandbox is enabled — both fail to deliver the ISO path (emulator stays on its game list).
 
-**Key type:** `GameLauncher.swift`.
+**Key types:** `GameLauncher.swift`, `LaunchArgumentTemplate.swift`.
 
 ---
 
@@ -246,6 +253,9 @@ Legacy bindings that used **Alt** (`0x12`) still map to left Option on the Mac.
 
 ## Known constraints / pitfalls
 
+- **App Sandbox vs launch argv:** Keeping `com.apple.security.app-sandbox` on strips `NSWorkspace.OpenConfiguration.arguments`. Emulator launch requires an unsandboxed Mac app (current `GBear.entitlements`).
+- **ARMSX2 / PCSX2 CLI:** Prefer **`-fastboot -- "{ImagePath}"`**. A bare `--` before the ISO is required when the path can confuse option parsing. **`-batch -fullscreen`** often produced a gray GS window even when the ISO did boot (check `~/Library/Application Support/ARMSX2/logs/emulog.txt` for `isoFile open ok` / ELF load).
+- **Already-running ARMSX2:** `open -a … --args` without quitting first only activates the existing game-list window and does not apply new argv — `GameLauncher` terminates instances before CLI launch.
 - **RPCS3 `dev_hdd0/game`:** Assign the folder to the **RPCS3** emulator profile (not a generic multi-system profile) so folder import and ISO-only file rules apply. After scanner fixes, run **Scan Paths** to rename stale **EBOOT** entries. PSN/HDD (**HG**) installs need `USRDIR/EBOOT.BIN`; disc **GD** data folders without EBOOT are not launchable from this path alone.
 - **ScreenScraper** quotas, threading, and API shape can change. Without resolved **`systemeid`**, hash lookup is skipped and fuzzy search may pick wrong consoles (DS/Xbox/NES) or return `no_match`. Run **Scan Paths** so `RomPathPlatformResolver` can infer platform from folder roots; check scrape log for `emulatorSystemeid=nil`.
 - **Multi-disc auto-link** uses normalized base titles — enable per emulator on **Paths**; manual link/unlink still available in inspector.

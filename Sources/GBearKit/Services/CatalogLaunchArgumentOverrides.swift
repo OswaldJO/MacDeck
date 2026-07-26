@@ -39,7 +39,41 @@ public enum CatalogLaunchArgumentOverrides {
 
     public static func setEffectiveStartupArguments(_ value: String, catalogId: Int) {
         var map = loadMap()
-        map[catalogId] = value
+        map[catalogId] = LaunchArgumentTemplate.normalizePCSX2StyleBootSeparator(
+            LaunchArgumentTemplate.normalizeHomePaths(value)
+        )
         saveMap(map)
+    }
+
+    /// Rewrites absolute home paths in catalog overrides to `/Users/{user_name}/...`.
+    public static func normalizeHomePathsInOverrides() {
+        let map = loadMap()
+        guard !map.isEmpty else { return }
+        var updated: [Int: String] = [:]
+        var changed = false
+        for (id, value) in map {
+            let normalized = LaunchArgumentTemplate.normalizeHomePaths(value)
+            updated[id] = normalized
+            if normalized != value { changed = true }
+        }
+        if changed {
+            saveMap(updated)
+        }
+    }
+
+    /// Upgrades PCSX2/ARMSX2-style overrides that are missing the `--` boot separator.
+    public static func normalizePCSX2StyleBootSeparatorsInOverrides() {
+        let map = loadMap()
+        guard !map.isEmpty else { return }
+        var updated: [Int: String] = [:]
+        var changed = false
+        for (id, value) in map {
+            let normalized = LaunchArgumentTemplate.normalizePCSX2StyleBootSeparator(value)
+            updated[id] = normalized
+            if normalized != value { changed = true }
+        }
+        if changed {
+            saveMap(updated)
+        }
     }
 }

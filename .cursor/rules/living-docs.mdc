@@ -1,0 +1,25 @@
+---
+description: Keep living product docs in sync after meaningful Mac/companion changes
+alwaysApply: true
+---
+
+# Living docs (source control log, Features, bug journal)
+
+After finishing work that changes **product behavior**, **architecture**, or **known bugs/fixes**, update the matching docs in the same turn (do not wait for the user to ask).
+
+| Doc | Update when |
+|-----|-------------|
+| `docs/source control log.md` | User-visible or ship-relevant change (feature, fix, migration, catalog, launch path). Add a dated bullet under **Updates**; adjust **Focus** / **Minimum** if release criteria changed. |
+| `docs/Features and Inner Workings.md` | Behavior or implementation map changed (tabs, launch pipeline, emulators, streaming, data model, pitfalls). Edit the relevant section; keep “how it works today” accurate. |
+| `docs/bug journal.md` | A bug was diagnosed or fixed. Add/update a **BJ-###** entry (symptom / cause / fix / commit or *in progress*). |
+
+## Skip when
+
+- Pure refactors with no behavior change, typos-only, or experiments that will be reverted.
+- Doc-only edits that already are the update.
+
+## Style
+
+- Match each file’s existing voice and structure (short bullets in the source control log; handbook sections in Features; table rows in the bug journal).
+- Prefer **why** and **where in code**; link related BJ / Features sections when helpful.
+- Mark uncommitted work **in progress**.

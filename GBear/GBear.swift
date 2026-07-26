@@ -40,6 +40,7 @@ struct GBear: App {
         do {
             let container = try ModelContainer(for: schema, configurations: [configuration])
             DebugLog.log("ModelContainer created")
+            LaunchArgumentTemplate.migrateStoredHomePaths(container: container)
             return container
         } catch {
             DebugLog.log("ModelContainer creation failed: \(error.localizedDescription)")

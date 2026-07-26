@@ -100,6 +100,55 @@ For release notes style summaries, see `source control log.md`. For architecture
 
 ---
 
+## Mac library — launch / ARMSX2
+
+### BJ-080 — ARMSX2 opens but stays on the game list (no ISO)
+| | |
+|---|---|
+| **When** | Jul 26, 2026 (**in progress**) |
+| **Symptom** | **Play** from GBear started ARMSX2 on the game list; game never booted. Unsandboxed CLI/`swift` tests with the same argv *did* pass the ISO (misleading). |
+| **Cause** | Mac app had **App Sandbox** enabled. Apple documents that **`NSWorkspace.OpenConfiguration.arguments` is ignored** when the caller is sandboxed. `/usr/bin/open --args` from the sandbox also failed to deliver argv. Emulog showed folder scan only — no `isoFile open ok`. |
+| **Fix** | Removed `com.apple.security.app-sandbox` from `GBear.entitlements` / `project.yml`. Launch via `NSWorkspace` + `arguments` + `createsNewApplicationInstance` after quitting existing ARMSX2 instances. |
+| **Commit** | *Not committed yet* |
+
+### BJ-081 — `open --args` ignored when ARMSX2 already running
+| | |
+|---|---|
+| **When** | Jul 26, 2026 (**in progress**) |
+| **Symptom** | Even after quitting “should” have fixed BJ-080, **Play** still left the user on the game list if ARMSX2 was already open. |
+| **Cause** | Without a new instance, macOS `open -a App --args …` only **activates** the existing process; argv is not applied. Process list showed bare `…/ARMSX2` with no ISO. |
+| **Fix** | `GameLauncher.terminateRunningInstances(ofAppAt:)` before CLI launch; `createsNewApplicationInstance = true` on `OpenConfiguration`. |
+| **Commit** | *Not committed yet* |
+
+### BJ-082 — Past game list but gray ARMSX2 screen (no visible gameplay)
+| | |
+|---|---|
+| **When** | Jul 26, 2026 (**in progress**) |
+| **Symptom** | With argv actually delivered (unsandboxed tests), ARMSX2 left the game list but showed a **gray** window; looked “not running.” |
+| **Cause** | Default/legacy template used **`-batch -fullscreen`**. Emulog could still show ISO/ELF load while the GS/fullscreen path presented a blank/gray surface. |
+| **Fix** | Catalog + migration prefer **`-fastboot -- "{ImagePath}"`** (no forced `-batch`/`-fullscreen`). Soften stored `-batch -fullscreen…` templates via `LaunchArgumentTemplate.normalizePCSX2StyleBootSeparator`. |
+| **Commit** | *Not committed yet* |
+
+### BJ-083 — ARMSX2 SIGSEGV in `MainWindow::startFile` (open-document while wizard)
+| | |
+|---|---|
+| **When** | Jul 26, 2026 (**in progress**) |
+| **Symptom** | Launch seemed to crash immediately after setup wizard / when reusing a running instance. |
+| **Cause** | Crash report: Apple Event **open documents** → `MainWindow::startFile` null deref while Qt still in **`QDialog::exec()`** (setup wizard). GBear’s “already running → open document” path triggered this. |
+| **Fix** | For non-empty launch templates, never use the open-document shortcut; always CLI launch after terminating instances. Avoid opening documents into ARMSX2 during first-run UI. |
+| **Commit** | *Not committed yet* |
+
+### BJ-084 — Hardcoded `/Users/<personal>/…` RetroArch cores in launch args
+| | |
+|---|---|
+| **When** | Jul 26, 2026 (**in progress**) |
+| **Symptom** | Configured RetroArch profiles embedded a personal home directory; not portable. |
+| **Cause** | Templates stored absolute `/Users/…` paths; `{user_name}` was documented in Help but not expanded at launch. |
+| **Fix** | `LaunchArgumentTemplate`: expand `{user_name}` / `~`; normalize stored home prefixes to `/Users/{user_name}/…` on migrate/save. |
+| **Commit** | *Not committed yet* |
+
+---
+
 ## Streaming — architecture (Sunshine → native Playnite)
 
 ### BJ-011 — Sunshine/Moonlight path fragile (ports, PIN, dual instances)
@@ -329,6 +378,7 @@ For release notes style summaries, see `source control log.md`. For architecture
 
 | ID | Issue | Notes |
 |----|--------|--------|
+| BJ-080–083 | ARMSX2 launch regressions (sandbox argv, gray GS, open-document crash) | Verify after rebuild with sandbox **off**; quit ARMSX2 before Play; emulog should show `isoFile open ok`. |
 | BJ-007 | Scrape log still mostly `emulatorSystemeid=nil` on some libraries | Confirm **Scan Paths** after rebuild; verify ROM paths match configured folder roots (symlinks / external drives). |
 | BJ-008 | Residual `no_match` for short/obscure titles | *rain*, *Hannah*, *ChokoNana* may need manual ScreenScraper pick even with platform set. |
 | — | Some OEMs still collapse custom notification layout | `addAction` fallback present; may need in-app stream control panel. |
@@ -344,3 +394,4 @@ For release notes style summaries, see `source control log.md`. For architecture
 1. Assign the next **BJ-###** id.
 2. Include **symptom**, **cause**, **fix**, and **commit** (or *in progress*).
 3. Add a line to `source control log.md` when the fix ships in a release.
+4. Agents: project rule **living-docs** (`.cursor/rules/living-docs.mdc`) — keep this journal, `source control log.md`, and `Features and Inner Workings.md` updated when work fits those docs.
